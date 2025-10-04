@@ -1,0 +1,40 @@
+
+> migration-dashboard@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use by an unknown process, using available port 3002 instead.
+   ▲ Next.js 15.4.5
+   - Local:        http://localhost:3002
+   - Network:      http://10.245.246.125:3002
+
+ ✓ Starting...
+ ✓ Ready in 1773ms
+ ○ Compiling / ...
+ ✓ Compiled / in 3.6s (1251 modules)
+ GET / 200 in 4150ms
+ ✓ Compiled in 748ms (555 modules)
+ ○ Compiling /api/migrations ...
+ ✓ Compiled /api/migrations in 606ms (641 modules)
+📊 Fetching migration jobs from database
+📡 OMA API returned 0 active jobs
+✅ Retrieved 0 migration jobs (0 active + 0 recent)
+ GET /api/migrations 200 in 740ms
+ ✓ Compiled in 507ms (542 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/home/pgrayson/migration-dashboard/.next/cache/webpack/client-development/1.pack.gz_' -> '/home/pgrayson/migration-dashboard/.next/cache/webpack/client-development/1.pack.gz'
+ ✓ Compiled in 838ms (556 modules)
+ ✓ Compiled in 487ms (556 modules)
+ ✓ Compiled in 306ms (542 modules)
+ ✓ Compiled in 560ms (556 modules)
+ ✓ Compiled / in 386ms (696 modules)
+ GET / 200 in 832ms
+ ✓ Compiled in 945ms (1252 modules)
+ GET / 200 in 327ms
+ ✓ Compiled in 823ms (556 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/home/pgrayson/migration-dashboard/.next/cache/webpack/client-development/4.pack.gz_' -> '/home/pgrayson/migration-dashboard/.next/cache/webpack/client-development/4.pack.gz'
+ ✓ Compiled in 1115ms (556 modules)
+ ✓ Compiled in 457ms (556 modules)
+ ✓ Compiled in 508ms (556 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/home/pgrayson/migration-dashboard/.next/cache/webpack/client-development/0.pack.gz_' -> '/home/pgrayson/migration-dashboard/.next/cache/webpack/client-development/0.pack.gz'
+ ✓ Compiled in 671ms (556 modules)
+ ✓ Compiled in 669ms (556 modules)
+ ✓ Compiled in 356ms (556 modules)
