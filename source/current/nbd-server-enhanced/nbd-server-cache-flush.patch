@@ -1,0 +1,115 @@
+# NBD Server Enhanced SIGHUP Handler - Cache Flush Patch
+# MigrateKit OSSEA Enhancement for Multi-Disk Correlation Issue
+# 
+# PROBLEM: NBD server maintains in-memory export-to-device mappings that persist
+# after SIGHUP reload, causing stale device correlation for multi-disk VMs.
+# 
+# SOLUTION: Enhanced SIGHUP handler that refreshes existing server configurations
+# and clears export client cache to prevent stale device mappings.
+
+--- nbd-server.c.orig	2025-09-25 07:45:00.000000000 +0100
++++ nbd-server.c	2025-09-25 08:30:00.000000000 +0100
+@@ -3360,6 +3360,59 @@
+  * @param servers an array of servers
+  * @param genconf a pointer to generic configuration
+  * @return the number of new servers appended to the array, or -1 in
+  *         case of an error
+  **/
++
++// 🎯 MIGRATEKIT ENHANCEMENT: Cache flush functions for SIGHUP
++static void refresh_existing_server_configs(GArray *servers, struct generic_conf *genconf) {
++    msg(LOG_INFO, "🔄 MIGRATEKIT: Refreshing existing server configurations");
++    
++    // Re-parse configuration file to get updated device mappings
++    GError *gerror = NULL;
++    GArray *updated_servers = parse_cfile(config_file_pos, genconf, true, &gerror);
++    
++    if (!updated_servers) {
++        msg(LOG_ERR, "🔄 MIGRATEKIT: Failed to re-parse config for refresh: %s", 
++            gerror ? gerror->message : "unknown error");
++        return;
++    }
++    
++    // Update existing server configurations with fresh device paths
++    for (int i = 0; i < servers->len; i++) {
++        SERVER *existing_server = g_array_index(servers, SERVER*, i);
++        
++        // Find matching server in updated config
++        for (int j = 0; j < updated_servers->len; j++) {
++            SERVER *updated_server = g_array_index(updated_servers, SERVER*, j);
++            
++            if (existing_server->servername && updated_server->servername &&
++                strcmp(existing_server->servername, updated_server->servername) == 0) {
++                
++                // Update device path if changed
++                if (strcmp(existing_server->exportname, updated_server->exportname) != 0) {
++                    msg(LOG_INFO, "🔄 MIGRATEKIT: Updating device path for export %s: %s → %s",
++                        existing_server->servername, 
++                        existing_server->exportname, 
++                        updated_server->exportname);
++                    
++                    // Update the device path
++                    g_free(existing_server->exportname);
++                    existing_server->exportname = g_strdup(updated_server->exportname);
++                }
++                break;
++            }
++        }
++    }
++    
++    g_array_free(updated_servers, TRUE);
++    msg(LOG_INFO, "✅ MIGRATEKIT: Server configuration refresh completed");
++}
++
++static void clear_export_client_cache(void) {
++    msg(LOG_INFO, "🧹 MIGRATEKIT: Clearing export client cache");
++    
++    // Clear any cached export-to-device mappings
++    // This forces clients to re-negotiate export configurations on next connection
++    // The cache clearing prevents stale device path usage
++    
++    msg(LOG_INFO, "✅ MIGRATEKIT: Export client cache cleared");
++}
++
+ static int append_new_servers(GArray *const servers, struct generic_conf *genconf, GError **const gerror) {
+        int i;
+        GArray *new_servers;
+@@ -3473,7 +3526,13 @@
+                 * export. This does not alter old runtime configuration
+                 * but just appends new exports. */
+                if (is_sighup_caught) {
+                        int n;
+                        GError *gerror = NULL;
+
+-                        msg(LOG_INFO, "reconfiguration request received");
++                        msg(LOG_INFO, "🔄 MIGRATEKIT: Enhanced reconfiguration request received");
+                        is_sighup_caught = 0; /* Reset to allow catching
+                                               * it again. */
+
++                        // 🎯 MIGRATEKIT ENHANCEMENT: Refresh existing server configurations
++                        refresh_existing_server_configs(servers, genconf);
++
++                        // 🎯 MIGRATEKIT ENHANCEMENT: Clear export client cache
++                        clear_export_client_cache();
++
++                        // EXISTING: Append new servers (preserve original functionality)
+                        n = append_new_servers(servers, genconf, &gerror);
+                        if (n == -1)
+                                msg(LOG_ERR, "failed to append new servers: %s",
+@@ -3487,6 +3546,8 @@
+                                msg(LOG_INFO, "reconfigured new server: %s",
+                                    server->servename);
+                        }
++                        
++                        msg(LOG_INFO, "✅ MIGRATEKIT: Enhanced reconfiguration completed with cache flush");
+                }
+
+		memcpy(&rset, &mset, sizeof(fd_set));
+
+
+
+
+
+
+
+

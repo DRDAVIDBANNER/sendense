@@ -1,0 +1,35 @@
+[Unit]
+Description=OMA Auto-login Setup Wizard
+Documentation=https://github.com/DRDAVIDBANNER/X-Vire
+After=multi-user.target network.target mariadb.service oma-api.service volume-daemon.service
+Wants=network.target
+
+[Service]
+Type=idle
+User=pgrayson
+Group=pgrayson
+TTY=/dev/tty1
+ExecStart=/opt/ossea-migrate/oma-setup-wizard.sh
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+Restart=no
+RemainAfterExit=yes
+
+# Environment variables
+Environment=HOME=/home/pgrayson
+Environment=USER=pgrayson
+Environment=TERM=xterm-256color
+
+# Security settings
+NoNewPrivileges=false
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target
+
+
+
+
+
+

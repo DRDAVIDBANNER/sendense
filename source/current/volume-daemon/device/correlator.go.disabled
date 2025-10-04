@@ -1,0 +1,271 @@
+package device
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+
+	"github.com/vexxhost/migratekit-volume-daemon/models"
+	"github.com/vexxhost/migratekit-volume-daemon/service"
+)
+
+// Correlator handles correlation between CloudStack volumes and Linux devices
+type Correlator struct {
+	monitor          service.DeviceMonitor
+	cloudStackClient service.CloudStackClient
+	volumeRepository service.VolumeRepository
+}
+
+// NewCorrelator creates a new device correlator
+func NewCorrelator(monitor service.DeviceMonitor, cloudStackClient service.CloudStackClient, volumeRepository service.VolumeRepository) *Correlator {
+	return &Correlator{
+		monitor:          monitor,
+		cloudStackClient: cloudStackClient,
+		volumeRepository: volumeRepository,
+	}
+}
+
+// CorrelateVolumeAttachment correlates a CloudStack volume attachment with a Linux device
+func (c *Correlator) CorrelateVolumeAttachment(ctx context.Context, volumeID, vmID string, timeout time.Duration) (*models.DeviceMapping, error) {
+	log.WithFields(log.Fields{
+		"volume_id": volumeID,
+		"vm_id":     vmID,
+		"timeout":   timeout,
+	}).Info("🔍 Starting volume-device correlation")
+
+	// Get the CloudStack volume information
+	volumeData, err := c.cloudStackClient.GetVolume(ctx, volumeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CloudStack volume info: %w", err)
+	}
+
+	// Extract volume size from CloudStack data
+	volumeSize, ok := volumeData["size"].(int64)
+	if !ok {
+		return nil, fmt.Errorf("invalid volume size in CloudStack data")
+	}
+
+	// Convert CloudStack size (GB) to bytes for comparison
+	volumeSizeBytes := volumeSize * 1024 * 1024 * 1024
+
+	log.WithFields(log.Fields{
+		"volume_id":   volumeID,
+		"volume_size": volumeSize,
+		"size_bytes":  volumeSizeBytes,
+	}).Debug("CloudStack volume information retrieved")
+
+	// Get current devices before waiting for new ones
+	existingDevices, err := c.monitor.GetDevices(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get existing devices: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"existing_device_count": len(existingDevices),
+	}).Debug("Current device state captured")
+
+	// Wait for new device to appear
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		// Check for new device events
+		eventCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		event, err := c.monitor.WaitForDevice(eventCtx, 5*time.Second)
+		cancel()
+
+		if err != nil {
+			// No event received, continue waiting
+			continue
+		}
+
+		if event.Type != service.DeviceAdded {
+			continue
+		}
+
+		log.WithFields(log.Fields{
+			"device_path": event.DevicePath,
+			"device_size": event.DeviceInfo.Size,
+			"event_time":  event.Timestamp,
+		}).Debug("New device detected during correlation")
+
+		// Check if this device matches our volume by size
+		if c.deviceSizeMatches(event.DeviceInfo.Size, volumeSizeBytes) {
+			mapping := &models.DeviceMapping{
+				VolumeUUID:                volumeID,
+				VolumeIDNumeric:           nil, // Will be populated from CloudStack if available
+				VMID:                      vmID,
+				OperationMode:             string(models.OperationModeOMA), // Device correlation only for OMA
+				CloudStackDeviceID:        nil,
+				RequiresDeviceCorrelation: true,
+				DevicePath:                event.DevicePath,
+				CloudStackState:           "attached",
+				LinuxState:                "detected",
+				Size:                      event.DeviceInfo.Size,
+				LastSync:                  time.Now(),
+				CreatedAt:                 time.Now(),
+				UpdatedAt:                 time.Now(),
+			}
+
+			log.WithFields(log.Fields{
+				"volume_id":   volumeID,
+				"device_path": event.DevicePath,
+				"size_match":  true,
+			}).Info("✅ Successfully correlated volume to device")
+
+			return mapping, nil
+		}
+
+		log.WithFields(log.Fields{
+			"device_path":     event.DevicePath,
+			"device_size":     event.DeviceInfo.Size,
+			"expected_size":   volumeSizeBytes,
+			"size_difference": math.Abs(float64(event.DeviceInfo.Size - volumeSizeBytes)),
+		}).Debug("Device size mismatch, continuing search")
+	}
+
+	return nil, fmt.Errorf("timeout: no matching device found for volume %s within %v", volumeID, timeout)
+}
+
+// CorrelateVolumeDetachment handles volume detachment correlation
+func (c *Correlator) CorrelateVolumeDetachment(ctx context.Context, volumeID string, timeout time.Duration) error {
+	log.WithFields(log.Fields{
+		"volume_id": volumeID,
+		"timeout":   timeout,
+	}).Info("🔍 Starting volume detachment correlation")
+
+	// Get the device mapping before detachment
+	mapping, err := c.volumeRepository.GetMapping(ctx, volumeID)
+	if err != nil {
+		return fmt.Errorf("failed to get device mapping: %w", err)
+	}
+
+	expectedDevicePath := mapping.DevicePath
+
+	log.WithFields(log.Fields{
+		"volume_id":     volumeID,
+		"expected_path": expectedDevicePath,
+	}).Debug("Waiting for device removal")
+
+	// Wait for device removal event
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		eventCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		event, err := c.monitor.WaitForDevice(eventCtx, 5*time.Second)
+		cancel()
+
+		if err != nil {
+			continue
+		}
+
+		if event.Type == service.DeviceRemoved && event.DevicePath == expectedDevicePath {
+			log.WithFields(log.Fields{
+				"volume_id":   volumeID,
+				"device_path": expectedDevicePath,
+			}).Info("✅ Successfully correlated volume detachment")
+
+			return nil
+		}
+	}
+
+	return fmt.Errorf("timeout: device removal not detected for volume %s within %v", volumeID, timeout)
+}
+
+// FindBestDeviceMatch finds the best matching device for a volume based on multiple criteria
+func (c *Correlator) FindBestDeviceMatch(ctx context.Context, volumeSize int64) (*service.DeviceInfo, error) {
+	devices, err := c.monitor.GetDevices(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get devices: %w", err)
+	}
+
+	var bestMatch *service.DeviceInfo
+	var bestScore float64 = -1
+
+	for _, device := range devices {
+		score := c.calculateMatchScore(device, volumeSize)
+
+		log.WithFields(log.Fields{
+			"device_path": device.Path,
+			"device_size": device.Size,
+			"volume_size": volumeSize,
+			"score":       score,
+		}).Debug("Device match score calculated")
+
+		if score > bestScore {
+			bestScore = score
+			deviceCopy := device
+			bestMatch = &deviceCopy
+		}
+	}
+
+	if bestMatch == nil {
+		return nil, fmt.Errorf("no suitable device found for volume size %d", volumeSize)
+	}
+
+	log.WithFields(log.Fields{
+		"device_path": bestMatch.Path,
+		"device_size": bestMatch.Size,
+		"volume_size": volumeSize,
+		"final_score": bestScore,
+	}).Info("Best device match found")
+
+	return bestMatch, nil
+}
+
+// deviceSizeMatches checks if a device size reasonably matches a volume size
+func (c *Correlator) deviceSizeMatches(deviceSize, volumeSize int64) bool {
+	// Allow for some tolerance due to CloudStack overhead (typically 1-2GB)
+	tolerance := int64(3 * 1024 * 1024 * 1024) // 3GB tolerance
+
+	sizeDiff := int64(math.Abs(float64(deviceSize - volumeSize)))
+
+	matches := sizeDiff <= tolerance
+
+	log.WithFields(log.Fields{
+		"device_size": deviceSize,
+		"volume_size": volumeSize,
+		"size_diff":   sizeDiff,
+		"tolerance":   tolerance,
+		"matches":     matches,
+	}).Debug("Device size match check")
+
+	return matches
+}
+
+// calculateMatchScore calculates a match score for a device against a volume
+func (c *Correlator) calculateMatchScore(device service.DeviceInfo, volumeSize int64) float64 {
+	// Size match score (most important factor)
+	sizeDiff := math.Abs(float64(device.Size - volumeSize))
+	maxSizeDiff := float64(5 * 1024 * 1024 * 1024) // 5GB max reasonable difference
+
+	if sizeDiff > maxSizeDiff {
+		return 0.0 // No match if size difference is too large
+	}
+
+	sizeScore := 1.0 - (sizeDiff / maxSizeDiff)
+
+	// Prefer devices that haven't been seen before (check metadata)
+	recencyScore := 1.0
+	if scanTime, exists := device.Metadata["scan_time"]; exists {
+		if parsed, err := time.Parse(time.RFC3339, scanTime); err == nil {
+			age := time.Since(parsed)
+			// Prefer newer devices (recently detected)
+			if age < 30*time.Second {
+				recencyScore = 1.0
+			} else {
+				recencyScore = 0.5
+			}
+		}
+	}
+
+	// Combined score (size is most important)
+	finalScore := (sizeScore * 0.8) + (recencyScore * 0.2)
+
+	return finalScore
+}
+
+// generateMappingID generates a unique ID for device mappings
+func generateMappingID() string {
+	return fmt.Sprintf("mapping-%d", time.Now().UnixNano())
+}

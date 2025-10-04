@@ -1,0 +1,271 @@
+// Package service provides NBD export management operations for volume access
+package service
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+
+	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
+	"github.com/vexxhost/migratekit-volume-daemon/models"
+	"github.com/vexxhost/migratekit-volume-daemon/nbd"
+)
+
+// NBDExportOperations handles all NBD export lifecycle management
+type NBDExportOperations struct {
+	nbdExportManager *nbd.ExportManager
+	repo             VolumeRepository
+}
+
+// NewNBDExportOperations creates a new NBD export operations handler
+func NewNBDExportOperations(nbdExportManager *nbd.ExportManager, repo VolumeRepository) *NBDExportOperations {
+	return &NBDExportOperations{
+		nbdExportManager: nbdExportManager,
+		repo:             repo,
+	}
+}
+
+// CreateNBDExport creates an NBD export for volume access
+func (neo *NBDExportOperations) CreateNBDExport(ctx context.Context, volumeID, vmName, vmID string, diskNumber int) (*models.NBDExportInfo, error) {
+	log.WithFields(log.Fields{
+		"volume_id":   volumeID,
+		"vm_name":     vmName,
+		"vm_id":       vmID,
+		"disk_number": diskNumber,
+	}).Info("🔧 Creating NBD export for volume")
+
+	// Get device mapping to determine device path
+	mapping, err := neo.repo.GetMapping(ctx, volumeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get device mapping for NBD export: %w", err)
+	}
+
+	devicePath := mapping.DevicePath
+
+	// Generate export name
+	exportName := fmt.Sprintf("migration-vol-%s", volumeID)
+
+	// Create NBD export via manager
+	export, err := neo.nbdExportManager.CreateExport(ctx, &models.NBDExportInfo{
+		ID:         uuid.New().String(),
+		VolumeID:   volumeID,
+		ExportName: exportName,
+		DevicePath: devicePath,
+		Port:       10809,
+		Status:     "active",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create NBD export: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"volume_id":   volumeID,
+		"export_name": exportName,
+		"device_path": devicePath,
+		"export_id":   export.ID,
+	}).Info("✅ NBD export created successfully")
+
+	return export, nil
+}
+
+// DeleteNBDExport removes an NBD export for a volume
+func (neo *NBDExportOperations) DeleteNBDExport(ctx context.Context, volumeID string) error {
+	log.WithField("volume_id", volumeID).Info("🗑️ Deleting NBD export")
+
+	err := neo.nbdExportManager.DeleteExport(ctx, volumeID)
+	if err != nil {
+		return fmt.Errorf("failed to delete NBD export: %w", err)
+	}
+
+	log.WithField("volume_id", volumeID).Info("✅ NBD export deleted successfully")
+	return nil
+}
+
+// GetNBDExport retrieves NBD export information for a volume
+func (neo *NBDExportOperations) GetNBDExport(ctx context.Context, volumeID string) (*models.NBDExportInfo, error) {
+	return neo.nbdExportManager.GetExport(ctx, volumeID)
+}
+
+// ListNBDExports lists all NBD exports with optional filtering
+func (neo *NBDExportOperations) ListNBDExports(ctx context.Context, filter models.NBDExportFilter) ([]*models.NBDExportInfo, error) {
+	return neo.nbdExportManager.ListExports(ctx, filter)
+}
+
+// ValidateNBDExports validates all NBD export configurations
+func (neo *NBDExportOperations) ValidateNBDExports(ctx context.Context) error {
+	return neo.nbdExportManager.ValidateExports(ctx)
+}
+
+// CreateNBDExportForVolume creates NBD export during volume attachment (internal method)
+func (neo *NBDExportOperations) CreateNBDExportForVolume(ctx context.Context, volumeID, vmID, devicePath string) {
+	log.WithFields(log.Fields{
+		"volume_id":   volumeID,
+		"vm_id":       vmID,
+		"device_path": devicePath,
+	}).Info("🔧 Creating NBD export for attached volume")
+
+	// Get VM name for export naming
+	vmName := neo.getVMName(ctx, vmID)
+	diskNumber := neo.getNextDiskNumber(ctx, vmID)
+
+	// Create NBD export
+	_, err := neo.CreateNBDExport(ctx, volumeID, vmName, vmID, diskNumber)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"volume_id":   volumeID,
+			"error":       err,
+			"device_path": devicePath,
+		}).Error("Failed to create NBD export for volume")
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"volume_id":   volumeID,
+		"device_path": devicePath,
+		"vm_name":     vmName,
+		"disk_number": diskNumber,
+	}).Info("✅ NBD export created for attached volume")
+}
+
+// DeleteNBDExportForVolume removes NBD export during volume detachment (internal method)
+func (neo *NBDExportOperations) DeleteNBDExportForVolume(ctx context.Context, volumeID string) {
+	log.WithField("volume_id", volumeID).Info("🗑️ Removing NBD export for detached volume")
+
+	err := neo.DeleteNBDExport(ctx, volumeID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"volume_id": volumeID,
+			"error":     err,
+		}).Error("Failed to delete NBD export for volume")
+		return
+	}
+
+	log.WithField("volume_id", volumeID).Info("✅ NBD export removed for detached volume")
+}
+
+// EnsureNBDExportDevicePathCorrect validates and corrects NBD export device paths
+func (neo *NBDExportOperations) EnsureNBDExportDevicePathCorrect(ctx context.Context, volumeID, currentDevicePath string) error {
+	log.WithFields(log.Fields{
+		"volume_id":           volumeID,
+		"current_device_path": currentDevicePath,
+	}).Info("🔍 Validating NBD export device path")
+
+	// Get NBD export
+	export, err := neo.GetNBDExport(ctx, volumeID)
+	if err != nil {
+		return fmt.Errorf("failed to get NBD export for validation: %w", err)
+	}
+
+	// Check if device path matches
+	if export.DevicePath != currentDevicePath {
+		log.WithFields(log.Fields{
+			"volume_id":      volumeID,
+			"export_device":  export.DevicePath,
+			"current_device": currentDevicePath,
+		}).Warn("⚠️ NBD export device path mismatch detected - updating")
+
+		// Update export device path
+		err = neo.updateNBDExportDevicePath(ctx, volumeID, currentDevicePath)
+		if err != nil {
+			return fmt.Errorf("failed to update NBD export device path: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// CreateNBDExportConfigFile creates NBD configuration file for export
+func (neo *NBDExportOperations) CreateNBDExportConfigFile(exportName, devicePath, configPath string) error {
+	config := fmt.Sprintf(`[%s]
+exportname = %s
+readonly = false
+multifile = false
+copyonwrite = false`, exportName, devicePath)
+
+	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
+		return fmt.Errorf("failed to write NBD export config: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"export_name":      exportName,
+		"device_path":      devicePath,
+		"config_file_path": configPath,
+	}).Info("✅ Successfully wrote NBD export config file")
+
+	return nil
+}
+
+// ReloadNBDServer sends SIGHUP to reload NBD server configuration
+func (neo *NBDExportOperations) ReloadNBDServer() error {
+	// Find NBD server process
+	cmd := exec.Command("pgrep", "nbd-server")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("NBD server process not found: %w", err)
+	}
+
+	pidStr := strings.TrimSpace(string(output))
+	if pidStr == "" {
+		return fmt.Errorf("NBD server process not found")
+	}
+
+	// Send SIGHUP to reload configuration
+	reloadCmd := exec.Command("kill", "-HUP", pidStr)
+	if err := reloadCmd.Run(); err != nil {
+		return fmt.Errorf("failed to send SIGHUP to NBD server: %w", err)
+	}
+
+	log.WithField("nbd_server_pid", pidStr).Info("✅ NBD server configuration reloaded via SIGHUP")
+	return nil
+}
+
+// Helper methods for NBD operations
+
+// getVMName retrieves VM name from CloudStack (with caching potential)
+func (neo *NBDExportOperations) getVMName(ctx context.Context, vmID string) string {
+	// TODO: Implement CloudStack VM name lookup
+	// For now, return VM ID as fallback
+	return fmt.Sprintf("vm-%s", vmID[:8])
+}
+
+// getNextDiskNumber determines the next available disk number for VM
+func (neo *NBDExportOperations) getNextDiskNumber(ctx context.Context, vmID string) int {
+	// TODO: Implement disk number calculation based on existing exports
+	// For now, return 0 as default
+	return 0
+}
+
+// updateNBDExportDevicePath updates the device path for an existing NBD export
+func (neo *NBDExportOperations) updateNBDExportDevicePath(ctx context.Context, volumeID, newDevicePath string) error {
+	// Get export info
+	export, err := neo.GetNBDExport(ctx, volumeID)
+	if err != nil {
+		return err
+	}
+
+	// Update device path in export
+	export.DevicePath = newDevicePath
+
+	// Update via NBD export manager
+	return neo.nbdExportManager.UpdateExport(ctx, export)
+}
+
+// extractDevicePathFromNBDConfig extracts device path from NBD configuration content
+func (neo *NBDExportOperations) extractDevicePathFromNBDConfig(configContent string) string {
+	// Parse exportname line from NBD config
+	lines := strings.Split(configContent, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "exportname") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				devicePath := strings.TrimSpace(parts[1])
+				return devicePath
+			}
+		}
+	}
+	return ""
+}

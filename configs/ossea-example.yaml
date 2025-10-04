@@ -1,0 +1,30 @@
+# Example OSSEA configuration for OMA
+# This file shows how to configure OSSEA connection details including the OMA VM ID
+
+name: "production-ossea"
+api_url: "http://ossea.example.com/client/api"
+api_key: "your-api-key-here"
+secret_key: "your-secret-key-here"
+domain: ""  # Optional - leave empty if not using domains
+zone: "zone1"  # Required - the zone where OMA and volumes will be created
+
+# OSSEA-specific IDs
+template_id: ""  # Optional - template for creating VMs
+network_id: ""   # Optional - network for VMs
+service_offering_id: ""  # Optional - compute offering for VMs
+disk_offering_id: ""     # Optional - disk offering for volumes
+
+# OMA VM identification
+oma_vm_id: "12345678-1234-1234-1234-123456789012"  # The VM ID of this OMA appliance in OSSEA
+
+# Example environment variables (alternative to YAML file):
+# export OSSEA_API_URL="http://ossea.example.com/client/api"
+# export OSSEA_API_KEY="your-api-key-here"
+# export OSSEA_SECRET_KEY="your-secret-key-here"
+# export OSSEA_DOMAIN=""
+# export OSSEA_ZONE="zone1"
+# export OSSEA_TEMPLATE_ID=""
+# export OSSEA_NETWORK_ID=""
+# export OSSEA_SERVICE_OFFERING_ID=""
+# export OSSEA_DISK_OFFERING_ID=""
+# export OSSEA_OMA_VM_ID="12345678-1234-1234-1234-123456789012"

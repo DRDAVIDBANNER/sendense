@@ -1,0 +1,42 @@
+[Unit]
+Description=VMA Enhanced SSH Tunnel to OMA (Bidirectional + API Access + Keep-Alive)
+After=network-online.target vma-api.service
+Wants=network-online.target
+Requires=vma-api.service
+
+[Service]
+Type=simple
+User=pgrayson
+Group=pgrayson
+WorkingDirectory=/home/pgrayson/migratekit-cloudstack
+
+# Use the enhanced tunnel script
+ExecStart=/home/pgrayson/migratekit-cloudstack/scripts/enhanced-ssh-tunnel.sh
+
+# Enhanced restart policy
+Restart=always
+RestartSec=15
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Resource limits
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/log /tmp
+
+# Environment
+Environment=OMA_HOST=10.245.246.125
+Environment=SSH_KEY=/home/pgrayson/.ssh/cloudstack_key
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vma-tunnel-enhanced
+
+[Install]
+WantedBy=multi-user.target

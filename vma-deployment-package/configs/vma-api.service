@@ -1,0 +1,17 @@
+[Unit]
+Description=VMA Control API Server
+After=network.target
+
+[Service]
+Type=simple
+User=vma
+Group=vma
+WorkingDirectory=/opt/vma
+ExecStart=/opt/vma/bin/vma-api-server -port 8081
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

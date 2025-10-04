@@ -1,0 +1,2 @@
+[33m46e4493[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m FEATURE: Migrate to Volume Daemon with CapacityBytes + 5GB sizing
+[33m86d0135[m Pre-migration: Volume size calculation before CapacityBytes integration

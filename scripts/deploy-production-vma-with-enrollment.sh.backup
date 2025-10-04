@@ -1,0 +1,477 @@
+#!/bin/bash
+# Production VMA Deployment Script with VMA Enrollment System
+# Deploys complete VMA with enrollment capabilities
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+echo -e "${BLUE}${BOLD}"
+cat << 'EOF'
+╔══════════════════════════════════════════════════════════════════╗
+║                Production VMA Deployment Script                  ║
+║              With VMA Enrollment System Support                  ║
+║                                                                  ║
+║                    🚀 Enterprise Ready                          ║
+╚══════════════════════════════════════════════════════════════════╝
+EOF
+echo -e "${NC}"
+
+echo -e "${CYAN}Deploying production VMA with complete enrollment system...${NC}"
+echo ""
+
+# Phase 1: System Dependencies
+echo -e "${BOLD}📦 Phase 1: Installing System Dependencies${NC}"
+echo "Installing system dependencies..."
+apt-get update
+apt-get install -y haveged jq curl openssh-client golang-go nbdkit libnbd-dev
+systemctl enable haveged
+systemctl start haveged
+echo -e "${GREEN}✅ System dependencies installed${NC}"
+echo ""
+
+# Phase 1.5: Deploy NBD Stack (nbdkit + VDDK)
+echo -e "${BOLD}📦 Phase 1.5: Deploying NBD Stack (nbdkit + VDDK)${NC}"
+NBD_STACK_PATH="/tmp/nbdkit-vddk-stack.tar.gz"
+if [ -f "$NBD_STACK_PATH" ]; then
+    echo "Extracting NBD stack from $NBD_STACK_PATH..."
+    tar xzf "$NBD_STACK_PATH" -C /
+    
+    # Create nbdkit VDDK library symlinks
+    echo "Creating nbdkit VDDK library symlinks..."
+    mkdir -p /usr/lib/x86_64-linux-gnu/vmware-vix-disklib/lib64
+    cd /usr/lib/x86_64-linux-gnu/vmware-vix-disklib/lib64
+    ln -sf /usr/lib/vmware-vix-disklib/lib64/libvixDiskLib.so libvixDiskLib.so
+    ln -sf /usr/lib/vmware-vix-disklib/lib64/libvixDiskLib.so.8 libvixDiskLib.so.8
+    ln -sf /usr/lib/vmware-vix-disklib/lib64/libvixDiskLib.so.8.0.3 libvixDiskLib.so.8.0.3
+    ln -sf /usr/lib/vmware-vix-disklib/lib64/libvixDiskLib.so.8.0.3 libvixDiskLib.so.9
+    cd - >/dev/null
+    
+    # Configure dynamic linker for VDDK libraries
+    echo "Configuring dynamic linker for VDDK libraries..."
+    echo '/usr/lib/vmware-vix-disklib/lib64' > /etc/ld.so.conf.d/vmware-vix-disklib.conf
+    ldconfig
+    echo "✅ VDDK libraries added to linker cache"
+    
+    # Verify installation
+    if command -v nbdkit >/dev/null 2>&1 && nbdkit --dump-plugin vddk >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ NBD stack deployed successfully${NC}"
+        nbdkit --version
+        echo "   VDDK plugin: $(nbdkit --dump-plugin vddk 2>&1 | grep '^version=' | cut -d= -f2)"
+        echo "   Libraries: /usr/lib/vmware-vix-disklib/"
+        echo "   Plugin lib path: /usr/lib/x86_64-linux-gnu/vmware-vix-disklib/lib64/"
+        echo "   LD cache: $(ldconfig -p | grep -c libvixDiskLib) VDDK libraries in cache"
+    else
+        echo -e "${RED}❌ NBD stack deployment failed${NC}"
+        echo "   nbdkit or VDDK plugin not working properly"
+        exit 1
+    fi
+else
+    echo -e "${RED}❌ NBD stack tarball not found at $NBD_STACK_PATH${NC}"
+    echo "   Required for VMware migrations"
+    echo "   Please copy nbdkit-vddk-stack.tar.gz to /tmp/"
+    exit 1
+fi
+echo ""
+
+# Phase 1.6: Deploy migratekit binary
+echo -e "${BOLD}🔧 Phase 1.6: Deploying migratekit binary${NC}"
+MIGRATEKIT_SOURCE="/tmp/migratekit-v2.21.0-hierarchical-sparse-optimization"
+if [ -f "$MIGRATEKIT_SOURCE" ]; then
+    echo "Deploying working migratekit binary..."
+    cp "$MIGRATEKIT_SOURCE" /opt/vma/bin/migratekit
+    chown vma:vma /opt/vma/bin/migratekit
+    chmod +x /opt/vma/bin/migratekit
+    
+    # Verify deployment
+    if [ -x "/opt/vma/bin/migratekit" ]; then
+        echo -e "${GREEN}✅ migratekit binary deployed successfully${NC}"
+        echo "   Binary: migratekit-v2.21.0-hierarchical-sparse-optimization (latest version)"
+        echo "   BuildID: $(readelf -n /opt/vma/bin/migratekit | grep 'Build ID' | awk '{print $3}' 2>/dev/null || echo 'N/A')"
+        echo "   Size: $(ls -lh /opt/vma/bin/migratekit | awk '{print $5}')"
+    else
+        echo -e "${RED}❌ migratekit binary deployment failed${NC}"
+        exit 1
+    fi
+else
+    echo -e "${RED}❌ migratekit binary not found at $MIGRATEKIT_SOURCE${NC}"
+    echo "   Required for VMware migrations"
+    exit 1
+fi
+echo ""
+
+# Phase 2: VMA Directory Structure
+echo -e "${BOLD}📁 Phase 2: Creating VMA Directory Structure${NC}"
+mkdir -p /opt/vma/{bin,config,enrollment,ssh,scripts,logs}
+mkdir -p /var/log/vma
+chown -R root:root /opt/vma
+chmod 755 /opt/vma/{bin,scripts}
+chmod 750 /opt/vma/{config,logs}
+chmod 700 /opt/vma/{enrollment,ssh}
+echo -e "${GREEN}✅ VMA directory structure created${NC}"
+echo ""
+
+# Phase 2.5: Deploy SSH Keys and Setup VMA User
+echo -e "${BOLD}🔑 Phase 2.5: Deploying SSH Keys and VMA User Setup${NC}"
+
+# Create vma user home directory and SSH setup
+mkdir -p /home/vma/.ssh
+chown vma:vma /home/vma/.ssh
+chmod 700 /home/vma/.ssh
+
+# Deploy cloudstack SSH key (working key for testing)
+echo "Deploying working SSH key for tunnel access..."
+if [ -f "/tmp/cloudstack_key" ] && [ -f "/tmp/cloudstack_key.pub" ]; then
+    cp /tmp/cloudstack_key /home/vma/.ssh/cloudstack_key
+    cp /tmp/cloudstack_key.pub /home/vma/.ssh/cloudstack_key.pub
+    
+    # Set correct permissions
+    chown vma:vma /home/vma/.ssh/cloudstack_key*
+    chmod 600 /home/vma/.ssh/cloudstack_key
+    chmod 644 /home/vma/.ssh/cloudstack_key.pub
+    
+    echo -e "${GREEN}✅ SSH keys deployed successfully${NC}"
+    echo "   Private key: /home/vma/.ssh/cloudstack_key"
+    echo "   Public key: /home/vma/.ssh/cloudstack_key.pub"
+    echo "   Fingerprint: $(ssh-keygen -lf /home/vma/.ssh/cloudstack_key.pub | awk '{print $2}' 2>/dev/null || echo 'N/A')"
+else
+    echo -e "${YELLOW}⚠️  SSH keys not found in /tmp/${NC}"
+    echo "   Expected: /tmp/cloudstack_key and /tmp/cloudstack_key.pub"
+    echo "   Keys must be copied before running this script"
+fi
+
+# Create log file with correct permissions
+echo "Setting up logging..."
+touch /var/log/vma-tunnel-enhanced.log
+chown vma:vma /var/log/vma-tunnel-enhanced.log
+chmod 644 /var/log/vma-tunnel-enhanced.log
+
+# Configure passwordless sudo for VMA user (required for setup wizard)
+echo "Configuring VMA user sudo access..."
+usermod -a -G sudo vma
+tee /etc/sudoers.d/vma > /dev/null << 'SUDO_EOF'
+# VMA user passwordless sudo for setup wizard
+vma ALL=(ALL) NOPASSWD: ALL
+SUDO_EOF
+
+echo -e "${GREEN}✅ VMA user and logging setup complete${NC}"
+echo "   Sudo access: Passwordless (required for wizard)"
+echo ""
+
+# Phase 2.6: Deploy VMA Setup Wizard
+echo -e "${BOLD}🧙 Phase 2.6: Deploying VMA Setup Wizard${NC}"
+echo "Deploying VMA setup wizard..."
+
+if [ -f "/tmp/vma-setup-wizard.sh" ]; then
+    cp /tmp/vma-setup-wizard.sh /opt/vma/setup-wizard.sh
+    chmod +x /opt/vma/setup-wizard.sh
+    chown vma:vma /opt/vma/setup-wizard.sh
+    
+    echo -e "${GREEN}✅ VMA setup wizard deployed${NC}"
+    echo "   Location: /opt/vma/setup-wizard.sh"
+    echo "   Usage: sudo /opt/vma/setup-wizard.sh"
+    
+    # Configure auto-login wizard for console access
+    echo "Configuring auto-login wizard..."
+    cat > /etc/systemd/system/vma-autologin.service << 'AUTOLOGIN_EOF'
+[Unit]
+Description=VMA Auto-login Setup Wizard
+Documentation=VMA setup wizard
+After=multi-user.target network.target
+Wants=network.target
+
+[Service]
+Type=idle
+User=vma
+Group=vma
+TTY=/dev/tty1
+ExecStart=/opt/vma/setup-wizard.sh
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+Restart=no
+RemainAfterExit=yes
+
+# Environment variables
+Environment=HOME=/home/vma
+Environment=USER=vma
+Environment=TERM=xterm-256color
+
+# Security settings  
+NoNewPrivileges=false
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target
+AUTOLOGIN_EOF
+    
+    # Enable auto-login and disable default getty
+    systemctl disable getty@tty1.service 2>/dev/null || true
+    systemctl enable vma-autologin.service
+    systemctl daemon-reload
+    
+    echo -e "${GREEN}✅ Auto-login wizard configured${NC}"
+else
+    echo -e "${YELLOW}⚠️  VMA setup wizard not found in /tmp/${NC}"
+    echo "   Expected: /tmp/vma-setup-wizard.sh"
+    echo "   Copy from working VMA before running script"
+fi
+echo ""
+
+# Phase 3: Skip Enrollment System (Optional for Testing)
+echo -e "${BOLD}🔐 Phase 3: Skipping VMA Enrollment System (Testing Mode)${NC}"
+echo "Enrollment system not required for testing with existing SSH keys"
+echo -e "${GREEN}✅ Enrollment phase skipped${NC}"
+echo ""
+
+# Phase 4: Deploy VMA Services
+echo -e "${BOLD}🚀 Phase 4: Deploying VMA Services${NC}"
+
+# Create VMA API service
+echo "Creating VMA API service..."
+# Create VMA API service
+echo "Creating VMA API service..."
+cat > /etc/systemd/system/vma-api.service << 'EOF'
+[Unit]
+Description=VMA Control API Server
+After=network.target
+
+[Service]
+Type=simple
+User=vma
+Group=vma
+WorkingDirectory=/opt/vma
+ExecStart=/opt/vma/bin/vma-api-server -port 8081
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Deploy VMA Enhanced SSH Tunnel Infrastructure (proven working architecture)
+echo "Deploying VMA enhanced SSH tunnel infrastructure..."
+
+# Copy working enhanced tunnel script from git repository
+cp /home/pgrayson/migratekit-cloudstack/scripts/enhanced-ssh-tunnel.sh /opt/vma/scripts/enhanced-ssh-tunnel-remote.sh
+
+# Create enhanced tunnel script for Dev OMA
+cat > /opt/vma/scripts/enhanced-ssh-tunnel-remote.sh << 'ENHANCED_EOF'
+#!/bin/bash
+# Enhanced SSH tunnel for Dev OMA (proven working architecture)
+set -euo pipefail
+
+# Configuration for Dev OMA
+OMA_HOST="${OMA_HOST:-10.245.246.125}"
+SSH_KEY="${SSH_KEY:-/home/vma/.ssh/cloudstack_key}"
+SSH_PORT=443
+VMA_API_PORT=8081
+OMA_API_PORT=8082
+OMA_REVERSE_PORT=9081
+NBD_PORT=10809
+NBD_PORT_ALT=10808
+LOG_FILE="/var/log/vma-tunnel-enhanced.log"
+
+# SSH settings (same as working QC setup)
+SERVER_ALIVE_INTERVAL=30
+SERVER_ALIVE_COUNT_MAX=3
+CONNECT_TIMEOUT=30
+HEALTH_CHECK_INTERVAL=60
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [$$] $*" | tee -a "$LOG_FILE"
+}
+
+health_check() {
+    local test_url="http://localhost:$OMA_API_PORT/health"
+    if curl --connect-timeout 5 --max-time 10 -s "$test_url" >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+cleanup_tunnel() {
+    log "🧹 Cleaning up existing tunnel processes..."
+    pkill -f "ssh.*$OMA_HOST" || true
+    sleep 2
+    pkill -9 -f "ssh.*$OMA_HOST" || true
+    log "✅ Cleanup completed"
+}
+
+establish_tunnel() {
+    log "🔧 Establishing SSH tunnel to Dev OMA: $OMA_HOST:$SSH_PORT..."
+    
+    # Enhanced SSH tunnel (same as QC OMA working config)
+    ssh -i "$SSH_KEY" \
+        -p $SSH_PORT \
+        -R ${OMA_REVERSE_PORT}:localhost:${VMA_API_PORT} \
+        -L ${OMA_API_PORT}:localhost:${OMA_API_PORT} \
+        -L ${NBD_PORT}:localhost:${NBD_PORT} \
+        -L ${NBD_PORT_ALT}:localhost:${NBD_PORT} \
+        -N \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -o ServerAliveInterval=$SERVER_ALIVE_INTERVAL \
+        -o ServerAliveCountMax=$SERVER_ALIVE_COUNT_MAX \
+        -o ConnectTimeout=$CONNECT_TIMEOUT \
+        -o TCPKeepAlive=yes \
+        -o ExitOnForwardFailure=yes \
+        -o BatchMode=yes \
+        "pgrayson@$OMA_HOST" &
+    
+    local ssh_pid=$!
+    log "🚀 SSH tunnel started with PID: $ssh_pid"
+    
+    sleep 5
+    
+    if ! kill -0 $ssh_pid 2>/dev/null; then
+        log "❌ SSH tunnel process died immediately"
+        return 1
+    fi
+    
+    local retries=0
+    while [ $retries -lt 10 ]; do
+        if health_check; then
+            log "✅ SSH tunnel established and verified"
+            return 0
+        fi
+        retries=$((retries + 1))
+        log "⏳ Waiting for tunnel to be ready... (attempt $retries/10)"
+        sleep 3
+    done
+    
+    log "❌ SSH tunnel failed to become ready after 30 seconds"
+    return 1
+}
+
+main() {
+    log "🎯 Starting Enhanced SSH Tunnel Manager (Dev OMA)"
+    log "   Target: $OMA_HOST:$SSH_PORT"
+    log "   SSH Key: $SSH_KEY"
+    
+    cleanup_tunnel
+    
+    while true; do
+        if establish_tunnel; then
+            log "🔄 Tunnel established, starting health monitoring..."
+            
+            while true; do
+                sleep $HEALTH_CHECK_INTERVAL
+                
+                if health_check; then
+                    log "💚 Tunnel health check passed"
+                else
+                    log "💔 Tunnel health check failed - tunnel needs restart"
+                    break
+                fi
+            done
+        else
+            log "❌ Failed to establish tunnel"
+        fi
+        
+        cleanup_tunnel
+        log "⏳ Waiting 10 seconds before retry..."
+        sleep 10
+    done
+}
+
+trap 'log "🛑 Received termination signal"; cleanup_tunnel; exit 0' TERM INT
+mkdir -p "$(dirname "$LOG_FILE")"
+main
+ENHANCED_EOF
+
+chmod +x /opt/vma/scripts/enhanced-ssh-tunnel-remote.sh
+
+# Create enhanced tunnel systemd service
+cat > /etc/systemd/system/vma-tunnel-enhanced-v2.service << 'SERVICE_EOF'
+[Unit]
+Description=VMA Enhanced SSH Tunnel to OMA (Bidirectional + API Access + Keep-Alive)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pgrayson
+Group=pgrayson
+WorkingDirectory=/opt/vma
+ExecStart=/opt/vma/scripts/enhanced-ssh-tunnel-remote.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables for tunnel configuration
+Environment=OMA_HOST=10.245.246.125
+Environment=SSH_KEY=/home/pgrayson/.ssh/cloudstack_key
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+
+# Enable services
+systemctl daemon-reload
+systemctl enable vma-api.service
+systemctl enable vma-tunnel-enhanced-v2.service
+
+echo -e "${GREEN}✅ Enhanced SSH tunnel service configured${NC}"
+
+echo -e "${GREEN}✅ VMA services configured${NC}"
+echo ""
+
+# Phase 7: Final Validation
+echo -e "${BOLD}🧪 Phase 7: Final Validation${NC}"
+
+# Test enrollment script
+if bash -n /opt/vma/vma-enrollment.sh; then
+    echo -e "${GREEN}✅ Enrollment script syntax valid${NC}"
+else
+    echo -e "${RED}❌ Enrollment script syntax error${NC}"
+    exit 1
+fi
+
+# Phase 6: Stunnel Configuration for Secure Tunneling
+echo -e "${BOLD}🔐 Phase 6: Final Validation${NC}"
+
+# Test setup wizard  
+if bash -n /opt/vma/setup-wizard.sh; then
+    echo -e "${GREEN}✅ Setup wizard syntax valid${NC}"
+else
+    echo -e "${RED}❌ Setup wizard syntax error${NC}"
+    exit 1
+fi
+
+echo ""
+echo -e "${BOLD}${GREEN}🎉 Production VMA Deployment Complete!${NC}"
+echo ""
+echo -e "${CYAN}📋 VMA Enhanced Tunnel System Ready:${NC}"
+echo -e "   ${BOLD}Enrollment Script:${NC} /opt/vma/vma-enrollment.sh"
+echo -e "   ${BOLD}Setup Wizard:${NC} /opt/vma/setup-wizard.sh" 
+echo -e "   ${BOLD}Dependencies:${NC} haveged, jq, curl, openssh-client, golang-go, nbdkit, libnbd installed"
+echo -e "   ${BOLD}Directory Structure:${NC} /opt/vma/* configured"
+echo -e "   ${BOLD}Enhanced Tunnel:${NC} vma-tunnel-enhanced-v2.service (auto-recovery + health monitoring)"
+echo -e "   ${BOLD}migratekit Binary:${NC} v2.21.0-hierarchical-sparse-optimization"
+echo ""
+echo -e "${CYAN}🎯 Next Steps:${NC}"
+echo -e "   1. VMA operators can run: sudo /opt/vma/setup-wizard.sh"
+echo -e "   2. Select Option 0: VMA Enrollment"
+echo -e "   3. Enter OMA IP: 10.245.246.125 and pairing code from admin"
+echo -e "   4. Automatic enrollment and enhanced tunnel establishment"
+echo ""
+echo -e "${CYAN}🔒 Enhanced Tunnel Features:${NC}"
+echo -e "   ${GREEN}✅${NC} Bidirectional SSH tunnel (NBD + API)"
+echo -e "   ${GREEN}✅${NC} Auto-recovery with health monitoring"
+echo -e "   ${GREEN}✅${NC} Keep-alive and connection resilience"
+echo -e "   ${GREEN}✅${NC} All traffic over port 443 (internet-safe)"
+echo -e "   ${GREEN}✅${NC} Proven architecture (adapted from working QC OMA setup)"
+echo ""
+echo -e "${BOLD}${GREEN}Production VMA ready with enhanced tunnel architecture!${NC}"

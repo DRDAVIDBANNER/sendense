@@ -1,0 +1,305 @@
+diff --git a/source/current/oma/failover/enhanced_cleanup_service.go b/source/current/oma/failover/enhanced_cleanup_service.go
+index dbf15d8..86f916e 100644
+--- a/source/current/oma/failover/enhanced_cleanup_service.go
++++ b/source/current/oma/failover/enhanced_cleanup_service.go
+@@ -4,7 +4,6 @@ package failover
+ import (
+ 	"context"
+ 	"fmt"
+-	"time"
+ 
+ 	"github.com/vexxhost/migratekit-oma/database"
+ 	"github.com/vexxhost/migratekit-oma/joblog"
+@@ -18,11 +17,11 @@ type RollbackOptions struct {
+ 	FailoverType    string `json:"failover_type"`      // "test" or "live"
+ }
+ 
+-// VMAClient interface for power management operations with vCenter credentials
++// VMAClient interface for power management operations (to be implemented)
+ type VMAClient interface {
+-	PowerOnSourceVM(ctx context.Context, vmwareVMID, vcenter, username, password string) error
+-	PowerOffSourceVM(ctx context.Context, vmwareVMID, vcenter, username, password string) error
+-	GetVMPowerState(ctx context.Context, vmwareVMID, vcenter, username, password string) (string, error)
++	PowerOnSourceVM(ctx context.Context, vmwareVMID string) error
++	PowerOffSourceVM(ctx context.Context, vmwareVMID string) error
++	GetVMPowerState(ctx context.Context, vmwareVMID string) (string, error)
+ }
+ 
+ // RollbackDecision represents a user decision point during rollback
+@@ -77,115 +76,23 @@ func NewEnhancedCleanupService(db database.Connection, jobTracker *joblog.Tracke
+ 	}
+ }
+ 
+-// ExecuteTestFailoverCleanupSteps executes individual cleanup steps under an existing job
+-func (ecs *EnhancedCleanupService) ExecuteTestFailoverCleanupSteps(ctx context.Context, jobID, contextID, vmNameOrID string) error {
+-	// Get logger with job context
+-	logger := ecs.jobTracker.Logger(ctx)
+-	logger.Info("Starting enhanced test failover cleanup steps", "vm_name_or_id", vmNameOrID, "job_id", jobID)
+-
+-	// PHASE 1: Initialize OSSEA client
+-	var osseaClient *ossea.Client
+-	if err := ecs.jobTracker.RunStep(ctx, jobID, "ossea-client-initialization", func(ctx context.Context) error {
+-		var err error
+-		osseaClient, err = ecs.helpers.InitializeOSSEAClient(ctx)
+-		if err != nil {
+-			return err
+-		}
+-		// Update component clients
+-		ecs.vmCleanup.osseaClient = osseaClient
+-		ecs.snapshotCleanup.osseaClient = osseaClient
+-		ecs.helpers.osseaClient = osseaClient
+-		return nil
+-	}); err != nil {
+-		return fmt.Errorf("OSSEA client initialization failed: %w", err)
+-	}
+-
+-	// PHASE 2: Retrieve failover job and snapshot information
+-	var failoverJobID, snapshotID, testVMID string
+-	if err := ecs.jobTracker.RunStep(ctx, jobID, "failover-job-retrieval", func(ctx context.Context) error {
+-		var err error
+-		failoverJobID, snapshotID, testVMID, err = ecs.helpers.GetFailoverJobDetails(ctx, vmNameOrID)
+-		return err
+-	}); err != nil {
+-		return fmt.Errorf("failover job retrieval failed: %w", err)
+-	}
+-
+-	// PHASE 3: Stop test VM
+-	if err := ecs.jobTracker.RunStep(ctx, jobID, "test-vm-shutdown", func(ctx context.Context) error {
+-		return ecs.vmCleanup.StopTestVM(ctx, testVMID)
+-	}); err != nil {
+-		return fmt.Errorf("test VM shutdown failed: %w", err)
+-	}
+-
+-	// PHASE 4: Detach volumes from test VM
+-	var volumeIDs []string
+-	if err := ecs.jobTracker.RunStep(ctx, jobID, "volume-detachment", func(ctx context.Context) error {
+-		var err error
+-		volumeIDs, err = ecs.volumeCleanup.DetachVolumesFromTestVM(ctx, testVMID)
+-		return err
+-	}); err != nil {
+-		return fmt.Errorf("volume detachment failed: %w", err)
+-	}
+-
+-	// PHASE 5: CloudStack Volume Snapshot Rollback (if snapshot exists)
+-	if snapshotID != "" {
+-		if err := ecs.jobTracker.RunStep(ctx, jobID, "cloudstack-snapshot-rollback", func(ctx context.Context) error {
+-			return ecs.snapshotCleanup.RollbackCloudStackVolumeSnapshot(ctx, snapshotID)
+-		}); err != nil {
+-			return fmt.Errorf("cloudstack snapshot rollback failed: %w", err)
+-		}
+-
+-		// PHASE 6: Delete CloudStack volume snapshot
+-		if err := ecs.jobTracker.RunStep(ctx, jobID, "cloudstack-snapshot-deletion", func(ctx context.Context) error {
+-			return ecs.snapshotCleanup.DeleteCloudStackVolumeSnapshot(ctx, snapshotID)
+-		}); err != nil {
+-			return fmt.Errorf("cloudstack snapshot deletion failed: %w", err)
+-		}
+-	} else {
+-		logger.Info("ℹ️ No snapshot found for CloudStack volume operations")
+-	}
+-
+-	// PHASE 7: Reattach volumes to OMA
+-	if err := ecs.jobTracker.RunStep(ctx, jobID, "volume-reattachment-to-oma", func(ctx context.Context) error {
+-		return ecs.volumeCleanup.ReattachVolumesToOMA(ctx, volumeIDs, vmNameOrID)
+-	}); err != nil {
+-		return fmt.Errorf("volume reattachment to OMA failed: %w", err)
+-	}
+-
+-	// PHASE 8: Delete test VM
+-	if err := ecs.jobTracker.RunStep(ctx, jobID, "test-vm-deletion", func(ctx context.Context) error {
+-		return ecs.vmCleanup.DeleteTestVM(ctx, testVMID)
+-	}); err != nil {
+-		return fmt.Errorf("test VM deletion failed: %w", err)
+-	}
+-
+-	// PHASE 9: Update failover job status
+-	if err := ecs.jobTracker.RunStep(ctx, jobID, "failover-job-status-update", func(ctx context.Context) error {
+-		return ecs.helpers.UpdateFailoverJobStatus(ctx, failoverJobID, "completed")
+-	}); err != nil {
+-		return fmt.Errorf("failover job status update failed: %w", err)
+-	}
+-
+-	// PHASE 10: Update VM context status
+-	if err := ecs.jobTracker.RunStep(ctx, jobID, "vm-context-status-update", func(ctx context.Context) error {
+-		return ecs.vmContextRepo.UpdateVMContextStatus(contextID, "ready_for_failover")
+-	}); err != nil {
+-		return fmt.Errorf("VM context status update failed: %w", err)
+-	}
+-
+-	logger.Info("✅ Enhanced test failover cleanup completed successfully",
+-		"context_id", contextID,
+-		"vm_name_or_id", vmNameOrID,
+-		"test_vm_id", testVMID,
+-		"volumes_processed", len(volumeIDs))
+-
+-	return nil
+-}
+-
+ // ExecuteTestFailoverCleanupWithTracking orchestrates the complete enhanced test failover cleanup process
+-func (ecs *EnhancedCleanupService) ExecuteTestFailoverCleanupWithTracking(ctx context.Context, contextID, vmNameOrID string, existingJobID string) error {
+-	// Use existing job ID instead of creating a new job
+-	jobID := existingJobID
++func (ecs *EnhancedCleanupService) ExecuteTestFailoverCleanupWithTracking(ctx context.Context, contextID, vmNameOrID string) error {
++	// START: Job creation with JobLog
++	ctx, jobID, err := ecs.jobTracker.StartJob(ctx, joblog.JobStart{
++		JobType:   "cleanup",
++		Operation: "enhanced-test-failover-cleanup",
++		Owner:     stringPtr("system"),
++		Metadata: map[string]interface{}{
++			"context_id":    contextID,
++			"vm_name_or_id": vmNameOrID,
++			"operation":     "test-failover-cleanup",
++		},
++	})
++	if err != nil {
++		return fmt.Errorf("failed to start cleanup job: %w", err)
++	}
++	defer ecs.jobTracker.EndJob(ctx, jobID, joblog.StatusCompleted, nil)
+ 
+ 	// Get logger with job context
+ 	logger := ecs.jobTracker.Logger(ctx)
+@@ -296,24 +203,21 @@ func (ecs *EnhancedCleanupService) ExecuteTestFailoverCleanupWithTracking(ctx co
+ }
+ 
+ // ExecuteUnifiedFailoverRollback orchestrates rollback for both test and live failover with optional behaviors
+-func (ecs *EnhancedCleanupService) ExecuteUnifiedFailoverRollback(ctx context.Context, contextID, vmNameOrID, vmwareVMID string, options *RollbackOptions, externalJobID string) error {
+-	// Create JobLog job with external job ID correlation (copying unified failover pattern)
++func (ecs *EnhancedCleanupService) ExecuteUnifiedFailoverRollback(ctx context.Context, contextID, vmNameOrID, vmwareVMID string, options *RollbackOptions) error {
++	// START: Job creation with JobLog
++	operationType := fmt.Sprintf("enhanced-%s-failover-rollback", options.FailoverType)
+ 	ctx, jobID, err := ecs.jobTracker.StartJob(ctx, joblog.JobStart{
+-		JobType:       "cleanup",
+-		Operation:     fmt.Sprintf("enhanced-%s-failover-rollback", options.FailoverType),
+-		Owner:         stringPtr("system"),
+-		ContextID:     &contextID,          // Enhanced: Direct VM context correlation
+-		ExternalJobID: &externalJobID,      // Enhanced: GUI job ID correlation (same as unified failover)
+-		JobCategory:   stringPtr("system"), // Enhanced: High-level categorization
++		JobType:   "cleanup",
++		Operation: operationType,
++		Owner:     stringPtr("system"),
+ 		Metadata: map[string]interface{}{
+-			"context_id":      contextID, // Backward compatibility
++			"context_id":      contextID,
+ 			"vm_name_or_id":   vmNameOrID,
+ 			"vmware_vm_id":    vmwareVMID,
+ 			"failover_type":   options.FailoverType,
+ 			"power_on_source": options.PowerOnSourceVM,
+ 			"force_cleanup":   options.ForceCleanup,
+ 			"operation":       "unified-failover-rollback",
+-			"external_job_id": externalJobID, // Track external ID in metadata too
+ 		},
+ 	})
+ 	if err != nil {
+@@ -329,9 +233,11 @@ func (ecs *EnhancedCleanupService) ExecuteUnifiedFailoverRollback(ctx context.Co
+ 		"vm_name_or_id", vmNameOrID,
+ 		"vmware_vm_id", vmwareVMID)
+ 
+-	// PHASE 1: Standard cleanup (volumes, test VM, snapshots) - execute steps directly under this job
++	// PHASE 1: Standard cleanup (volumes, test VM, snapshots)
+ 	logger.Info("📋 Phase 1: Standard cleanup operations")
+-	if err := ecs.ExecuteTestFailoverCleanupSteps(ctx, jobID, contextID, vmNameOrID); err != nil {
++	if err := ecs.jobTracker.RunStep(ctx, jobID, "standard-cleanup-execution", func(ctx context.Context) error {
++		return ecs.ExecuteTestFailoverCleanupWithTracking(ctx, contextID, vmNameOrID)
++	}); err != nil {
+ 		if !options.ForceCleanup {
+ 			return fmt.Errorf("standard cleanup failed during rollback: %w", err)
+ 		}
+@@ -343,66 +249,30 @@ func (ecs *EnhancedCleanupService) ExecuteUnifiedFailoverRollback(ctx context.Co
+ 		logger.Info("⚡ Phase 2: Source VM power-on requested")
+ 
+ 		if err := ecs.jobTracker.RunStep(ctx, jobID, "source-vm-power-on", func(ctx context.Context) error {
+-			// Get logger with step context for proper external_job_id correlation
+-			stepLogger := ecs.jobTracker.Logger(ctx)
+-
+-			// Get vCenter credentials (same pattern as migration workflow)
+-			vcenterHost := "quad-vcenter-01.quadris.local"   // Use working hostname (matches replication pattern)
+-			vcenterUsername := "administrator@vsphere.local" // TODO: Get from secure config (matches migration.go pattern)
+-			vcenterPassword := "EmyGVoBFesGQc47-"            // TODO: Get from secure config (matches migration.go pattern)
+-
+ 			// First check current power state
+-			powerState, err := ecs.vmaClient.GetVMPowerState(ctx, vmwareVMID, vcenterHost, vcenterUsername, vcenterPassword)
++			powerState, err := ecs.vmaClient.GetVMPowerState(ctx, vmwareVMID)
+ 			if err != nil {
+ 				return fmt.Errorf("failed to check source VM power state: %w", err)
+ 			}
+ 
+-			stepLogger.Info("🔍 Current source VM power state", "power_state", powerState, "vmware_vm_id", vmwareVMID)
++			logger.Info("🔍 Current source VM power state", "power_state", powerState, "vmware_vm_id", vmwareVMID)
+ 
+ 			if powerState == "poweredOff" {
+-				stepLogger.Info("🔌 Powering on source VM as part of rollback")
+-				if err := ecs.vmaClient.PowerOnSourceVM(ctx, vmwareVMID, vcenterHost, vcenterUsername, vcenterPassword); err != nil {
++				logger.Info("🔌 Powering on source VM as part of rollback")
++				if err := ecs.vmaClient.PowerOnSourceVM(ctx, vmwareVMID); err != nil {
+ 					return fmt.Errorf("failed to power on source VM: %w", err)
+ 				}
+ 
+-				// Wait for VM to actually power on (same logic as power-off wait)
+-				// VM power-on can take 30-120 seconds depending on OS boot time and VMware Tools
+-				stepLogger.Info("⏳ Waiting for VM to complete power-on sequence...")
+-				maxWaitTime := 180 * time.Second // 3 minutes for power-on (longer than power-off)
+-				pollInterval := 10 * time.Second // Check every 10 seconds
+-				startTime := time.Now()
+-
+-				for time.Since(startTime) < maxWaitTime {
+-					time.Sleep(pollInterval)
+-
+-					// Check current power state
+-					currentState, err := ecs.vmaClient.GetVMPowerState(ctx, vmwareVMID, vcenterHost, vcenterUsername, vcenterPassword)
+-					if err != nil {
+-						// If we can't check state, continue waiting
+-						stepLogger.Warn("Failed to check power state during wait, continuing...", "error", err)
+-						continue
+-					}
+-
+-					if currentState == "poweredOn" {
+-						stepLogger.Info("✅ Source VM powered on successfully", "final_state", currentState, "wait_duration", time.Since(startTime))
+-						return nil // Successfully powered on
+-					}
+-
+-					stepLogger.Info("🔄 VM still powering on...", "current_state", currentState, "elapsed", time.Since(startTime))
++				// Verify power state after power-on
++				newPowerState, err := ecs.vmaClient.GetVMPowerState(ctx, vmwareVMID)
++				if err != nil {
++					logger.Error("Failed to verify power state after power-on", "error", err)
++					return fmt.Errorf("failed to verify power state after power-on: %w", err)
+ 				}
+ 
+-				// Timeout reached - check final state
+-				finalState, err := ecs.vmaClient.GetVMPowerState(ctx, vmwareVMID, vcenterHost, vcenterUsername, vcenterPassword)
+-				if err == nil && finalState == "poweredOn" {
+-					stepLogger.Info("✅ Source VM powered on successfully (final check)", "final_state", finalState)
+-					return nil
+-				}
+-
+-				// Still not powered on after timeout
+-				stepLogger.Warn("VM power-on timeout reached", "final_state", finalState, "timeout", maxWaitTime)
+-				return fmt.Errorf("VM power-on timeout: VM still %s after %v", finalState, maxWaitTime)
++				logger.Info("✅ Source VM powered on successfully", "new_power_state", newPowerState)
+ 			} else {
+-				stepLogger.Info("ℹ️ Source VM already powered on, no action needed", "power_state", powerState)
++				logger.Info("ℹ️ Source VM already powered on, no action needed", "power_state", powerState)
+ 			}
+ 
+ 			return nil
+@@ -421,8 +291,18 @@ func (ecs *EnhancedCleanupService) ExecuteUnifiedFailoverRollback(ctx context.Co
+ 		}
+ 	}
+ 
+-	// NOTE: VM context status was already updated to ready_for_failover in Phase 9 (vm-context-status-update)
+-	// No additional status update needed here
++	// PHASE 3: Final status update
++	logger.Info("📊 Phase 3: Final rollback status update")
++	if err := ecs.jobTracker.RunStep(ctx, jobID, "rollback-completion-status", func(ctx context.Context) error {
++		// Update VM context status to ready_for_failover (same as standard cleanup)
++		if contextID != "" {
++			return ecs.vmContextRepo.UpdateVMContextStatus(contextID, "ready_for_failover")
++		}
++		return nil
++	}); err != nil {
++		logger.Error("Failed to update VM context status after rollback", "error", err, "context_id", contextID)
++		// Don't fail rollback for status update issues
++	}
+ 
+ 	logger.Info("✅ Unified failover rollback completed successfully",
+ 		"context_id", contextID,

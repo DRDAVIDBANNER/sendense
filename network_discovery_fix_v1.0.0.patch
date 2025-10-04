@@ -1,0 +1,148 @@
+--- a/internal/vma/vmware/discovery.go
++++ b/internal/vma/vmware/discovery.go
+@@ -349,7 +349,13 @@ func (d *Discovery) convertVMToModel(vm *object.VirtualMachine, mvm *mo.Virtual
+ func (d *Discovery) resolveNetworkName(backing types.BaseVirtualDeviceBackingInfo) string {
+ 	if backing == nil {
++		log.WithField("error", "backing_is_nil").Debug("Network backing is nil")
+ 		return "Unknown"
+ 	}
+ 
++	log.WithFields(log.Fields{
++		"backing_type": fmt.Sprintf("%T", backing),
++	}).Debug("Resolving network name")
++
+ 	switch b := backing.(type) {
+ 	case *types.VirtualEthernetCardNetworkBackingInfo:
+ 		// Standard network backing (vSwitch)
+@@ -357,12 +363,25 @@ func (d *Discovery) resolveNetworkName(backing types.BaseVirtualDeviceBackingIn
++		log.WithFields(log.Fields{
++			"has_network_ref": b.Network != nil,
++			"device_name":     b.DeviceName,
++		}).Debug("Processing standard network backing")
++
+ 		if b.Network != nil {
++			log.WithFields(log.Fields{
++				"network_ref_value": b.Network.Value,
++				"network_ref_type":  b.Network.Type,
++			}).Debug("Attempting to resolve network reference")
++
+ 			// Try to resolve the network object reference to actual name
+ 			networkName := d.resolveNetworkReference(b.Network)
++			log.WithField("resolved_name", networkName).Debug("Network reference resolution result")
++
+ 			if networkName != "" {
++				log.WithField("network_name", networkName).Info("✅ Successfully resolved network name")
+ 				return networkName
+ 			}
++			log.WithField("fallback_value", b.Network.Value).Debug("Using network reference value as fallback")
+ 			// Fallback to reference value if resolution fails
+ 			return b.Network.Value
+ 		}
+@@ -391,6 +410,9 @@ func (d *Discovery) resolveNetworkName(backing types.BaseVirtualDeviceBackingIn
+ 
+ 	default:
+ 		// Unknown backing type
++		log.WithFields(log.Fields{
++			"backing_type": fmt.Sprintf("%T", backing),
++		}).Warn("Unknown network backing type encountered")
+ 		log.WithField("backing_type", fmt.Sprintf("%T", backing)).Debug("Unknown network backing type")
+ 		return "Unknown-Backing"
+ 	}
+@@ -400,6 +422,11 @@ func (d *Discovery) resolveNetworkName(backing types.BaseVirtualDeviceBackingIn
+ func (d *Discovery) resolveNetworkReference(networkRef *types.ManagedObjectReference) string {
+ 	if networkRef == nil || d.client == nil {
++		log.WithFields(log.Fields{
++			"network_ref_nil": networkRef == nil,
++			"client_nil":      d.client == nil,
++		}).Debug("Cannot resolve network reference - nil parameter")
+ 		return ""
+ 	}
+ 
+@@ -410,12 +437,21 @@ func (d *Discovery) resolveNetworkReference(networkRef *types.ManagedObjectRefe
+ 	// Try to get network properties
+ 	var networkMo mo.Network
+ 	err := pc.RetrieveOne(ctx, *networkRef, []string{"name"}, &networkMo)
+ 	if err != nil {
++		log.WithFields(log.Fields{
++			"network_ref": networkRef.Value,
++			"error":       err.Error(),
++		}).Error("Failed to resolve network reference - VMware API error")
+ 		log.WithFields(log.Fields{
+ 			"network_ref": networkRef.Value,
+ 			"error":       err.Error(),
+ 		}).Debug("Failed to resolve network reference, using reference value")
+ 		return ""
+ 	}
+ 
++	log.WithFields(log.Fields{
++		"network_ref":  networkRef.Value,
++		"network_name": networkMo.Name,
++		"name_empty":   networkMo.Name == "",
++	}).Debug("Retrieved network properties from VMware")
++
+ 	if networkMo.Name != "" {
+ 		log.WithFields(log.Fields{
+@@ -432,6 +468,11 @@ func (d *Discovery) resolveNetworkReference(networkRef *types.ManagedObjectRefe
+ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 	if portgroupKey == "" || d.client == nil {
++		log.WithFields(log.Fields{
++			"portgroup_key_empty": portgroupKey == "",
++			"client_nil":          d.client == nil,
++		}).Debug("Cannot resolve DVS portgroup - invalid parameters")
+ 		return ""
+ 	}
+ 
+@@ -441,11 +482,17 @@ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 	// Set datacenter context
+ 	dc, err := finder.DefaultDatacenter(ctx)
+ 	if err != nil {
++		log.WithError(err).Error("Failed to get default datacenter for DVS portgroup lookup")
+ 		log.WithField("error", err.Error()).Debug("Failed to get default datacenter for portgroup lookup")
+ 		return ""
+ 	}
+ 
+ 	finder.SetDatacenter(dc)
++
++	log.WithFields(log.Fields{
++		"portgroup_key": portgroupKey,
++		"datacenter":    dc.Name(),
++	}).Debug("Starting DVS portgroup resolution")
+ 
+ 	// Search for DVS portgroups using NetworkList (which includes DVS portgroups)
+ 	networks, err := finder.NetworkList(ctx, "*")
+@@ -454,6 +501,10 @@ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 		return ""
+ 	}
+ 
++	log.WithFields(log.Fields{
++		"total_networks": len(networks),
++	}).Debug("Found networks to search for DVS portgroup")
++
+ 	// Property collector for batch retrieval
+ 	pc := property.DefaultCollector(d.client.Client)
+ 
+@@ -463,6 +514,9 @@ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 		var networkMo mo.DistributedVirtualPortgroup
+ 		err := pc.RetrieveOne(ctx, network.Reference(), []string{"key", "name"}, &networkMo)
+ 		if err != nil {
++			log.WithFields(log.Fields{
++				"network_ref": network.Reference().Value,
++			}).Debug("Network is not a DVS portgroup, skipping")
+ 			// Not a DVS portgroup, try as regular network
+ 			continue
+ 		}
+@@ -470,6 +524,10 @@ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 		if networkMo.Key == portgroupKey {
+ 			log.WithFields(log.Fields{
+ 				"portgroup_key":  portgroupKey,
+ 				"portgroup_name": networkMo.Name,
++			}).Info("✅ Successfully resolved DVS portgroup name")
++			log.WithFields(log.Fields{
++				"portgroup_key":  portgroupKey,
++				"portgroup_name": networkMo.Name,
+ 			}).Debug("Successfully resolved DVS portgroup name")
+ 			return networkMo.Name
+ 		}
+@@ -478,5 +536,8 @@ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 	return ""
+ }

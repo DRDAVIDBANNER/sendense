@@ -1,0 +1,326 @@
+// Package service provides volume lifecycle management operations
+package service
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/vexxhost/migratekit-volume-daemon/models"
+)
+
+// VolumeLifecycle handles volume creation, attachment, detachment, and deletion operations
+type VolumeLifecycle struct {
+	cloudStackOps           *CloudStackOperations
+	deviceCorrelation       *DeviceCorrelation
+	nbdExportOps            *NBDExportOperations
+	persistentDeviceManager *PersistentDeviceManager
+	repo                    VolumeRepository
+}
+
+// NewVolumeLifecycle creates a new volume lifecycle handler
+func NewVolumeLifecycle(
+	cloudStackOps *CloudStackOperations,
+	deviceCorrelation *DeviceCorrelation,
+	nbdExportOps *NBDExportOperations,
+	persistentDeviceManager *PersistentDeviceManager,
+	repo VolumeRepository,
+) *VolumeLifecycle {
+	return &VolumeLifecycle{
+		cloudStackOps:           cloudStackOps,
+		deviceCorrelation:       deviceCorrelation,
+		nbdExportOps:            nbdExportOps,
+		persistentDeviceManager: persistentDeviceManager,
+		repo:                    repo,
+	}
+}
+
+// ExecuteVolumeAttachment performs complete volume attachment with device correlation
+func (vl *VolumeLifecycle) ExecuteVolumeAttachment(ctx context.Context, operation *models.VolumeOperation, volumeID, vmID string) {
+	// Update operation status to executing
+	operation.Status = models.StatusExecuting
+	operation.UpdatedAt = time.Now()
+	vl.repo.UpdateOperation(ctx, operation)
+
+	log.WithFields(log.Fields{
+		"volume_id":    volumeID,
+		"vm_id":        vmID,
+		"operation_id": operation.ID,
+	}).Info("🔗 Starting volume attachment execution")
+
+	// Check if CloudStack client is available
+	if vl.cloudStackOps == nil {
+		vl.completeOperationWithError(ctx, operation, fmt.Errorf("CloudStack operations not available"))
+		return
+	}
+
+	// Step 1: CloudStack volume attachment
+	err := vl.cloudStackOps.AttachVolume(ctx, volumeID, vmID)
+	if err != nil {
+		vl.completeOperationWithError(ctx, operation, fmt.Errorf("CloudStack volume attachment failed: %w", err))
+		return
+	}
+
+	// Determine operation mode and handle device correlation accordingly
+	var devicePath string
+	var deviceSize int64
+	var operationMode string
+	var cloudStackDeviceID *int
+	var requiresCorrelation bool
+
+	// Check if this is an OMA attachment (where device correlation is possible)
+	isOMAAttachment := vl.deviceCorrelation.IsOMAVM(ctx, vmID)
+
+	if isOMAAttachment {
+		// OMA Mode: Full device correlation required
+		operationMode = string(models.OperationModeOMA)
+		requiresCorrelation = true
+
+		log.WithFields(log.Fields{
+			"volume_id": volumeID,
+			"vm_id":     vmID,
+			"mode":      operationMode,
+		}).Info("🔗 OMA attachment - performing device correlation")
+
+		devicePath, deviceSize = vl.deviceCorrelation.CorrelateVolumeToDevice(ctx, volumeID, vmID)
+		if devicePath == "" {
+			vl.completeOperationWithError(ctx, operation, fmt.Errorf("device correlation failed"))
+			return
+		}
+
+		// Get CloudStack device ID for correlation
+		if cloudStackDeviceIDInt, err := vl.cloudStackOps.GetCloudStackDeviceID(ctx, volumeID); err == nil {
+			cloudStackDeviceID = &cloudStackDeviceIDInt
+		}
+	} else {
+		// Failover Mode: CloudStack state tracking only
+		operationMode = string(models.OperationModeFailover)
+		requiresCorrelation = false
+		// Use placeholder device path for failover VMs
+		devicePath = fmt.Sprintf("remote-vm-%s", vmID)
+		deviceSize = 0 // Size not needed for failover VMs
+	}
+
+	// Step 2: Create device mapping with persistent naming support
+	err = vl.createDeviceMappingWithPersistentNaming(ctx, operation, volumeID, vmID,
+		devicePath, operationMode, cloudStackDeviceID, requiresCorrelation, deviceSize, isOMAAttachment)
+	if err != nil {
+		vl.completeOperationWithError(ctx, operation, err)
+		return
+	}
+
+	// Step 3: Create NBD export for OMA attachments
+	if isOMAAttachment {
+		vl.nbdExportOps.CreateNBDExportForVolume(ctx, volumeID, vmID, devicePath)
+	}
+
+	// Complete operation successfully
+	vl.completeOperationWithSuccess(ctx, operation, devicePath)
+}
+
+// ExecuteVolumeDetachment performs complete volume detachment
+func (vl *VolumeLifecycle) ExecuteVolumeDetachment(ctx context.Context, operation *models.VolumeOperation, volumeID string) {
+	// Update operation status to executing
+	operation.Status = models.StatusExecuting
+	operation.UpdatedAt = time.Now()
+	vl.repo.UpdateOperation(ctx, operation)
+
+	log.WithFields(log.Fields{
+		"volume_id":    volumeID,
+		"operation_id": operation.ID,
+	}).Info("🔌 Starting volume detachment execution")
+
+	// Get current device mapping
+	mapping, err := vl.repo.GetMapping(ctx, volumeID)
+	if err != nil {
+		vl.completeOperationWithError(ctx, operation, fmt.Errorf("failed to get device mapping: %w", err))
+		return
+	}
+
+	devicePath := mapping.DevicePath
+	vmID := mapping.VMID
+
+	// Step 1: CloudStack volume detachment
+	err = vl.cloudStackOps.DetachVolume(ctx, volumeID)
+	if err != nil {
+		vl.completeOperationWithError(ctx, operation, fmt.Errorf("CloudStack volume detachment failed: %w", err))
+		return
+	}
+
+	// Step 2: Remove NBD export ONLY when detaching from OMA VM
+	if devicePath != "" && !strings.HasPrefix(devicePath, "remote-vm-") && vl.deviceCorrelation.IsOMAVM(ctx, vmID) {
+		vl.nbdExportOps.DeleteNBDExportForVolume(ctx, volumeID)
+	}
+
+	// Step 3: Handle persistent device cleanup
+	err = vl.handlePersistentDeviceCleanup(ctx, mapping)
+	if err != nil {
+		log.WithError(err).Warn("Failed to clean up persistent device")
+		// Don't fail the operation - continue with standard cleanup
+	}
+
+	// Step 4: Remove device mapping
+	if devicePath != "" {
+		if err := vl.repo.DeleteMapping(ctx, volumeID); err != nil {
+			log.WithFields(log.Fields{
+				"volume_id":   volumeID,
+				"device_path": devicePath,
+				"error":       err,
+			}).Error("Failed to delete device mapping after volume detachment")
+		}
+	}
+
+	vl.completeOperationWithSuccess(ctx, operation, devicePath)
+}
+
+// createDeviceMappingWithPersistentNaming creates device mapping with optional persistent naming
+func (vl *VolumeLifecycle) createDeviceMappingWithPersistentNaming(
+	ctx context.Context,
+	operation *models.VolumeOperation,
+	volumeID, vmID, devicePath, operationMode string,
+	cloudStackDeviceID *int,
+	requiresCorrelation bool,
+	deviceSize int64,
+	isOMAAttachment bool,
+) error {
+	// Set appropriate Linux state based on operation mode
+	linuxState := "detected"
+	if operationMode == string(models.OperationModeFailover) {
+		linuxState = "n/a" // No Linux device detection for failover VMs
+	}
+
+	// 🆕 NEW: Generate persistent device naming if context available
+	var persistentDeviceName *string
+	var symlinkPath *string
+
+	// Check if operation request contains VM context for persistent naming
+	if reqData, ok := operation.Request.(map[string]interface{}); ok {
+		if vmName, hasVMName := reqData["vm_name"].(string); hasVMName && vmName != "" {
+			if diskID, hasDiskID := reqData["disk_id"].(string); hasDiskID && diskID != "" {
+				if requestPersistent, hasPersistent := reqData["request_persistent_name"].(bool); hasPersistent && requestPersistent && isOMAAttachment {
+
+					log.WithFields(log.Fields{
+						"volume_id": volumeID,
+						"vm_name":   vmName,
+						"disk_id":   diskID,
+					}).Info("🏷️  Generating persistent device name")
+
+					persistentName := vl.persistentDeviceManager.GeneratePersistentDeviceName(vmName, diskID)
+					persistentDeviceName = &persistentName
+
+					// Create persistent device symlink
+					symlink, symlinkErr := vl.persistentDeviceManager.CreatePersistentDevice(ctx, devicePath, persistentName)
+					if symlinkErr != nil {
+						log.WithError(symlinkErr).Warn("Failed to create persistent device - using standard naming")
+						persistentDeviceName = nil
+						symlinkPath = nil
+					} else {
+						symlinkPath = &symlink
+						log.WithFields(log.Fields{
+							"persistent_name": persistentName,
+							"symlink_path":    symlink,
+							"device_path":     devicePath,
+						}).Info("✅ Persistent device created successfully")
+					}
+				}
+			}
+		}
+	}
+
+	// Create device mapping with persistent naming fields
+	mapping := &models.DeviceMapping{
+		VolumeUUID:                volumeID,
+		VolumeIDNumeric:           nil, // Will be populated from CloudStack if available
+		VMID:                      vmID,
+		OperationMode:             operationMode,
+		CloudStackDeviceID:        cloudStackDeviceID,
+		RequiresDeviceCorrelation: requiresCorrelation,
+		DevicePath:                devicePath,
+		CloudStackState:           "attached",
+		LinuxState:                linuxState,
+		Size:                      deviceSize,
+		LastSync:                  time.Now(),
+		CreatedAt:                 time.Now(),
+		UpdatedAt:                 time.Now(),
+		// 🆕 NEW: Persistent device naming fields
+		PersistentDeviceName: persistentDeviceName,
+		SymlinkPath:          symlinkPath,
+	}
+
+	if err := vl.repo.CreateMapping(ctx, mapping); err != nil {
+		return fmt.Errorf("failed to create device mapping: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"volume_id":       volumeID,
+		"device_path":     devicePath,
+		"persistent_name": persistentDeviceName,
+		"symlink_path":    symlinkPath,
+		"operation_mode":  operationMode,
+	}).Info("✅ Device mapping created with persistent naming support")
+
+	return nil
+}
+
+// handlePersistentDeviceCleanup cleans up persistent device mappings during detachment
+func (vl *VolumeLifecycle) handlePersistentDeviceCleanup(ctx context.Context, mapping *models.DeviceMapping) error {
+	if mapping.PersistentDeviceName != nil && *mapping.PersistentDeviceName != "" {
+		log.WithField("persistent_name", *mapping.PersistentDeviceName).Info("🧹 Cleaning up persistent device mapping")
+
+		// Remove persistent device mapping (will be recreated on reattachment)
+		err := vl.persistentDeviceManager.RemovePersistentDevice(ctx, *mapping.PersistentDeviceName)
+		if err != nil {
+			return fmt.Errorf("failed to remove persistent device: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// Helper methods for operation completion
+
+// completeOperationWithError marks operation as failed with error details
+func (vl *VolumeLifecycle) completeOperationWithError(ctx context.Context, operation *models.VolumeOperation, err error) {
+	operation.Status = models.StatusFailed
+	operation.UpdatedAt = time.Now()
+	operation.Response = map[string]interface{}{
+		"error":     err.Error(),
+		"failed_at": time.Now(),
+		"operation": operation.Type,
+		"volume_id": operation.VolumeID,
+	}
+
+	if updateErr := vl.repo.UpdateOperation(ctx, operation); updateErr != nil {
+		log.WithError(updateErr).Error("Failed to update operation status to failed")
+	}
+
+	log.WithFields(log.Fields{
+		"operation_id": operation.ID,
+		"volume_id":    operation.VolumeID,
+		"error":        err.Error(),
+	}).Error("❌ Volume operation failed")
+}
+
+// completeOperationWithSuccess marks operation as completed successfully
+func (vl *VolumeLifecycle) completeOperationWithSuccess(ctx context.Context, operation *models.VolumeOperation, devicePath string) {
+	operation.Status = models.StatusCompleted
+	operation.UpdatedAt = time.Now()
+	operation.Response = map[string]interface{}{
+		"device_path":  devicePath,
+		"completed_at": time.Now(),
+		"operation":    operation.Type,
+		"volume_id":    operation.VolumeID,
+	}
+
+	if err := vl.repo.UpdateOperation(ctx, operation); err != nil {
+		log.WithError(err).Error("Failed to update operation status to completed")
+	}
+
+	log.WithFields(log.Fields{
+		"operation_id": operation.ID,
+		"volume_id":    operation.VolumeID,
+		"device_path":  devicePath,
+	}).Info("✅ Volume operation completed successfully")
+}

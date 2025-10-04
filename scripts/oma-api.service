@@ -1,0 +1,63 @@
+# OMA API Server - OSSEA Migration Appliance API Service
+# Following project rules: proper service setup, clean deployment
+
+[Unit]
+Description=OMA Migration API Server
+Documentation=https://github.com/vexxhost/migratekit
+After=network-online.target mariadb.service
+Wants=network-online.target
+Requires=network-online.target
+
+[Service]
+Type=simple
+User=oma
+Group=oma
+WorkingDirectory=/opt/migratekit
+
+# Environment variables for configuration
+Environment=OMA_PORT=8082
+Environment=OMA_DB_TYPE=mariadb
+Environment=OMA_DB_HOST=localhost
+Environment=OMA_DB_PORT=3306
+Environment=OMA_DB_NAME=migratekit_oma
+Environment=OMA_DB_USER=oma_user
+Environment=OMA_DB_PASS=oma_password
+Environment=OMA_AUTH=true
+Environment=OMA_DEBUG=false
+
+# Service executable
+ExecStart=/opt/migratekit/bin/oma-api \
+    -port=${OMA_PORT} \
+    -db-type=${OMA_DB_TYPE} \
+    -db-host=${OMA_DB_HOST} \
+    -db-port=${OMA_DB_PORT} \
+    -db-name=${OMA_DB_NAME} \
+    -db-user=${OMA_DB_USER} \
+    -db-pass=${OMA_DB_PASS} \
+    -auth=${OMA_AUTH} \
+    -debug=${OMA_DEBUG}
+
+# Service management
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/migratekit/logs /var/log/migratekit
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=oma-api
+
+[Install]
+WantedBy=multi-user.target

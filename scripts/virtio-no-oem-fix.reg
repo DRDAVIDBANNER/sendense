@@ -1,0 +1,22 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\viostor]
+"Start"=dword:00000000
+"Type"=dword:00000001
+"ErrorControl"=dword:00000001
+"ImagePath"=hex(2):53,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,64,00,72,00,69,00,76,00,65,00,72,00,73,00,5c,00,76,00,69,00,6f,00,73,00,74,00,6f,00,72,00,2e,00,73,00,79,00,73,00,00,00
+"Group"="SCSI miniport"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\vioscsi]
+"Start"=dword:00000000
+"Type"=dword:00000001
+"ErrorControl"=dword:00000001
+"ImagePath"=hex(2):53,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,64,00,72,00,69,00,76,00,65,00,72,00,73,00,5c,00,76,00,69,00,6f,00,73,00,63,00,73,00,69,00,2e,00,73,00,79,00,73,00,00,00
+"Group"="SCSI miniport"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\netkvm]
+"Start"=dword:00000003
+"Type"=dword:00000001
+"ErrorControl"=dword:00000001
+"ImagePath"=hex(2):53,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,64,00,72,00,69,00,76,00,65,00,72,00,73,00,5c,00,6e,00,65,00,74,00,6b,00,76,00,6d,00,2e,00,73,00,79,00,73,00,00,00
+"Group"="NDIS"

@@ -1,0 +1,21 @@
+# VMA System Dependencies
+# Required packages for VMA functionality
+
+## Core System
+haveged              # Entropy generation for cryptographic operations
+jq                   # JSON processing for API responses
+curl                 # HTTP client for API calls
+
+## SSH and Network
+openssh-client       # SSH client for tunnel connections
+
+## Development Tools
+golang-go            # Go runtime (if needed for binary compatibility)
+
+## NBD Stack
+nbdkit              # NBD server toolkit
+libnbd-dev          # NBD library development headers
+nbd-client          # NBD client tools
+
+## Package Installation Command:
+# apt-get install -y haveged jq curl openssh-client golang-go nbdkit libnbd-dev nbd-client

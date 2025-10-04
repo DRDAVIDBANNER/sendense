@@ -1,0 +1,22 @@
+[Unit]
+Description=VMA Auto-login Setup Wizard
+After=multi-user.target network.target
+Wants=network.target
+
+[Service]
+Type=idle
+User=vma
+Group=vma
+TTYPath=/dev/tty1
+ExecStart=/opt/vma/setup-wizard.sh
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+Restart=no
+RemainAfterExit=yes
+Environment=HOME=/home/vma
+Environment=USER=vma
+Environment=TERM=xterm-256color
+
+[Install]
+WantedBy=multi-user.target

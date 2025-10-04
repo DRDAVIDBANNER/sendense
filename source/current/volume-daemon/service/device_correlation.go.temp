@@ -1,0 +1,132 @@
+// Package service provides device correlation functionality for volume-to-device mapping
+package service
+
+import (
+	"context"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+)
+
+// DeviceCorrelation handles volume-to-device correlation logic
+type DeviceCorrelation struct {
+	deviceMonitor DeviceMonitor
+	repo          VolumeRepository
+}
+
+// NewDeviceCorrelation creates a new device correlation handler
+func NewDeviceCorrelation(deviceMonitor DeviceMonitor, repo VolumeRepository) *DeviceCorrelation {
+	return &DeviceCorrelation{
+		deviceMonitor: deviceMonitor,
+		repo:          repo,
+	}
+}
+
+// CorrelateVolumeToDevice performs device correlation for volume attachment
+// This is critical functionality that must be preserved exactly
+func (dc *DeviceCorrelation) CorrelateVolumeToDevice(ctx context.Context, volumeID, vmID string) (string, int64) {
+	if dc.deviceMonitor == nil {
+		log.Warn("Device monitor not available for correlation")
+		return "", 0
+	}
+
+	log.WithFields(log.Fields{
+		"volume_id": volumeID,
+		"vm_id":     vmID,
+	}).Info("🕐 Starting device correlation with timestamp filtering (no pre-draining)")
+
+	// Wait for device events for up to 30 seconds
+	timeout := 30 * time.Second
+	deadline := time.Now().Add(timeout)
+	correlationStartTime := time.Now()
+	contemporaryThreshold := correlationStartTime.Add(-30 * time.Second)
+
+	for time.Now().Before(deadline) {
+		// Wait for device event with short timeout
+		eventCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		event, err := dc.deviceMonitor.WaitForDevice(eventCtx, 1*time.Second)
+		cancel()
+
+		if err != nil {
+			// No event received, continue waiting
+			continue
+		}
+
+		log.WithFields(log.Fields{
+			"device_path":            event.DevicePath,
+			"device_size":            event.DeviceInfo.Size,
+			"event_timestamp":        event.Timestamp,
+			"correlation_start":      correlationStartTime,
+			"contemporary_threshold": contemporaryThreshold,
+		}).Debug("📡 Received device event for correlation analysis")
+
+		// Skip events that are too old (stale device events)
+		if event.Timestamp.Before(contemporaryThreshold) {
+			log.WithFields(log.Fields{
+				"device_path":     event.DevicePath,
+				"event_timestamp": event.Timestamp,
+				"threshold":       contemporaryThreshold,
+			}).Debug("🚫 Skipping stale device event (>5s before correlation)")
+			continue // Skip stale event, keep looking for fresh ones
+		}
+
+		log.WithFields(log.Fields{
+			"device_path":     event.DevicePath,
+			"device_size":     event.DeviceInfo.Size,
+			"event_timestamp": event.Timestamp,
+			"age_seconds":     time.Since(event.Timestamp).Seconds(),
+		}).Info("✅ Using contemporary/fresh device for correlation")
+
+		// ✅ Clear remaining events after successful correlation
+		dc.clearDeviceEventsAfterSuccess(ctx)
+
+		return event.DevicePath, event.DeviceInfo.Size
+	}
+
+	log.WithFields(log.Fields{
+		"volume_id": volumeID,
+		"vm_id":     vmID,
+		"timeout":   timeout,
+	}).Warn("⚠️  No fresh device detected during correlation timeout")
+
+	return "", 0
+}
+
+// clearDeviceEventsAfterSuccess clears remaining device events after successful correlation
+// This prevents stale events from affecting future correlations
+func (dc *DeviceCorrelation) clearDeviceEventsAfterSuccess(ctx context.Context) {
+	clearDeadline := time.Now().Add(200 * time.Millisecond)
+	cleared := 0
+
+	log.Debug("🧹 Clearing remaining device events after successful correlation")
+
+	for time.Now().Before(clearDeadline) {
+		eventCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		event, err := dc.deviceMonitor.WaitForDevice(eventCtx, 50*time.Millisecond)
+		cancel()
+
+		if err != nil {
+			// No more events to clear
+			break
+		}
+
+		cleared++
+		log.WithFields(log.Fields{
+			"device_path":   event.DevicePath,
+			"cleared_count": cleared,
+		}).Debug("🧹 Cleared device event after successful correlation")
+	}
+
+	if cleared > 0 {
+		log.WithFields(log.Fields{
+			"cleared_events": cleared,
+		}).Info("🧹 Cleared remaining device events - channel ready for next correlation")
+	}
+}
+
+// IsOMAVM checks if the given VM ID is the OMA VM (where device correlation is possible)
+func (dc *DeviceCorrelation) IsOMAVM(ctx context.Context, vmID string) bool {
+	// The OMA VM ID - could be made configurable or retrieved from database
+	const omaVMID = "8a4400e5-c92a-4bc4-8bff-4b6b0b6a018c"
+	return vmID == omaVMID
+}

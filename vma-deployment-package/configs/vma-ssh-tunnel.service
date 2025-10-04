@@ -1,0 +1,17 @@
+[Unit]
+Description=VMA SSH Tunnel to OMA
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vma
+Group=vma
+ExecStart=/usr/local/bin/vma-tunnel-wrapper.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

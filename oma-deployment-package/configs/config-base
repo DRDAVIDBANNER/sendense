@@ -1,0 +1,21 @@
+[generic]
+user = root
+group = root
+port = 10809
+bind = 127.0.0.1
+allowlist = true
+includedir = /etc/nbd-server/conf.d
+
+# Logging
+logfile = /var/log/nbd-server.log
+loglevel = 3
+
+# Performance tuning for high-speed transfers
+max_connections = 50
+timeout = 30
+
+# Dummy export required for NBD server to start
+# Real exports will be created dynamically in /etc/nbd-server/conf.d/
+[dummy]
+exportname = /dev/null
+readonly = true

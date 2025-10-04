@@ -1,0 +1,175 @@
+--- a/internal/vma/vmware/discovery.go
++++ b/internal/vma/vmware/discovery.go
+@@ -349,7 +349,13 @@ func (d *Discovery) convertVMToModel(vm *object.VirtualMachine, mvm *mo.Virtual
+ func (d *Discovery) resolveNetworkName(backing types.BaseVirtualDeviceBackingInfo) string {
+ 	if backing == nil {
++		log.Error("Network backing is nil - possible VMware configuration issue")
+ 		return "Unknown"
+ 	}
+ 
++	log.WithFields(log.Fields{
++		"backing_type": fmt.Sprintf("%T", backing),
++	}).Debug("Resolving network name for backing type")
++
+ 	switch b := backing.(type) {
+ 	case *types.VirtualEthernetCardNetworkBackingInfo:
+ 		// Standard network backing (vSwitch)
+@@ -372,9 +378,21 @@ func (d *Discovery) resolveNetworkName(backing types.BaseVirtualDeviceBackingIn
+ 
+ 	case *types.VirtualEthernetCardDistributedVirtualPortBackingInfo:
+ 		// Distributed virtual switch backing
++		log.WithFields(log.Fields{
++			"portgroup_key": b.Port.PortgroupKey,
++			"switch_uuid":   b.Port.SwitchUuid,
++			"port_key":      b.Port.PortKey,
++		}).Debug("Processing DVS network backing")
++
+ 		if b.Port.PortgroupKey != "" {
+ 			// Try to resolve DVS portgroup name
+ 			portgroupName := d.resolveDVSPortgroupName(b.Port.PortgroupKey)
++			log.WithFields(log.Fields{
++				"portgroup_key":      b.Port.PortgroupKey,
++				"resolved_name":      portgroupName,
++				"resolution_success": portgroupName != "",
++			}).Debug("DVS portgroup resolution result")
++
+ 			if portgroupName != "" {
+ 				return portgroupName
+ 			}
+@@ -432,6 +450,11 @@ func (d *Discovery) resolveNetworkReference(networkRef *types.ManagedObjectRefe
+ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 	if portgroupKey == "" || d.client == nil {
++		log.WithFields(log.Fields{
++			"portgroup_key_empty": portgroupKey == "",
++			"client_nil":          d.client == nil,
++		}).Debug("Cannot resolve DVS portgroup - invalid parameters")
+ 		return ""
+ 	}
+ 
+@@ -441,11 +464,21 @@ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 	// Set datacenter context
+ 	dc, err := finder.DefaultDatacenter(ctx)
+ 	if err != nil {
++		log.WithFields(log.Fields{
++			"portgroup_key": portgroupKey,
++			"error":         err.Error(),
++		}).Error("Failed to get default datacenter for DVS portgroup lookup")
+ 		log.WithField("error", err.Error()).Debug("Failed to get default datacenter for portgroup lookup")
+ 		return ""
+ 	}
+ 
+ 	finder.SetDatacenter(dc)
++
++	log.WithFields(log.Fields{
++		"portgroup_key": portgroupKey,
++		"datacenter":    dc.Name(),
++	}).Debug("Starting DVS portgroup name resolution")
+ 
+ 	// Search for DVS portgroups using NetworkList (which includes DVS portgroups)
+ 	networks, err := finder.NetworkList(ctx, "*")
+@@ -454,6 +487,10 @@ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 		return ""
+ 	}
+ 
++	log.WithFields(log.Fields{
++		"total_networks": len(networks),
++		"portgroup_key":  portgroupKey,
++	}).Debug("Searching through networks for DVS portgroup")
++
+ 	// Property collector for batch retrieval
+ 	pc := property.DefaultCollector(d.client.Client)
+ 
+@@ -461,8 +498,22 @@ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 	for _, network := range networks {
+ 		// Check if this is a DVS portgroup
+ 		var networkMo mo.DistributedVirtualPortgroup
+-		err := pc.RetrieveOne(ctx, network.Reference(), []string{"key", "name"}, &networkMo)
++		err := pc.RetrieveOne(ctx, network.Reference(), []string{"key", "name", "config"}, &networkMo)
+ 		if err != nil {
++			// Try as regular network object if not DVS portgroup
++			var regularNetworkMo mo.Network  
++			regularErr := pc.RetrieveOne(ctx, network.Reference(), []string{"name"}, &regularNetworkMo)
++			if regularErr == nil {
++				log.WithFields(log.Fields{
++					"network_name": regularNetworkMo.Name,
++					"network_ref":  network.Reference().Value,
++				}).Debug("Found regular network, not DVS portgroup")
++			}
++			
++			log.WithFields(log.Fields{
++				"network_ref": network.Reference().Value,
++				"error":       err.Error(),
++			}).Debug("Network is not a DVS portgroup")
+ 			// Not a DVS portgroup, try as regular network
+ 			continue
+ 		}
+@@ -470,6 +521,10 @@ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 		if networkMo.Key == portgroupKey {
+ 			log.WithFields(log.Fields{
+ 				"portgroup_key":  portgroupKey,
+ 				"portgroup_name": networkMo.Name,
++			}).Info("✅ Successfully resolved DVS portgroup name")
++			log.WithFields(log.Fields{
++				"portgroup_key":  portgroupKey,
++				"portgroup_name": networkMo.Name,
+ 			}).Debug("Successfully resolved DVS portgroup name")
+ 			return networkMo.Name
+ 		}
+@@ -478,5 +533,59 @@ func (d *Discovery) resolveDVSPortgroupName(portgroupKey string) string {
+ 	return ""
+ }
++
++// Enhanced DVS resolution with alternative approaches
++func (d *Discovery) resolveDVSPortgroupNameEnhanced(portgroupKey string) string {
++	// Try the standard approach first
++	name := d.resolveDVSPortgroupName(portgroupKey)
++	if name != "" {
++		return name
++	}
++
++	log.WithField("portgroup_key", portgroupKey).Debug("Standard DVS resolution failed, trying alternative approaches")
++
++	// Alternative approach 1: Direct DVS search
++	if alternativeName := d.searchDVSDirectly(portgroupKey); alternativeName != "" {
++		return alternativeName
++	}
++
++	// Alternative approach 2: Use portgroup key as descriptive name
++	return fmt.Sprintf("DVS-Portgroup-%s", portgroupKey)
++}
++
++// searchDVSDirectly attempts to find DVS portgroups using a different API approach
++func (d *Discovery) searchDVSDirectly(portgroupKey string) string {
++	if d.client == nil {
++		return ""
++	}
++
++	ctx := context.Background()
++	finder := find.NewFinder(d.client.Client, false)
++	
++	// Get datacenter
++	dc, err := finder.DefaultDatacenter(ctx)
++	if err != nil {
++		log.WithError(err).Debug("Failed to get datacenter for direct DVS search")
++		return ""
++	}
++
++	finder.SetDatacenter(dc)
++
++	// Search for DVS switches first, then their portgroups
++	dvsList, err := finder.DistributedVirtualSwitchList(ctx, "*")
++	if err != nil {
++		log.WithError(err).Debug("Failed to list DVS switches")
++		return ""
++	}
++
++	log.WithFields(log.Fields{
++		"dvs_count":      len(dvsList),
++		"portgroup_key":  portgroupKey,
++	}).Debug("Searching DVS switches for portgroup")
++
++	// For each DVS, search its portgroups
++	// (This would require additional implementation based on govmomi DVS API)
++	
++	return ""
++}

@@ -1,0 +1,39 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\viostor]
+"Start"=dword:00000000
+"Type"=dword:00000001
+"ErrorControl"=dword:00000001
+"ImagePath"="\\SystemRoot\\System32\\drivers\\viostor.sys"
+"Group"="SCSI miniport"
+"DisplayName"="Red Hat VirtIO SCSI controller"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\vioscsi]
+"Start"=dword:00000000
+"Type"=dword:00000001
+"ErrorControl"=dword:00000001
+"ImagePath"="\\SystemRoot\\System32\\drivers\\vioscsi.sys"
+"Group"="SCSI miniport"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\netkvm]
+"Start"=dword:00000003
+"Type"=dword:00000001
+"ErrorControl"=dword:00000001
+"ImagePath"="\\SystemRoot\\System32\\drivers\\netkvm.sys"
+"Group"="NDIS"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\CriticalDeviceDatabase\pci#ven_1af4&dev_1001]
+"Service"="viostor"
+"ClassGUID"="{4D36E97B-E325-11CE-BFC1-08002BE10318}"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\CriticalDeviceDatabase\pci#ven_1af4&dev_1004]
+"Service"="viostor"
+"ClassGUID"="{4D36E97B-E325-11CE-BFC1-08002BE10318}"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\CriticalDeviceDatabase\pci#ven_1af4&dev_1008]
+"Service"="vioscsi"
+"ClassGUID"="{4D36E97B-E325-11CE-BFC1-08002BE10318}"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\CriticalDeviceDatabase\pci#ven_1af4&dev_1000]
+"Service"="netkvm"
+"ClassGUID"="{4D36E972-E325-11CE-BFC1-08002BE10318}"

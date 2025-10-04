@@ -1,0 +1,140 @@
+// Package service provides CloudStack API operations for volume management
+package service
+
+import (
+	"context"
+	"fmt"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/vexxhost/migratekit-volume-daemon/models"
+)
+
+// CloudStackOperations handles all CloudStack API interactions for volume management
+type CloudStackOperations struct {
+	client CloudStackClient
+	repo   VolumeRepository
+}
+
+// NewCloudStackOperations creates a new CloudStack operations handler
+func NewCloudStackOperations(client CloudStackClient, repo VolumeRepository) *CloudStackOperations {
+	return &CloudStackOperations{
+		client: client,
+		repo:   repo,
+	}
+}
+
+// AttachVolume performs CloudStack volume attachment
+func (cso *CloudStackOperations) AttachVolume(ctx context.Context, volumeID, vmID string) error {
+	log.WithFields(log.Fields{
+		"volume_id": volumeID,
+		"vm_id":     vmID,
+	}).Info("🔗 Executing CloudStack volume attachment")
+
+	err := cso.client.AttachVolume(ctx, volumeID, vmID)
+	if err != nil {
+		return fmt.Errorf("CloudStack volume attachment failed: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"volume_id": volumeID,
+		"vm_id":     vmID,
+	}).Info("✅ CloudStack volume attachment completed")
+
+	return nil
+}
+
+// AttachVolumeAsRoot performs CloudStack volume attachment as root device
+func (cso *CloudStackOperations) AttachVolumeAsRoot(ctx context.Context, volumeID, vmID string) error {
+	log.WithFields(log.Fields{
+		"volume_id": volumeID,
+		"vm_id":     vmID,
+	}).Info("🔗 Executing CloudStack root volume attachment")
+
+	// Use device ID 0 for root attachments
+	err := cso.client.AttachVolumeAsRoot(ctx, volumeID, vmID)
+	if err != nil {
+		return fmt.Errorf("CloudStack root volume attachment failed: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"volume_id": volumeID,
+		"vm_id":     vmID,
+	}).Info("✅ CloudStack root volume attachment completed")
+
+	return nil
+}
+
+// DetachVolume performs CloudStack volume detachment
+func (cso *CloudStackOperations) DetachVolume(ctx context.Context, volumeID string) error {
+	log.WithField("volume_id", volumeID).Info("🔌 Executing CloudStack volume detachment")
+
+	err := cso.client.DetachVolume(ctx, volumeID)
+	if err != nil {
+		return fmt.Errorf("CloudStack volume detachment failed: %w", err)
+	}
+
+	log.WithField("volume_id", volumeID).Info("✅ CloudStack volume detachment completed")
+	return nil
+}
+
+// DeleteVolume performs CloudStack volume deletion
+func (cso *CloudStackOperations) DeleteVolume(ctx context.Context, volumeID string) error {
+	log.WithField("volume_id", volumeID).Info("🗑️ Executing CloudStack volume deletion")
+
+	err := cso.client.DeleteVolume(ctx, volumeID)
+	if err != nil {
+		return fmt.Errorf("CloudStack volume deletion failed: %w", err)
+	}
+
+	log.WithField("volume_id", volumeID).Info("✅ CloudStack volume deletion completed")
+	return nil
+}
+
+// CreateVolume performs CloudStack volume creation
+func (cso *CloudStackOperations) CreateVolume(ctx context.Context, req models.CreateVolumeRequest) (string, error) {
+	log.WithFields(log.Fields{
+		"name":             req.Name,
+		"size":             req.Size,
+		"disk_offering_id": req.DiskOfferingID,
+		"zone_id":          req.ZoneID,
+	}).Info("🔧 Executing CloudStack volume creation")
+
+	volumeID, err := cso.client.CreateVolume(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("CloudStack volume creation failed: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"volume_id":        volumeID,
+		"name":             req.Name,
+		"disk_offering_id": req.DiskOfferingID,
+	}).Info("✅ CloudStack volume creation completed")
+
+	return volumeID, nil
+}
+
+// GetCloudStackDeviceID retrieves device ID from CloudStack for a volume
+func (cso *CloudStackOperations) GetCloudStackDeviceID(ctx context.Context, volumeID string) (int, error) {
+	deviceID, err := cso.client.GetVolumeDeviceID(ctx, volumeID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get CloudStack device ID: %w", err)
+	}
+
+	return deviceID, nil
+}
+
+// ValidateVolumeState checks CloudStack volume state consistency
+func (cso *CloudStackOperations) ValidateVolumeState(ctx context.Context, volumeID string) error {
+	// Get volume state from CloudStack
+	state, err := cso.client.GetVolumeState(ctx, volumeID)
+	if err != nil {
+		return fmt.Errorf("failed to get volume state: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"volume_id": volumeID,
+		"state":     state,
+	}).Debug("📊 CloudStack volume state validated")
+
+	return nil
+}

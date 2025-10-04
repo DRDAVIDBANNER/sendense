@@ -1,0 +1,435 @@
+package device
+
+import (
+	"context"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
+	log "github.com/sirupsen/logrus"
+
+	"github.com/vexxhost/migratekit-volume-daemon/service"
+)
+
+// Monitor implements the DeviceMonitor interface for Linux block devices
+type Monitor struct {
+	watcher   *fsnotify.Watcher
+	ctx       context.Context
+	cancel    context.CancelFunc
+	eventChan chan service.DeviceEvent
+	isRunning bool
+	mutex     sync.RWMutex
+	devices   map[string]service.DeviceInfo // Current device state
+}
+
+// NewMonitor creates a new Linux device monitor
+func NewMonitor() (service.DeviceMonitor, error) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create filesystem watcher: %w", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	monitor := &Monitor{
+		watcher:   watcher,
+		ctx:       ctx,
+		cancel:    cancel,
+		eventChan: make(chan service.DeviceEvent, 100),
+		devices:   make(map[string]service.DeviceInfo),
+	}
+
+	return monitor, nil
+}
+
+// StartMonitoring begins monitoring Linux block devices
+func (m *Monitor) StartMonitoring(ctx context.Context) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if m.isRunning {
+		return fmt.Errorf("device monitor is already running")
+	}
+
+	log.Info("🔍 Starting Linux device monitor...")
+
+	// Watch /sys/block for device changes
+	err := m.watcher.Add("/sys/block")
+	if err != nil {
+		return fmt.Errorf("failed to watch /sys/block: %w", err)
+	}
+
+	// Initial scan of existing devices
+	if err := m.scanExistingDevices(); err != nil {
+		log.WithError(err).Warn("Failed to scan existing devices during startup")
+	}
+
+	m.isRunning = true
+
+	// Start monitoring goroutine
+	go m.monitoringLoop()
+
+	log.WithFields(log.Fields{
+		"watched_path": "/sys/block",
+		"device_count": len(m.devices),
+	}).Info("✅ Linux device monitor started successfully")
+
+	return nil
+}
+
+// StopMonitoring stops the device monitor
+func (m *Monitor) StopMonitoring(ctx context.Context) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if !m.isRunning {
+		return nil
+	}
+
+	log.Info("🛑 Stopping Linux device monitor...")
+
+	m.cancel()
+	m.watcher.Close()
+	close(m.eventChan)
+	m.isRunning = false
+
+	log.Info("✅ Linux device monitor stopped")
+	return nil
+}
+
+// GetDevices returns all currently detected block devices
+func (m *Monitor) GetDevices(ctx context.Context) ([]service.DeviceInfo, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	devices := make([]service.DeviceInfo, 0, len(m.devices))
+	for _, device := range m.devices {
+		devices = append(devices, device)
+	}
+
+	return devices, nil
+}
+
+// GetDeviceByPath returns information about a specific device
+func (m *Monitor) GetDeviceByPath(ctx context.Context, devicePath string) (*service.DeviceInfo, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	device, exists := m.devices[devicePath]
+	if !exists {
+		return nil, fmt.Errorf("device not found: %s", devicePath)
+	}
+
+	return &device, nil
+}
+
+// WaitForDevice waits for a device event within the timeout period
+func (m *Monitor) WaitForDevice(ctx context.Context, timeout time.Duration) (*service.DeviceEvent, error) {
+	select {
+	case event := <-m.eventChan:
+		return &event, nil
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("timeout waiting for device event")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// IsHealthy returns whether the device monitor is functioning properly
+func (m *Monitor) IsHealthy(ctx context.Context) bool {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	return m.isRunning
+}
+
+// monitoringLoop is the main event processing loop
+func (m *Monitor) monitoringLoop() {
+	log.Debug("Device monitoring loop started")
+
+	for {
+		select {
+		case event, ok := <-m.watcher.Events:
+			if !ok {
+				log.Debug("Watcher events channel closed")
+				return
+			}
+			m.handleFilesystemEvent(event)
+
+		case err, ok := <-m.watcher.Errors:
+			if !ok {
+				log.Debug("Watcher errors channel closed")
+				return
+			}
+			log.WithError(err).Error("Filesystem watcher error")
+
+		case <-m.ctx.Done():
+			log.Debug("Device monitoring loop cancelled")
+			return
+		}
+	}
+}
+
+// handleFilesystemEvent processes filesystem events from /sys/block
+func (m *Monitor) handleFilesystemEvent(event fsnotify.Event) {
+	// Only care about virtio devices (vd*)
+	deviceName := filepath.Base(event.Name)
+	if !strings.HasPrefix(deviceName, "vd") {
+		return
+	}
+
+	devicePath := "/dev/" + deviceName
+
+	log.WithFields(log.Fields{
+		"event":       event.Op.String(),
+		"path":        event.Name,
+		"device_name": deviceName,
+		"device_path": devicePath,
+	}).Debug("Filesystem event detected")
+
+	switch {
+	case event.Op&fsnotify.Create == fsnotify.Create:
+		m.handleDeviceAdded(devicePath, deviceName)
+	case event.Op&fsnotify.Remove == fsnotify.Remove:
+		m.handleDeviceRemoved(devicePath)
+	case event.Op&fsnotify.Write == fsnotify.Write:
+		m.handleDeviceChanged(devicePath, deviceName)
+	}
+}
+
+// handleDeviceAdded processes device addition events
+func (m *Monitor) handleDeviceAdded(devicePath, deviceName string) {
+	// Give the device a moment to stabilize
+	time.Sleep(100 * time.Millisecond)
+
+	deviceInfo, err := m.getDeviceInfo(devicePath, deviceName)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"device_path": devicePath,
+			"error":       err,
+		}).Warn("Failed to get device info for added device")
+		return
+	}
+
+	m.mutex.Lock()
+	m.devices[devicePath] = *deviceInfo
+	m.mutex.Unlock()
+
+	event := service.DeviceEvent{
+		Type:       service.DeviceAdded,
+		DevicePath: devicePath,
+		DeviceInfo: deviceInfo,
+		Timestamp:  time.Now(),
+	}
+
+	log.WithFields(log.Fields{
+		"device_path": devicePath,
+		"size":        deviceInfo.Size,
+		"controller":  deviceInfo.Controller,
+	}).Info("📎 New block device detected")
+
+	// Send event (non-blocking)
+	select {
+	case m.eventChan <- event:
+	default:
+		log.Warn("Device event channel full, dropping event")
+	}
+}
+
+// handleDeviceRemoved processes device removal events
+func (m *Monitor) handleDeviceRemoved(devicePath string) {
+	m.mutex.Lock()
+	deviceInfo, existed := m.devices[devicePath]
+	if existed {
+		delete(m.devices, devicePath)
+	}
+	m.mutex.Unlock()
+
+	if !existed {
+		return // Device wasn't tracked
+	}
+
+	event := service.DeviceEvent{
+		Type:       service.DeviceRemoved,
+		DevicePath: devicePath,
+		DeviceInfo: &deviceInfo,
+		Timestamp:  time.Now(),
+	}
+
+	log.WithFields(log.Fields{
+		"device_path": devicePath,
+		"size":        deviceInfo.Size,
+	}).Info("📌 Block device removed")
+
+	// Send event (non-blocking)
+	select {
+	case m.eventChan <- event:
+	default:
+		log.Warn("Device event channel full, dropping event")
+	}
+}
+
+// handleDeviceChanged processes device change events
+func (m *Monitor) handleDeviceChanged(devicePath, deviceName string) {
+	deviceInfo, err := m.getDeviceInfo(devicePath, deviceName)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"device_path": devicePath,
+			"error":       err,
+		}).Debug("Failed to get device info for changed device")
+		return
+	}
+
+	m.mutex.Lock()
+	oldInfo, existed := m.devices[devicePath]
+	m.devices[devicePath] = *deviceInfo
+	m.mutex.Unlock()
+
+	// Only send event if something meaningful changed
+	if existed && oldInfo.Size == deviceInfo.Size && oldInfo.Controller == deviceInfo.Controller {
+		return
+	}
+
+	event := service.DeviceEvent{
+		Type:       service.DeviceChanged,
+		DevicePath: devicePath,
+		DeviceInfo: deviceInfo,
+		Timestamp:  time.Now(),
+	}
+
+	log.WithFields(log.Fields{
+		"device_path": devicePath,
+		"size":        deviceInfo.Size,
+		"controller":  deviceInfo.Controller,
+	}).Debug("Block device changed")
+
+	// Send event (non-blocking)
+	select {
+	case m.eventChan <- event:
+	default:
+		log.Warn("Device event channel full, dropping event")
+	}
+}
+
+// scanExistingDevices performs initial scan of existing block devices
+func (m *Monitor) scanExistingDevices() error {
+	entries, err := ioutil.ReadDir("/sys/block")
+	if err != nil {
+		return fmt.Errorf("failed to read /sys/block: %w", err)
+	}
+
+	count := 0
+	for _, entry := range entries {
+		deviceName := entry.Name()
+		
+		// Skip if not a virtio device
+		if !strings.HasPrefix(deviceName, "vd") {
+			continue
+		}
+
+		// Check if this is a valid block device (could be symlink or directory)
+		sysDevicePath := fmt.Sprintf("/sys/block/%s", deviceName)
+		if _, err := os.Stat(sysDevicePath); err != nil {
+			continue
+		}
+
+		devicePath := "/dev/" + deviceName
+		deviceInfo, err := m.getDeviceInfo(devicePath, deviceName)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"device_path": devicePath,
+				"error":       err,
+			}).Debug("Failed to get info for existing device")
+			continue
+		}
+
+		m.devices[devicePath] = *deviceInfo
+		count++
+
+		log.WithFields(log.Fields{
+			"device_path": devicePath,
+			"size":        deviceInfo.Size,
+			"controller":  deviceInfo.Controller,
+		}).Debug("Found existing block device")
+	}
+
+	log.WithFields(log.Fields{
+		"device_count": count,
+	}).Info("📋 Scanned existing block devices")
+
+	return nil
+}
+
+// getDeviceInfo extracts detailed information about a block device
+func (m *Monitor) getDeviceInfo(devicePath, deviceName string) (*service.DeviceInfo, error) {
+	// Get device size
+	size, err := m.getDeviceSize(deviceName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get device size: %w", err)
+	}
+
+	// Get virtio controller information
+	controller, err := m.getVirtioController(deviceName)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"device_name": deviceName,
+			"error":       err,
+		}).Debug("Failed to get virtio controller info")
+		controller = "unknown"
+	}
+
+	metadata := map[string]string{
+		"scan_time": time.Now().Format(time.RFC3339),
+		"source":    "device_monitor",
+	}
+
+	return &service.DeviceInfo{
+		Path:       devicePath,
+		Size:       size,
+		Controller: controller,
+		Metadata:   metadata,
+	}, nil
+}
+
+// getDeviceSize reads the device size from /sys/block/*/size
+func (m *Monitor) getDeviceSize(deviceName string) (int64, error) {
+	sizePath := fmt.Sprintf("/sys/block/%s/size", deviceName)
+	data, err := ioutil.ReadFile(sizePath)
+	if err != nil {
+		return 0, err
+	}
+
+	// Size is in 512-byte sectors
+	sectors, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return sectors * 512, nil
+}
+
+// getVirtioController reads virtio controller information
+func (m *Monitor) getVirtioController(deviceName string) (string, error) {
+	// Try to read the device symlink to get virtio controller info
+	deviceLink := fmt.Sprintf("/sys/block/%s/device", deviceName)
+	target, err := os.Readlink(deviceLink)
+	if err != nil {
+		return "", err
+	}
+
+	// Extract virtio controller identifier from the symlink target
+	// Example: ../../../devices/pci0000:00/0000:00:06.0/virtio2/block/vdb
+	parts := strings.Split(target, "/")
+	for _, part := range parts {
+		if strings.HasPrefix(part, "virtio") {
+			return part, nil
+		}
+	}
+
+	return "", fmt.Errorf("no virtio controller found in device path: %s", target)
+}

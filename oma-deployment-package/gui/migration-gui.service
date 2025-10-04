@@ -1,0 +1,43 @@
+# Migration Dashboard GUI - Next.js Service
+# Service configuration for production deployment
+
+[Unit]
+Description=Migration Dashboard GUI
+Documentation=Migration dashboard for VMware to OSSEA migrations
+After=network-online.target oma-api.service
+Wants=network-online.target
+Requires=network-online.target
+
+[Service]
+Type=simple
+User=pgrayson
+Group=pgrayson
+WorkingDirectory=/home/pgrayson/migration-dashboard
+
+# Environment variables for Next.js
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=HOSTNAME=localhost
+
+# Service executable
+ExecStart=/usr/bin/npm run dev -- --port 3001 --hostname localhost
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=migration-gui
+
+[Install]
+WantedBy=multi-user.target

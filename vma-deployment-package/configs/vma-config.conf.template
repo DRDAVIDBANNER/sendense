@@ -1,0 +1,10 @@
+# VMA Configuration Template
+# This template is used by the VMA wizard and deployment script
+# Variables will be substituted during deployment
+
+OMA_HOST=__OMA_IP_PLACEHOLDER__
+OMA_PORT=443
+VMA_API_PORT=8081
+TUNNEL_LOCAL_PORT=9081
+SETUP_DATE="__SETUP_DATE_PLACEHOLDER__"
+SETUP_VERSION=v2.0.0-production

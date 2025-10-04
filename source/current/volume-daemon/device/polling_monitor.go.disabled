@@ -1,0 +1,320 @@
+package device
+
+import (
+	"context"
+	"fmt"
+	"io/ioutil"
+	"strings"
+	"sync"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+
+	"github.com/vexxhost/migratekit-volume-daemon/service"
+)
+
+// PollingMonitor implements device monitoring using periodic polling instead of inotify
+// This is more reliable for CloudStack volume operations that happen at kernel level
+type PollingMonitor struct {
+	ctx          context.Context
+	cancel       context.CancelFunc
+	eventChan    chan service.DeviceEvent
+	isRunning    bool
+	mutex        sync.RWMutex
+	devices      map[string]service.DeviceInfo // Current device state
+	pollInterval time.Duration
+}
+
+// NewPollingMonitor creates a new polling-based device monitor
+func NewPollingMonitor() (service.DeviceMonitor, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	monitor := &PollingMonitor{
+		ctx:          ctx,
+		cancel:       cancel,
+		eventChan:    make(chan service.DeviceEvent, 100),
+		devices:      make(map[string]service.DeviceInfo),
+		pollInterval: 2 * time.Second, // Poll every 2 seconds
+	}
+
+	return monitor, nil
+}
+
+// StartMonitoring begins polling for Linux block devices
+func (pm *PollingMonitor) StartMonitoring(ctx context.Context) error {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	if pm.isRunning {
+		return fmt.Errorf("polling monitor is already running")
+	}
+
+	log.Info("🔍 Starting Linux device polling monitor...")
+
+	// Initial scan of existing devices
+	if err := pm.scanDevices(); err != nil {
+		log.WithError(err).Warn("Failed to scan existing devices during startup")
+	}
+
+	pm.isRunning = true
+
+	// Start polling goroutine
+	go pm.pollingLoop()
+
+	log.WithFields(log.Fields{
+		"poll_interval": pm.pollInterval,
+		"device_count":  len(pm.devices),
+	}).Info("✅ Linux device polling monitor started successfully")
+
+	return nil
+}
+
+// StopMonitoring stops the polling monitor
+func (pm *PollingMonitor) StopMonitoring(ctx context.Context) error {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	if !pm.isRunning {
+		return nil
+	}
+
+	log.Info("🛑 Stopping Linux device polling monitor...")
+
+	pm.cancel()
+	close(pm.eventChan)
+	pm.isRunning = false
+
+	log.Info("✅ Linux device polling monitor stopped")
+	return nil
+}
+
+// GetDevices returns all currently detected block devices
+func (pm *PollingMonitor) GetDevices(ctx context.Context) ([]service.DeviceInfo, error) {
+	pm.mutex.RLock()
+	defer pm.mutex.RUnlock()
+
+	devices := make([]service.DeviceInfo, 0, len(pm.devices))
+	for _, device := range pm.devices {
+		devices = append(devices, device)
+	}
+
+	return devices, nil
+}
+
+// GetDeviceByPath returns information about a specific device
+func (pm *PollingMonitor) GetDeviceByPath(ctx context.Context, devicePath string) (*service.DeviceInfo, error) {
+	pm.mutex.RLock()
+	defer pm.mutex.RUnlock()
+
+	device, exists := pm.devices[devicePath]
+	if !exists {
+		return nil, fmt.Errorf("device not found: %s", devicePath)
+	}
+
+	return &device, nil
+}
+
+// WaitForDevice waits for a device event within the timeout period
+func (pm *PollingMonitor) WaitForDevice(ctx context.Context, timeout time.Duration) (*service.DeviceEvent, error) {
+	select {
+	case event := <-pm.eventChan:
+		return &event, nil
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("timeout waiting for device event")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// IsHealthy returns whether the polling monitor is functioning properly
+func (pm *PollingMonitor) IsHealthy(ctx context.Context) bool {
+	pm.mutex.RLock()
+	defer pm.mutex.RUnlock()
+	return pm.isRunning
+}
+
+// pollingLoop is the main polling loop that checks for device changes
+func (pm *PollingMonitor) pollingLoop() {
+	log.Debug("Device polling loop started")
+
+	ticker := time.NewTicker(pm.pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			pm.checkForDeviceChanges()
+
+		case <-pm.ctx.Done():
+			log.Debug("Device polling loop cancelled")
+			return
+		}
+	}
+}
+
+// checkForDeviceChanges scans for device changes and generates events
+func (pm *PollingMonitor) checkForDeviceChanges() {
+	// Get current devices from filesystem
+	currentDevices, err := pm.scanCurrentDevices()
+	if err != nil {
+		log.WithError(err).Warn("Failed to scan current devices")
+		return
+	}
+
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	// Create maps for comparison
+	previousDevices := make(map[string]service.DeviceInfo)
+	for path, device := range pm.devices {
+		previousDevices[path] = device
+	}
+
+	currentDeviceMap := make(map[string]service.DeviceInfo)
+	for _, device := range currentDevices {
+		currentDeviceMap[device.Path] = device
+	}
+
+	// Check for new devices
+	for path, device := range currentDeviceMap {
+		if _, existed := previousDevices[path]; !existed {
+			pm.handleDeviceAdded(device)
+		}
+	}
+
+	// Check for removed devices
+	for path, device := range previousDevices {
+		if _, exists := currentDeviceMap[path]; !exists {
+			pm.handleDeviceRemoved(device)
+		}
+	}
+
+	// Update current state
+	pm.devices = currentDeviceMap
+}
+
+// scanCurrentDevices returns all current virtio devices
+func (pm *PollingMonitor) scanCurrentDevices() ([]service.DeviceInfo, error) {
+	entries, err := ioutil.ReadDir("/sys/block")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read /sys/block: %w", err)
+	}
+
+	var devices []service.DeviceInfo
+	for _, entry := range entries {
+		deviceName := entry.Name()
+
+		// Skip if not a virtio device
+		if !strings.HasPrefix(deviceName, "vd") {
+			continue
+		}
+
+		devicePath := "/dev/" + deviceName
+		deviceInfo, err := pm.getDeviceInfo(devicePath, deviceName)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"device_path": devicePath,
+				"error":       err,
+			}).Debug("Failed to get info for device")
+			continue
+		}
+
+		devices = append(devices, *deviceInfo)
+	}
+
+	return devices, nil
+}
+
+// scanDevices performs initial scan of existing devices
+func (pm *PollingMonitor) scanDevices() error {
+	devices, err := pm.scanCurrentDevices()
+	if err != nil {
+		return err
+	}
+
+	for _, device := range devices {
+		pm.devices[device.Path] = device
+	}
+
+	log.WithFields(log.Fields{
+		"device_count": len(devices),
+	}).Info("📋 Scanned existing block devices")
+
+	return nil
+}
+
+// handleDeviceAdded processes a newly detected device
+func (pm *PollingMonitor) handleDeviceAdded(device service.DeviceInfo) {
+	event := service.DeviceEvent{
+		Type:       service.DeviceAdded,
+		DevicePath: device.Path,
+		DeviceInfo: &device,
+		Timestamp:  time.Now(),
+	}
+
+	log.WithFields(log.Fields{
+		"device_path": device.Path,
+		"size":        device.Size,
+		"controller":  device.Controller,
+	}).Info("📎 New block device detected via polling")
+
+	// Send event (non-blocking)
+	select {
+	case pm.eventChan <- event:
+	default:
+		log.Warn("Device event channel full, dropping event")
+	}
+}
+
+// handleDeviceRemoved processes a removed device
+func (pm *PollingMonitor) handleDeviceRemoved(device service.DeviceInfo) {
+	event := service.DeviceEvent{
+		Type:       service.DeviceRemoved,
+		DevicePath: device.Path,
+		DeviceInfo: &device,
+		Timestamp:  time.Now(),
+	}
+
+	log.WithFields(log.Fields{
+		"device_path": device.Path,
+		"size":        device.Size,
+	}).Info("📌 Block device removed detected via polling")
+
+	// Send event (non-blocking)
+	select {
+	case pm.eventChan <- event:
+	default:
+		log.Warn("Device event channel full, dropping event")
+	}
+}
+
+// getDeviceInfo extracts detailed information about a block device
+func (pm *PollingMonitor) getDeviceInfo(devicePath, deviceName string) (*service.DeviceInfo, error) {
+	// Get device size
+	size, err := getDeviceSize(deviceName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get device size: %w", err)
+	}
+
+	// Get virtio controller information
+	controller, err := getVirtioController(deviceName)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"device_name": deviceName,
+			"error":       err,
+		}).Debug("Failed to get virtio controller info")
+		controller = "unknown"
+	}
+
+	metadata := map[string]string{
+		"scan_time": time.Now().Format(time.RFC3339),
+		"source":    "polling_monitor",
+	}
+
+	return &service.DeviceInfo{
+		Path:       devicePath,
+		Size:       size,
+		Controller: controller,
+		Metadata:   metadata,
+	}, nil
+}

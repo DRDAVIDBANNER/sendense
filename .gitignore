@@ -1,0 +1,64 @@
+# Binaries
+/opt/migratekit/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Build artifacts
+/bin/
+/build/
+/dist/
+coverage/
+*.out
+
+# Logs
+*.log
+/var/log/migratekit/
+
+# Editor/OS files
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Generated docs
+docs/swagger.*
+
+# Local configs
+.env
+.env.*
+
+# NBD configs (managed outside repo)
+/opt/migratekit/nbd-configs/
+# Build Artifacts
+source/builds/**
+*.log
+*.binary
+dist/**
+
+# Large deployment files excluded (too large for GitHub)
+# VirtIO ISO (693 MB)
+oma-deployment-package/virtio/
+
+# GUI build artifacts and dependencies (should be rebuilt on target)
+oma-deployment-package/gui/node_modules/
+oma-deployment-package/gui/.next/
+
+# VMA VDDK (large VMware library)
+vma-deployment-package/vddk/
+
+# GUI build tarball (can be regenerated)
+oma-deployment-package/gui/migration-gui-built.tar.gz
+
+# Binary executables in deployment packages (build artifacts - should be rebuilt)
+oma-deployment-package/binaries/oma-api*
+oma-deployment-package/binaries/volume-daemon*
+!oma-deployment-package/binaries/*.sha256
+!oma-deployment-package/binaries/*.md
+vma-deployment-package/binaries/migratekit*
+vma-deployment-package/binaries/vma-api-server*
+!vma-deployment-package/binaries/*.md
+
+# VirtIO tools (Windows executables)
+oma-deployment-package/virt-tools/*.exe
