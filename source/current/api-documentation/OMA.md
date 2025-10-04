@@ -147,6 +147,51 @@ VMA Enrollment (OMA side)
   - Callsites: VMA `services/enrollment_client.go` uses public endpoints via 443 proxy
   - Classification: Key
 
+Backup Repository System (Phase 1 - Added 2025-10-04)
+- GET /repositories → list all repositories
+- POST /repositories → register new repository
+- GET /repositories/{id} → get repository details
+- PATCH /repositories/{id} → update repository
+- DELETE /repositories/{id} → delete repository
+- POST /repositories/test → test repository connection
+- POST /repositories/refresh-storage → refresh storage info for all repositories
+- GET /repositories/storage-summary → get aggregate storage statistics
+  - Handler: `handlers.BackupRepository.*`
+  - Classification: Key (backup infrastructure)
+
+Backup Policy Management (Phase 1 - Added 2025-10-04)
+- GET /backup-policies → list all backup policies
+- POST /backup-policies → create backup policy
+- GET /backup-policies/{id} → get policy details
+- PATCH /backup-policies/{id} → update policy
+- DELETE /backup-policies/{id} → delete policy
+- POST /backup-policies/{policy_id}/copy-rules → add copy rule to policy
+- PATCH /backup-policies/{policy_id}/copy-rules/{rule_id} → update copy rule
+- DELETE /backup-policies/{policy_id}/copy-rules/{rule_id} → delete copy rule
+  - Handler: `handlers.BackupPolicy.*`
+  - Classification: Key (backup configuration)
+
+Backup Job Management (Phase 1 - Added 2025-10-04)
+- POST /backups → create backup job
+- GET /backups/{backup_id} → get backup job status
+- GET /backups → list backups (filter by vm_context_id, repository_id, status)
+- DELETE /backups/{backup_id} → delete backup (respects immutability)
+- GET /backups/chain → get backup chain for VM disk
+- POST /backups/chain/{chain_id}/consolidate → consolidate backup chain
+  - Handler: `handlers.BackupJob.*`
+  - Callsites: Scheduler service, GUI backup workflows
+  - Classification: Key (backup operations)
+
+Backup Copy Management (Phase 1 - Added 2025-10-04)
+- GET /backup-copies → list backup copies (filter by source_backup_id, repository_id, status)
+- POST /backup-copies → manually create backup copy
+- GET /backup-copies/{copy_id} → get copy status
+- POST /backup-copies/{copy_id}/verify → verify backup copy integrity
+- DELETE /backup-copies/{copy_id} → cancel copy operation
+  - Handler: `handlers.BackupCopy.*`
+  - Callsites: Backup copy engine (automatic), GUI manual copy workflows
+  - Classification: Key (multi-location backup support)
+
 Legacy/Potentially Legacy Notes
 - Original failover handlers exist alongside enhanced; enhanced/unified are primary. The `RegisterFailoverRoutes` exports classic paths; prefer enhanced/unified.
 - `vma_simple.go` defines simple enrollment handlers but is not wired in `handlers.NewHandlers`; Classification: Legacy (unused).
