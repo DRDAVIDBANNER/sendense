@@ -9,7 +9,7 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/opt/sendense
-ExecStart=/usr/local/bin/sendense-hub
+ExecStart=/usr/local/bin/sendense-hub -port=8082 -db-host=localhost -db-port=3306 -db-name=migratekit_oma -db-user=oma_user -db-pass=oma_password
 Restart=always
 RestartSec=10s
 StandardOutput=journal
@@ -20,6 +20,11 @@ SyslogIdentifier=sendense-hub
 Environment="PORT=8082"
 Environment="LOG_LEVEL=info"
 Environment="CONFIG_PATH=/etc/sendense/config.yaml"
+Environment="DB_HOST=localhost"
+Environment="DB_PORT=3306"
+Environment="DB_NAME=migratekit_oma"
+Environment="DB_USER=oma_user"
+Environment="DB_PASS=oma_password"
 
 # Resource limits
 LimitNOFILE=65536
