@@ -1,0 +1,38 @@
+[Unit]
+Description=Sendense Volume Management Daemon
+Documentation=https://docs.sendense.com/volume-daemon/
+After=network.target mariadb.service
+Requires=mariadb.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/sendense
+ExecStart=/usr/local/bin/volume-daemon
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=volume-daemon
+
+# Environment
+Environment="PORT=8090"
+Environment="LOG_LEVEL=info"
+Environment="DB_HOST=localhost"
+Environment="DB_PORT=3306"
+Environment="DB_USER=oma_user"
+Environment="DB_PASS=oma_password"
+Environment="DB_NAME=migratekit_oma"
+
+# Resource limits
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/sendense /var/lib/sendense /dev
+
+[Install]
+WantedBy=multi-user.target

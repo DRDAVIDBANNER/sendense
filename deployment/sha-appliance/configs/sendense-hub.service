@@ -1,0 +1,35 @@
+[Unit]
+Description=Sendense Hub Appliance (SHA) API Server
+Documentation=https://docs.sendense.com/sha/
+After=network.target mariadb.service volume-daemon.service
+Wants=volume-daemon.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/sendense
+ExecStart=/usr/local/bin/sendense-hub
+Restart=always
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sendense-hub
+
+# Environment
+Environment="PORT=8082"
+Environment="LOG_LEVEL=info"
+Environment="CONFIG_PATH=/etc/sendense/config.yaml"
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/sendense /var/lib/sendense /opt/sendense
+
+[Install]
+WantedBy=multi-user.target
