@@ -1,8 +1,8 @@
 # Current Active Work - Sendense Project
 
 **Last Updated:** 2025-10-05  
-**Current Phase:** Phase 1 - VMware Backups (Week 2-3)  
-**Active Job Sheets:** 0 (Task 3 complete - choosing next priority)
+**Current Phase:** Phase 1 - VMware Backups (Week 3-4)  
+**Active Job Sheets:** 1 (Task 4 ready to start)
 
 ---
 
@@ -46,22 +46,23 @@
 
 ---
 
-### **Job 3: Backup Copy Engine & Immutable Storage** 🔴 ACTIVE
-**File:** `job-sheets/2025-10-04-backup-copy-engine.md`  
-**Status:** 🔴 **ACTIVE** (Starting 2025-10-05)  
-**Duration:** 4-5 days  
+### **Job 4: File-Level Restore** 🔴 ACTIVE
+**File:** `job-sheets/2025-10-05-file-level-restore.md`  
+**Status:** 🔴 **READY TO START** (2025-10-05)  
+**Duration:** 1-2 weeks  
 **Owner:** Backend Engineering Team  
-**Priority:** High (Enterprise features)
+**Priority:** Critical (Customer file recovery)
 
-**Description:** Implement multi-repository copies and immutable storage for ransomware protection
+**Description:** Mount QCOW2 backups and extract individual files via REST API
 
-**Dependencies:** ✅ Jobs 1 and 2 complete - ready to start
+**Dependencies:** ✅ Tasks 1, 2, 3 complete - foundation ready
 
 **Progress:**
-- [ ] Day 1-2: Backup Policy Management
-- [ ] Day 2-3: Backup Copy Engine implementation
-- [ ] Day 3-4: Immutable Storage support
-- [ ] Day 4-5: API endpoints and testing
+- [ ] Phase 1: QCOW2 mount management (Days 1-3)
+- [ ] Phase 2: File browser API (Days 4-6)  
+- [ ] Phase 3: File download & extraction (Days 5-7)
+- [ ] Phase 4: Safety & cleanup (Days 6-8)
+- [ ] Phase 5: API integration (Days 8-10)
 
 ---
 
@@ -130,16 +131,18 @@ Task 1 Total: [██████▱▱▱▱] 67% (~10-12 days total)
   - Local, NFS, CIFS repository support with API endpoints
 
 **NBD & Workflow Infrastructure (2025-10-05):**
-- [x] **Task 2: NBD File Export** - 67% COMPLETE (Phase 1-2 done)
+- [x] **Task 2: NBD File Export** - 100% COMPLETE ✅
   - Config.d + SIGHUP pattern (512 lines nbd_config_manager.go)
-  - QCOW2 file export support (232 lines backup_export_helpers.go)
-  - Collision-proof export naming system
-  - Volume Daemon architecture compliance
+  - QCOW2 file export support (232 lines backup_export_helpers.go)  
+  - Comprehensive testing (286 lines unit tests + integration tests)
+  - Production validated on 10.245.246.136
+  - Total: 1,414 lines with testing validation
 - [x] **Task 3: Backup Workflow** - 100% COMPLETE ✅
   - BackupEngine orchestration (460 lines workflows/backup.go)
   - BackupJobRepository (262 lines database/backup_job_repository.go)
   - Full and incremental backup workflows
   - Task 1+2 integration, VMA API integration, CBT change tracking
+  - Total: 722 lines of workflow automation
 
 **Project Setup (2025-10-04):**
 - [x] Created project governance framework
