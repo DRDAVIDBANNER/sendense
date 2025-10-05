@@ -122,30 +122,61 @@ source/current/control-plane/storage/
 **Current State:** NBD server exports `/dev/vdX` block devices  
 **New State:** NBD server can also export QCOW2 files
 
+**Architecture Decision:** Follow Volume Daemon pattern with config.d + SIGHUP
+
 **Sub-Tasks:**
-2.1. **Add File Export Support**
-   - Modify `internal/oma/nbd/server.go`
-   - Add `CreateFileExport()` method
-   - Update `/etc/nbd-server/config-base` format
+2.1. **Migrate to config.d Pattern**
+   - Update OMA NBD to use config.d directory structure (like Volume Daemon)
+   - Base NBD config with `includedir = /opt/migratekit/nbd-configs/conf.d`
+   - Individual export files in conf.d directory
+   - Implement SIGHUP reload functionality
    
-2.2. **Handle QCOW2-specific Options**
-   - Set proper filesize from QCOW2 metadata
+2.2. **Add File Export Support**
+   - Modify `internal/oma/nbd/server.go`
+   - Add `CreateFileExport()` method for QCOW2 files
+   - Support both block device and file exports in same server
+   
+2.3. **Handle QCOW2-specific Options**
+   - Set proper filesize from QCOW2 metadata using `qemu-img info`
    - Support read-write for incremental writes
-   - Handle SIGHUP reload after adding export
+   - Use SIGHUP reload after adding/removing exports (no service restart)
 
 **Files to Modify:**
 ```
-source/current/control-plane/nbd/
-├── server.go                 # Add CreateFileExport method
-├── config.go                 # Support file-based exports
-└── models.go                 # Add FileExport type
+source/current/oma/nbd/
+├── server.go                 # Add CreateFileExport method  
+├── config.go                 # Migrate to config.d pattern with SIGHUP
+└── models.go                 # Add FileExport type, update Export struct
 ```
 
+**Implementation Notes:**
+- **Pattern Consistency:** Align OMA NBD with proven Volume Daemon architecture
+- **Dynamic Exports:** Add/remove exports without NBD server restart (SIGHUP only)
+- **File Size Detection:** Use `qemu-img info --output=json` for accurate QCOW2 size
+- **Backward Compatibility:** Existing block device exports continue working
+- **Config Structure:**
+  ```
+  /opt/migratekit/nbd-configs/
+  ├── nbd-server.conf          # Base config with includedir
+  └── conf.d/                  # Individual export files
+      ├── backup-vm1-disk0.conf
+      ├── backup-vm2-disk0.conf
+      └── migration-job-123.conf
+  ```
+
+**Benefits:**
+- ✅ **No Service Restarts** - SIGHUP reload for backup exports
+- ✅ **Atomic Operations** - Individual export files prevent corruption
+- ✅ **Proven Architecture** - Reuses Volume Daemon's working pattern
+- ✅ **Clean Separation** - Block device vs file exports managed consistently
+
 **Acceptance Criteria:**
-- [ ] NBD server can export QCOW2 file
-- [ ] Capture Agent can connect to file export
-- [ ] Data writes to QCOW2 file correctly
-- [ ] No regression on block device exports
+- [ ] NBD server migrated to config.d pattern with SIGHUP reload
+- [ ] NBD server can export QCOW2 files alongside block devices
+- [ ] Capture Agent can connect to file exports (same as block device exports)
+- [ ] Data writes to QCOW2 file correctly with proper file locking
+- [ ] No regression on existing block device exports
+- [ ] Export add/remove operations use SIGHUP (no service restart)
 
 ---
 
