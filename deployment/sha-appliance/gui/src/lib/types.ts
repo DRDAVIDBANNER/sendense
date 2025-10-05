@@ -295,3 +295,105 @@ export interface OperationSummary {
 export interface EnhancedVMContextDetails extends VMContextDetails {
   last_operation?: OperationSummary;
 }
+
+// ============================================================================
+// BACKUP API TYPES (Task 5 Integration)
+// ============================================================================
+
+export interface BackupJob {
+  backup_id: string;
+  vm_context_id: string;
+  vm_name: string;
+  disk_id: number;
+  backup_type: 'full' | 'incremental';
+  repository_id: string;
+  policy_id?: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  file_path?: string;
+  nbd_export_name?: string;
+  bytes_transferred: number;
+  total_bytes: number;
+  change_id?: string;
+  error_message?: string;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  tags?: Record<string, string>;
+}
+
+export interface BackupListResponse {
+  backups: BackupJob[];
+  total: number;
+}
+
+export interface BackupChainResponse {
+  chain_id: string;
+  vm_context_id: string;
+  vm_name: string;
+  disk_id: number;
+  repository_id: string;
+  full_backup_id: string;
+  backups: BackupJob[];
+  total_size_bytes: number;
+  backup_count: number;
+}
+
+export interface StartBackupRequest {
+  vm_name: string;
+  disk_id: number;
+  backup_type: 'full' | 'incremental';
+  repository_id: string;
+  policy_id?: string;
+  tags?: Record<string, string>;
+}
+
+// ============================================================================
+// FILE-LEVEL RESTORE API TYPES (Task 4 Integration)
+// ============================================================================
+
+export interface RestoreMount {
+  mount_id: string;
+  backup_id: string;
+  mount_path: string;
+  nbd_device: string;
+  filesystem_type: string;
+  status: 'mounting' | 'mounted' | 'unmounting' | 'failed';
+  created_at: string;
+  last_accessed_at: string;
+  expires_at: string;
+}
+
+export interface RestoreMountsListResponse {
+  mounts: RestoreMount[];
+  count: number;
+}
+
+export interface FileInfo {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  size: number;
+  modified: string;
+  permissions: string;
+}
+
+export interface FileListResponse {
+  files: FileInfo[];
+  total_count: number;
+}
+
+export interface RestoreResourceStatus {
+  active_mounts: number;
+  max_mounts: number;
+  available_slots: number;
+  allocated_devices: string[];
+  device_utilization: number;
+}
+
+export interface RestoreCleanupStatus {
+  running: boolean;
+  cleanup_interval: string;
+  idle_timeout: string;
+  active_mount_count: number;
+  expired_mount_count: number;
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { HiHome, HiCog, HiDatabase, HiCloud, HiGlobe, HiChartBar, HiServer, HiLightningBolt, HiDocumentSearch, HiClock, HiCollection } from 'react-icons/hi';
+import { HiHome, HiCog, HiDatabase, HiCloud, HiGlobe, HiChartBar, HiServer, HiLightningBolt, HiDocumentSearch, HiClock, HiCollection, HiArchive } from 'react-icons/hi';
 import { ClientIcon } from './ClientIcon';
 
 interface SidebarProps {
@@ -75,6 +75,19 @@ export function AppSidebar({ currentPage }: SidebarProps) {
                 <HiServer />
               </ClientIcon>
               <span className="ml-3">Virtual Machines</span>
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/backups"
+              className={`flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                isActive('backups') ? 'bg-gray-100 dark:bg-gray-700' : ''
+              }`}
+            >
+              <ClientIcon className="w-5 h-5 text-gray-500 dark:text-gray-400">
+                <HiArchive />
+              </ClientIcon>
+              <span className="ml-3">Backups</span>
             </Link>
           </li>
           <li>

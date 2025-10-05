@@ -10,7 +10,17 @@ import {
   APIResponse,
   NetworkMappingForm,
   ReplicationForm,
-  FailoverForm
+  FailoverForm,
+  BackupJob,
+  BackupListResponse,
+  BackupChainResponse,
+  StartBackupRequest,
+  RestoreMount,
+  RestoreMountsListResponse,
+  FileInfo,
+  FileListResponse,
+  RestoreResourceStatus,
+  RestoreCleanupStatus
 } from './types';
 
 class APIClient {
@@ -268,6 +278,206 @@ class APIClient {
       throw error;
     }
     throw new Error('An unknown error occurred');
+  }
+
+  // ============================================================================
+  // BACKUP API METHODS (Task 5 Integration)
+  // ============================================================================
+
+  async listBackups(params?: {
+    vm_name?: string;
+    vm_context_id?: string;
+    repository_id?: string;
+    status?: string;
+    backup_type?: string;
+  }): Promise<BackupListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.vm_name) searchParams.append('vm_name', params.vm_name);
+    if (params?.vm_context_id) searchParams.append('vm_context_id', params.vm_context_id);
+    if (params?.repository_id) searchParams.append('repository_id', params.repository_id);
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.backup_type) searchParams.append('backup_type', params.backup_type);
+
+    const url = searchParams.toString() 
+      ? `${this.baseURL}/api/v1/backup/list?${searchParams}`
+      : `${this.baseURL}/api/v1/backup/list`;
+
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch backups: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  async getBackupDetails(backupId: string): Promise<BackupJob> {
+    const response = await fetch(`${this.baseURL}/api/v1/backup/${encodeURIComponent(backupId)}`);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Backup not found: ${backupId}`);
+      }
+      throw new Error(`Failed to fetch backup details: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  async startBackup(request: StartBackupRequest): Promise<BackupJob> {
+    const response = await fetch(`${this.baseURL}/api/v1/backup/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to start backup');
+    }
+    
+    return response.json();
+  }
+
+  async deleteBackup(backupId: string): Promise<{ message: string; backup_id: string }> {
+    const response = await fetch(`${this.baseURL}/api/v1/backup/${encodeURIComponent(backupId)}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete backup');
+    }
+    
+    return response.json();
+  }
+
+  async getBackupChain(params: {
+    vm_context_id?: string;
+    vm_name?: string;
+    disk_id?: number;
+  }): Promise<BackupChainResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.vm_context_id) searchParams.append('vm_context_id', params.vm_context_id);
+    if (params.vm_name) searchParams.append('vm_name', params.vm_name);
+    if (params.disk_id !== undefined) searchParams.append('disk_id', params.disk_id.toString());
+
+    const response = await fetch(`${this.baseURL}/api/v1/backup/chain?${searchParams}`);
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch backup chain');
+    }
+    
+    return response.json();
+  }
+
+  // ============================================================================
+  // FILE-LEVEL RESTORE API METHODS (Task 4 Integration)
+  // ============================================================================
+
+  async mountBackup(backupId: string): Promise<RestoreMount> {
+    const response = await fetch(`${this.baseURL}/api/v1/restore/mount`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backup_id: backupId })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to mount backup');
+    }
+    
+    return response.json();
+  }
+
+  async unmountBackup(mountId: string): Promise<{ message: string }> {
+    const response = await fetch(`${this.baseURL}/api/v1/restore/${encodeURIComponent(mountId)}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to unmount backup');
+    }
+    
+    return response.json();
+  }
+
+  async listRestoreMounts(): Promise<RestoreMountsListResponse> {
+    const response = await fetch(`${this.baseURL}/api/v1/restore/mounts`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch restore mounts: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  async listFiles(mountId: string, path: string = '/', recursive: boolean = false): Promise<FileListResponse> {
+    const searchParams = new URLSearchParams();
+    searchParams.append('path', path);
+    if (recursive) searchParams.append('recursive', 'true');
+
+    const response = await fetch(
+      `${this.baseURL}/api/v1/restore/${encodeURIComponent(mountId)}/files?${searchParams}`
+    );
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to list files');
+    }
+    
+    return response.json();
+  }
+
+  async getFileInfo(mountId: string, path: string): Promise<FileInfo> {
+    const searchParams = new URLSearchParams();
+    searchParams.append('path', path);
+
+    const response = await fetch(
+      `${this.baseURL}/api/v1/restore/${encodeURIComponent(mountId)}/file-info?${searchParams}`
+    );
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to get file info');
+    }
+    
+    return response.json();
+  }
+
+  getDownloadFileUrl(mountId: string, path: string): string {
+    const searchParams = new URLSearchParams();
+    searchParams.append('path', path);
+    return `${this.baseURL}/api/v1/restore/${encodeURIComponent(mountId)}/download?${searchParams}`;
+  }
+
+  getDownloadDirectoryUrl(mountId: string, path: string, format: 'zip' | 'tar.gz' = 'zip'): string {
+    const searchParams = new URLSearchParams();
+    searchParams.append('path', path);
+    searchParams.append('format', format);
+    return `${this.baseURL}/api/v1/restore/${encodeURIComponent(mountId)}/download-directory?${searchParams}`;
+  }
+
+  async getRestoreResourceStatus(): Promise<RestoreResourceStatus> {
+    const response = await fetch(`${this.baseURL}/api/v1/restore/resources`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch restore resource status: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  async getRestoreCleanupStatus(): Promise<RestoreCleanupStatus> {
+    const response = await fetch(`${this.baseURL}/api/v1/restore/cleanup-status`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch restore cleanup status: ${response.statusText}`);
+    }
+    
+    return response.json();
   }
 }
 
