@@ -8,14 +8,19 @@ import (
 )
 
 // ChainManager handles backup chain tracking and validation.
+// Refactored to use repository pattern (PROJECT_RULES lines 469-470).
+// Note: Retains db field for complex transaction operations (SELECT FOR UPDATE patterns).
 type ChainManager struct {
-	db *sql.DB
+	repo BackupChainRepository // Repository pattern for simple queries
+	db   *sql.DB               // Direct DB access for transactions only
 }
 
-// NewChainManager creates a new ChainManager.
-func NewChainManager(db *sql.DB) *ChainManager {
+// NewChainManager creates a new ChainManager using repository pattern.
+// Note: db parameter retained for transaction support (AddBackupToChain, RemoveBackupFromChain).
+func NewChainManager(repo BackupChainRepository, db *sql.DB) *ChainManager {
 	return &ChainManager{
-		db: db,
+		repo: repo,
+		db:   db,
 	}
 }
 
@@ -30,31 +35,11 @@ func (cm *ChainManager) GetOrCreateChain(ctx context.Context, vmContextID string
 		return nil, err
 	}
 
-	// Create new chain
+	// Create new chain using repository
 	chainID := GenerateChainID(vmContextID, diskID)
 	now := time.Now()
 
-	query := `
-		INSERT INTO backup_chains (
-			id, vm_context_id, disk_id, 
-			full_backup_id, latest_backup_id,
-			total_backups, total_size_bytes,
-			created_at, updated_at
-		) VALUES (?, ?, ?, '', '', 0, 0, ?, ?)
-	`
-
-	_, err = cm.db.ExecContext(ctx, query,
-		chainID, vmContextID, diskID,
-		now, now)
-	if err != nil {
-		return nil, &ChainError{
-			ChainID: chainID,
-			Op:      "create",
-			Err:     fmt.Errorf("failed to create chain: %w", err),
-		}
-	}
-
-	return &BackupChain{
+	newChain := &BackupChain{
 		ID:             chainID,
 		VMContextID:    vmContextID,
 		DiskID:         diskID,
@@ -65,55 +50,30 @@ func (cm *ChainManager) GetOrCreateChain(ctx context.Context, vmContextID string
 		TotalSizeBytes: 0,
 		CreatedAt:      now,
 		UpdatedAt:      now,
-	}, nil
+	}
+
+	err = cm.repo.CreateBackupChain(ctx, newChain)
+	if err != nil {
+		return nil, &ChainError{
+			ChainID: chainID,
+			Op:      "create",
+			Err:     fmt.Errorf("failed to create chain: %w", err),
+		}
+	}
+
+	return newChain, nil
 }
 
 // GetChain retrieves the complete backup chain for a VM disk.
 func (cm *ChainManager) GetChain(ctx context.Context, vmContextID string, diskID int) (*BackupChain, error) {
-	// Get chain record
-	var chain BackupChain
-	query := `
-		SELECT id, vm_context_id, disk_id,
-			full_backup_id, latest_backup_id,
-			total_backups, total_size_bytes,
-			created_at, updated_at
-		FROM backup_chains
-		WHERE vm_context_id = ? AND disk_id = ?
-	`
-
-	err := cm.db.QueryRowContext(ctx, query, vmContextID, diskID).Scan(
-		&chain.ID, &chain.VMContextID, &chain.DiskID,
-		&chain.FullBackupID, &chain.LatestBackupID,
-		&chain.TotalBackups, &chain.TotalSizeBytes,
-		&chain.CreatedAt, &chain.UpdatedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, ErrBackupChainNotFound
-	}
+	// Get chain record using repository
+	chain, err := cm.repo.GetBackupChain(ctx, vmContextID, diskID)
 	if err != nil {
-		return nil, &ChainError{
-			Op:  "get_chain",
-			Err: fmt.Errorf("failed to query chain: %w", err),
-		}
+		return nil, err
 	}
 
-	// Get all backups in chain, ordered by created_at
-	backupsQuery := `
-		SELECT id, vm_context_id, vm_name, disk_id,
-			backup_type, status, parent_backup_id,
-			change_id, repository_path as file_path,
-			bytes_transferred as size_bytes, total_bytes,
-			created_at, completed_at, error_message
-		FROM backup_jobs
-		WHERE vm_context_id = ? 
-			AND repository_path LIKE ?
-			AND status = 'completed'
-		ORDER BY created_at ASC
-	`
-
-	// Match all backups for this disk (using path pattern)
-	diskPathPattern := fmt.Sprintf("%%/disk-%d/%%", diskID)
-	rows, err := cm.db.QueryContext(ctx, backupsQuery, vmContextID, diskPathPattern)
+	// Get all backups for this chain using repository
+	backups, err := cm.repo.ListBackupsForChain(ctx, vmContextID, diskID)
 	if err != nil {
 		return nil, &ChainError{
 			ChainID: chain.ID,
@@ -121,61 +81,14 @@ func (cm *ChainManager) GetChain(ctx context.Context, vmContextID string, diskID
 			Err:     fmt.Errorf("failed to query backups: %w", err),
 		}
 	}
-	defer rows.Close()
 
-	chain.Backups = []*Backup{}
-	for rows.Next() {
-		var backup Backup
-		var completedAt sql.NullTime
-		var errorMessage sql.NullString
-		var parentBackupID sql.NullString
-		var changeID sql.NullString
-
-		err := rows.Scan(
-			&backup.ID, &backup.VMContextID, &backup.VMName, &backup.DiskID,
-			&backup.BackupType, &backup.Status, &parentBackupID,
-			&changeID, &backup.FilePath,
-			&backup.SizeBytes, &backup.TotalBytes,
-			&backup.CreatedAt, &completedAt, &errorMessage,
-		)
-		if err != nil {
-			return nil, &ChainError{
-				ChainID: chain.ID,
-				Op:      "scan_backup",
-				Err:     fmt.Errorf("failed to scan backup: %w", err),
-			}
-		}
-
-		if completedAt.Valid {
-			backup.CompletedAt = &completedAt.Time
-		}
-		if errorMessage.Valid {
-			backup.ErrorMessage = errorMessage.String
-		}
-		if parentBackupID.Valid {
-			backup.ParentBackupID = parentBackupID.String
-		}
-		if changeID.Valid {
-			backup.ChangeID = changeID.String
-		}
-
-		chain.Backups = append(chain.Backups, &backup)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, &ChainError{
-			ChainID: chain.ID,
-			Op:      "iterate_backups",
-			Err:     fmt.Errorf("failed to iterate backups: %w", err),
-		}
-	}
-
-	return &chain, nil
+	chain.Backups = backups
+	return chain, nil
 }
 
 // AddBackupToChain adds a backup to the chain and updates metadata.
 func (cm *ChainManager) AddBackupToChain(ctx context.Context, chainID string, backup *Backup) error {
-	// Start transaction
+	// Start transaction (using db for complex transaction pattern)
 	tx, err := cm.db.BeginTx(ctx, nil)
 	if err != nil {
 		return &ChainError{
@@ -320,30 +233,24 @@ func (cm *ChainManager) ValidateChain(ctx context.Context, chainID string) error
 
 // GetChainByID retrieves a chain by its ID.
 func (cm *ChainManager) GetChainByID(ctx context.Context, chainID string) (*BackupChain, error) {
-	// Parse chainID to extract vmContextID and diskID
-	// Format: chain-{vmContextID}-disk{diskID}
-	// This is a simplified version - you may need more robust parsing
-	var vmContextID string
-	var diskID int
-
-	query := `
-		SELECT vm_context_id, disk_id
-		FROM backup_chains
-		WHERE id = ?
-	`
-	err := cm.db.QueryRowContext(ctx, query, chainID).Scan(&vmContextID, &diskID)
-	if err == sql.ErrNoRows {
-		return nil, ErrBackupChainNotFound
+	// Use repository to get chain by ID
+	chain, err := cm.repo.GetBackupChainByID(ctx, chainID)
+	if err != nil {
+		return nil, err
 	}
+
+	// Get all backups for this chain
+	backups, err := cm.repo.ListBackupsForChain(ctx, chain.VMContextID, chain.DiskID)
 	if err != nil {
 		return nil, &ChainError{
 			ChainID: chainID,
-			Op:      "get_chain_by_id",
-			Err:     fmt.Errorf("failed to query chain: %w", err),
+			Op:      "get_backups",
+			Err:     fmt.Errorf("failed to query backups: %w", err),
 		}
 	}
 
-	return cm.GetChain(ctx, vmContextID, diskID)
+	chain.Backups = backups
+	return chain, nil
 }
 
 // CalculateChainSize calculates the total actual size of all files in a chain.
@@ -363,15 +270,8 @@ func (cm *ChainManager) CalculateChainSize(ctx context.Context, chainID string) 
 
 // CanDeleteBackup checks if a backup can be safely deleted (no dependents).
 func (cm *ChainManager) CanDeleteBackup(ctx context.Context, backupID string) (bool, error) {
-	// Check if any backups have this as parent
-	query := `
-		SELECT COUNT(*)
-		FROM backup_jobs
-		WHERE parent_backup_id = ?
-	`
-
-	var count int
-	err := cm.db.QueryRowContext(ctx, query, backupID).Scan(&count)
+	// Use repository to count dependencies
+	count, err := cm.repo.CountBackupDependencies(ctx, backupID)
 	if err != nil {
 		return false, &BackupError{
 			BackupID: backupID,
@@ -385,7 +285,7 @@ func (cm *ChainManager) CanDeleteBackup(ctx context.Context, backupID string) (b
 
 // RemoveBackupFromChain removes a backup from chain tracking and updates metadata.
 func (cm *ChainManager) RemoveBackupFromChain(ctx context.Context, chainID, backupID string) error {
-	// Start transaction
+	// Start transaction (using db for complex transaction pattern)
 	tx, err := cm.db.BeginTx(ctx, nil)
 	if err != nil {
 		return &ChainError{

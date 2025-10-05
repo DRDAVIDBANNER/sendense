@@ -55,7 +55,7 @@ func NewLocalRepository(config *RepositoryConfig, db *sql.DB) (*LocalRepository,
 		basePath:    localConfig.Path,
 		db:          db,
 		qcowManager: qcowManager,
-		chainMgr:    NewChainManager(db),
+		chainMgr:    NewChainManager(NewBackupChainRepository(db), db),
 	}, nil
 }
 

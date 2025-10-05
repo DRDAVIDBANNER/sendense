@@ -3,23 +3,29 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 )
 
 // RepositoryManager manages multiple backup repositories.
+// Refactored to use repository pattern (PROJECT_RULES lines 469-470).
+// Note: Retains db field for creating repository instances (LocalRepository needs db for ChainManager).
 type RepositoryManager struct {
-	db           *sql.DB
+	configRepo   ConfigRepository          // Repository pattern for config operations
+	backupRepo   BackupChainRepository     // Backup chain operations
+	db           *sql.DB                   // Direct DB access for creating repository instances only
 	repositories map[string]Repository      // Active repository instances
 	configs      map[string]*RepositoryConfig // Repository configurations
 	mu           sync.RWMutex               // Protects repositories and configs
 }
 
-// NewRepositoryManager creates a new RepositoryManager.
-func NewRepositoryManager(db *sql.DB) (*RepositoryManager, error) {
+// NewRepositoryManager creates a new RepositoryManager using repository pattern.
+// Note: db parameter retained for creating LocalRepository instances (they need db for ChainManager).
+func NewRepositoryManager(configRepo ConfigRepository, backupRepo BackupChainRepository, db *sql.DB) (*RepositoryManager, error) {
 	rm := &RepositoryManager{
+		configRepo:   configRepo,
+		backupRepo:   backupRepo,
 		db:           db,
 		repositories: make(map[string]Repository),
 		configs:      make(map[string]*RepositoryConfig),
@@ -35,29 +41,13 @@ func NewRepositoryManager(db *sql.DB) (*RepositoryManager, error) {
 
 // loadRepositories loads all enabled repositories from database.
 func (rm *RepositoryManager) loadRepositories(ctx context.Context) error {
-	query := `
-		SELECT id, name, repository_type, enabled, config,
-			is_immutable, immutable_config, min_retention_days,
-			total_size_bytes, used_size_bytes, available_size_bytes,
-			last_check_at, created_at, updated_at
-		FROM backup_repositories
-		WHERE enabled = TRUE
-	`
-
-	rows, err := rm.db.QueryContext(ctx, query)
+	// Use repository pattern instead of direct SQL
+	configs, err := rm.configRepo.ListEnabled(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to query repositories: %w", err)
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		config, err := rm.scanRepositoryConfig(rows)
-		if err != nil {
-			// Log error but continue loading other repositories
-			fmt.Printf("Warning: failed to load repository: %v\n", err)
-			continue
-		}
-
+	for _, config := range configs {
 		// Initialize repository instance
 		if err := rm.initializeRepository(ctx, config); err != nil {
 			fmt.Printf("Warning: failed to initialize repository %s: %v\n", config.ID, err)
@@ -65,68 +55,7 @@ func (rm *RepositoryManager) loadRepositories(ctx context.Context) error {
 		}
 	}
 
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating repositories: %w", err)
-	}
-
 	return nil
-}
-
-// scanRepositoryConfig scans a database row into a RepositoryConfig.
-func (rm *RepositoryManager) scanRepositoryConfig(rows *sql.Rows) (*RepositoryConfig, error) {
-	var config RepositoryConfig
-	var configJSON []byte
-	var immutableConfigJSON sql.NullString
-	var lastCheckAt sql.NullTime
-
-	err := rows.Scan(
-		&config.ID, &config.Name, &config.Type, &config.Enabled, &configJSON,
-		&config.IsImmutable, &immutableConfigJSON, &config.MinRetentionDays,
-		&config.TotalBytes, &config.UsedBytes, &config.AvailableBytes,
-		&lastCheckAt, &config.CreatedAt, &config.UpdatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan repository: %w", err)
-	}
-
-	// Parse config JSON based on type
-	switch config.Type {
-	case RepositoryTypeLocal:
-		var localConfig LocalRepositoryConfig
-		if err := json.Unmarshal(configJSON, &localConfig); err != nil {
-			return nil, fmt.Errorf("failed to parse local config: %w", err)
-		}
-		config.Config = localConfig
-	case RepositoryTypeNFS:
-		var nfsConfig NFSRepositoryConfig
-		if err := json.Unmarshal(configJSON, &nfsConfig); err != nil {
-			return nil, fmt.Errorf("failed to parse NFS config: %w", err)
-		}
-		config.Config = nfsConfig
-	case RepositoryTypeCIFS, RepositoryTypeSMB:
-		var cifsConfig CIFSRepositoryConfig
-		if err := json.Unmarshal(configJSON, &cifsConfig); err != nil {
-			return nil, fmt.Errorf("failed to parse CIFS config: %w", err)
-		}
-		config.Config = cifsConfig
-	default:
-		return nil, fmt.Errorf("unsupported repository type: %s", config.Type)
-	}
-
-	if lastCheckAt.Valid {
-		config.LastCheckAt = &lastCheckAt.Time
-	}
-
-	// Parse immutable config if present
-	if immutableConfigJSON.Valid && config.IsImmutable {
-		var immutableConfig ImmutableConfig
-		if err := json.Unmarshal([]byte(immutableConfigJSON.String), &immutableConfig); err != nil {
-			return nil, fmt.Errorf("failed to parse immutable config: %w", err)
-		}
-		config.ImmutableConfig = &immutableConfig
-	}
-
-	return &config, nil
 }
 
 // initializeRepository creates a repository instance from config.
@@ -136,6 +65,7 @@ func (rm *RepositoryManager) initializeRepository(ctx context.Context, config *R
 
 	switch config.Type {
 	case RepositoryTypeLocal:
+		// LocalRepository needs db for ChainManager - this is legitimate use
 		repo, err = NewLocalRepository(config, rm.db)
 	case RepositoryTypeNFS:
 		// TODO: Implement NFSRepository in Job Sheet 2
@@ -191,45 +121,8 @@ func (rm *RepositoryManager) RegisterRepository(ctx context.Context, config *Rep
 		}
 	}
 
-	// Serialize config to JSON
-	configJSON, err := json.Marshal(config.Config)
-	if err != nil {
-		return &RepositoryError{
-			RepositoryID: config.ID,
-			Op:           "marshal_config",
-			Err:          fmt.Errorf("failed to marshal config: %w", err),
-		}
-	}
-
-	// Serialize immutable config if present
-	var immutableConfigJSON sql.NullString
-	if config.IsImmutable && config.ImmutableConfig != nil {
-		data, err := json.Marshal(config.ImmutableConfig)
-		if err != nil {
-			return &RepositoryError{
-				RepositoryID: config.ID,
-				Op:           "marshal_immutable_config",
-				Err:          fmt.Errorf("failed to marshal immutable config: %w", err),
-			}
-		}
-		immutableConfigJSON = sql.NullString{String: string(data), Valid: true}
-	}
-
-	// Insert into database
-	now := time.Now()
-	query := `
-		INSERT INTO backup_repositories (
-			id, name, repository_type, enabled, config,
-			is_immutable, immutable_config, min_retention_days,
-			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-
-	_, err = rm.db.ExecContext(ctx, query,
-		config.ID, config.Name, config.Type, config.Enabled, configJSON,
-		config.IsImmutable, immutableConfigJSON, config.MinRetentionDays,
-		now, now,
-	)
+	// Use repository pattern to create config
+	err := rm.configRepo.Create(ctx, config)
 	if err != nil {
 		return &RepositoryError{
 			RepositoryID: config.ID,
@@ -240,8 +133,8 @@ func (rm *RepositoryManager) RegisterRepository(ctx context.Context, config *Rep
 
 	// Initialize repository instance
 	if err := rm.initializeRepository(ctx, config); err != nil {
-		// Rollback database insert
-		rm.db.ExecContext(ctx, "DELETE FROM backup_repositories WHERE id = ?", config.ID)
+		// Rollback database insert using repository pattern
+		rm.configRepo.Delete(ctx, config.ID)
 		return err
 	}
 
@@ -304,11 +197,8 @@ func (rm *RepositoryManager) TestRepository(ctx context.Context, config *Reposit
 
 // DeleteRepository removes a repository configuration.
 func (rm *RepositoryManager) DeleteRepository(ctx context.Context, repoID string) error {
-	// Check for existing backups
-	var backupCount int
-	err := rm.db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM backup_jobs WHERE repository_id = ?",
-		repoID).Scan(&backupCount)
+	// Check for existing backups using repository pattern
+	backupCount, err := rm.configRepo.CountBackupsForRepository(ctx, repoID)
 	if err != nil {
 		return &RepositoryError{
 			RepositoryID: repoID,
@@ -325,8 +215,8 @@ func (rm *RepositoryManager) DeleteRepository(ctx context.Context, repoID string
 		}
 	}
 
-	// Remove from database
-	_, err = rm.db.ExecContext(ctx, "DELETE FROM backup_repositories WHERE id = ?", repoID)
+	// Remove from database using repository pattern
+	err = rm.configRepo.Delete(ctx, repoID)
 	if err != nil {
 		return &RepositoryError{
 			RepositoryID: repoID,
@@ -356,30 +246,8 @@ func (rm *RepositoryManager) UpdateRepository(ctx context.Context, config *Repos
 		return err
 	}
 
-	// Serialize config
-	configJSON, err := json.Marshal(config.Config)
-	if err != nil {
-		return &RepositoryError{
-			RepositoryID: config.ID,
-			Op:           "marshal_config",
-			Err:          fmt.Errorf("failed to marshal config: %w", err),
-		}
-	}
-
-	// Update database
-	query := `
-		UPDATE backup_repositories
-		SET name = ?, enabled = ?, config = ?,
-			is_immutable = ?, min_retention_days = ?,
-			updated_at = ?
-		WHERE id = ?
-	`
-
-	_, err = rm.db.ExecContext(ctx, query,
-		config.Name, config.Enabled, configJSON,
-		config.IsImmutable, config.MinRetentionDays,
-		time.Now(), config.ID,
-	)
+	// Update database using repository pattern
+	err := rm.configRepo.Update(ctx, config)
 	if err != nil {
 		return &RepositoryError{
 			RepositoryID: config.ID,
@@ -505,20 +373,8 @@ func (rm *RepositoryManager) RefreshStorageInfo(ctx context.Context) error {
 			continue
 		}
 
-		// Update database
-		query := `
-			UPDATE backup_repositories
-			SET total_size_bytes = ?,
-				used_size_bytes = ?,
-				available_size_bytes = ?,
-				last_check_at = ?
-			WHERE id = ?
-		`
-
-		_, err = rm.db.ExecContext(ctx, query,
-			info.TotalBytes, info.UsedBytes, info.AvailableBytes,
-			time.Now(), repoID,
-		)
+		// Update database using repository pattern
+		err = rm.configRepo.UpdateStorageStats(ctx, repoID, info.TotalBytes, info.UsedBytes, info.AvailableBytes)
 		if err != nil {
 			fmt.Printf("Warning: failed to update storage info for %s: %v\n", repoID, err)
 		}
