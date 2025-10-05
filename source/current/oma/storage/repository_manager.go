@@ -15,6 +15,7 @@ type RepositoryManager struct {
 	configRepo   ConfigRepository          // Repository pattern for config operations
 	backupRepo   BackupChainRepository     // Backup chain operations
 	db           *sql.DB                   // Direct DB access for creating repository instances only
+	mountManager *MountManager             // Mount management for NFS/CIFS repositories
 	repositories map[string]Repository      // Active repository instances
 	configs      map[string]*RepositoryConfig // Repository configurations
 	mu           sync.RWMutex               // Protects repositories and configs
@@ -22,11 +23,18 @@ type RepositoryManager struct {
 
 // NewRepositoryManager creates a new RepositoryManager using repository pattern.
 // Note: db parameter retained for creating LocalRepository instances (they need db for ChainManager).
-func NewRepositoryManager(configRepo ConfigRepository, backupRepo BackupChainRepository, db *sql.DB) (*RepositoryManager, error) {
+// mountManager is optional - if nil, NFS/CIFS repositories will not be available.
+func NewRepositoryManager(configRepo ConfigRepository, backupRepo BackupChainRepository, db *sql.DB, mountManager *MountManager) (*RepositoryManager, error) {
+	// Create default MountManager if not provided
+	if mountManager == nil {
+		mountManager = NewMountManager()
+	}
+
 	rm := &RepositoryManager{
 		configRepo:   configRepo,
 		backupRepo:   backupRepo,
 		db:           db,
+		mountManager: mountManager,
 		repositories: make(map[string]Repository),
 		configs:      make(map[string]*RepositoryConfig),
 	}
@@ -68,11 +76,11 @@ func (rm *RepositoryManager) initializeRepository(ctx context.Context, config *R
 		// LocalRepository needs db for ChainManager - this is legitimate use
 		repo, err = NewLocalRepository(config, rm.db)
 	case RepositoryTypeNFS:
-		// TODO: Implement NFSRepository in Job Sheet 2
-		return fmt.Errorf("NFS repositories not yet implemented")
+		// NFSRepository uses MountManager for NFS mounting
+		repo, err = NewNFSRepository(config, rm.db, rm.mountManager)
 	case RepositoryTypeCIFS, RepositoryTypeSMB:
-		// TODO: Implement CIFSRepository in Job Sheet 2
-		return fmt.Errorf("CIFS repositories not yet implemented")
+		// CIFSRepository uses MountManager for CIFS/SMB mounting with authentication
+		repo, err = NewCIFSRepository(config, rm.db, rm.mountManager)
 	default:
 		return fmt.Errorf("unsupported repository type: %s", config.Type)
 	}
