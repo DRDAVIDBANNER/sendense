@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Terminology framework (descend/ascend/transcend operations)
 - MSP cloud platform architecture with bulletproof licensing
 - Cockpit-style GUI design system adapted from original plan
+- **Repository Management API** (Storage Monitoring Day 4 - 2025-10-05):
+  - 5 REST endpoints for backup repository CRUD operations (POST/GET/DELETE /api/v1/repositories)
+  - Support for Local, NFS, and CIFS/SMB repository types
+  - Test repository configuration endpoint for validation before saving
+  - Real-time storage capacity monitoring via /api/v1/repositories/{id}/storage
+  - Composition-based NFSRepository and CIFSRepository implementations
+  - Full integration with MountManager for network storage operations
+  - Protection against deleting repositories with existing backups
 
 ### Changed
 - Component naming: VMA/OMA → Capture Agent/Control Plane

@@ -222,7 +222,16 @@ func (s *Server) setupRoutes() {
 	api.HandleFunc("/vma/enroll/verify", s.handlers.VMAReal.VerifyChallenge).Methods("POST", "OPTIONS")
 	api.HandleFunc("/vma/enroll/result", s.handlers.VMAReal.GetEnrollmentResult).Methods("GET", "OPTIONS")
 
-	log.WithField("endpoints", 71).Info("OMA API routes configured - includes basic VMA enrollment")
+	// 🆕 NEW: Backup Repository Management endpoints (Storage Monitoring Day 4)
+	if s.handlers.Repository != nil {
+		api.HandleFunc("/repositories", s.requireAuth(s.handlers.Repository.CreateRepository)).Methods("POST")
+		api.HandleFunc("/repositories", s.requireAuth(s.handlers.Repository.ListRepositories)).Methods("GET")
+		api.HandleFunc("/repositories/test", s.requireAuth(s.handlers.Repository.TestRepository)).Methods("POST")
+		api.HandleFunc("/repositories/{id}/storage", s.requireAuth(s.handlers.Repository.GetRepositoryStorage)).Methods("GET")
+		api.HandleFunc("/repositories/{id}", s.requireAuth(s.handlers.Repository.DeleteRepository)).Methods("DELETE")
+	}
+
+	log.WithField("endpoints", 76).Info("OMA API routes configured - includes repository management")
 }
 
 // Middleware functions

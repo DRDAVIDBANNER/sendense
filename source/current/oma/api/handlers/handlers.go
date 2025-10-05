@@ -4,6 +4,8 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -37,6 +39,7 @@ type Handlers struct {
 	StreamlinedOSSEA       *StreamlinedOSSEAConfigHandler // 🆕 NEW: Streamlined OSSEA configuration
 	VMAReal                *VMARealHandler                // 🆕 NEW: VMA enrollment system (real implementation)
 	CloudStackSettings     *CloudStackSettingsHandler     // 🆕 NEW: CloudStack validation & settings
+	Repository             *RepositoryHandler             // 🆕 NEW: Backup repository management (Storage Monitoring Day 4)
 	
 	// Exposed services for job recovery integration
 	VMAProgressClient *services.VMAProgressClient // VMA API client
@@ -142,7 +145,7 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 	// vmaEnrollmentService := services.NewVMAEnrollmentService(db, vmaEnrollmentRepo, vmaAuditRepo, vmaCryptoService)
 	// vmaAuditService := services.NewVMAAuditService(vmaAuditRepo)
 
-	return &Handlers{
+	handlers := &Handlers{
 		Auth:                   NewAuthHandler(db),
 		VM:                     NewVMHandler(db),
 		Replication:            NewReplicationHandler(db, mountManager, vmaProgressPoller),
@@ -165,5 +168,33 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 		// Expose VMA services for job recovery
 		VMAProgressClient: vmaProgressClient,
 		VMAProgressPoller: vmaProgressPoller,
-	}, nil
+	}
+
+	// Initialize Repository handler (requires separate initialization due to error handling)
+	sqlDB, err := handlers.extractSQLDB(db)
+	if err != nil {
+		log.WithError(err).Warn("Failed to get SQL DB from connection - repository management unavailable")
+	} else {
+		repositoryHandler, err := NewRepositoryHandler(sqlDB)
+		if err != nil {
+			log.WithError(err).Warn("Repository handler initialization failed - repository management endpoints unavailable")
+		} else {
+			handlers.Repository = repositoryHandler
+		}
+	}
+
+	return handlers, nil
+}
+
+// extractSQLDB extracts *sql.DB from database.Connection
+func (h *Handlers) extractSQLDB(conn database.Connection) (*sql.DB, error) {
+	gormDB := conn.GetGormDB()
+	if gormDB == nil {
+		return nil, fmt.Errorf("GORM DB is nil")
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SQL DB: %w", err)
+	}
+	return sqlDB, nil
 }

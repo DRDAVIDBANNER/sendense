@@ -147,17 +147,33 @@ VMA Enrollment (OMA side)
   - Callsites: VMA `services/enrollment_client.go` uses public endpoints via 443 proxy
   - Classification: Key
 
-Backup Repository System (Phase 1 - Added 2025-10-04)
-- GET /repositories → list all repositories
-- POST /repositories → register new repository
-- GET /repositories/{id} → get repository details
-- PATCH /repositories/{id} → update repository
-- DELETE /repositories/{id} → delete repository
-- POST /repositories/test → test repository connection
-- POST /repositories/refresh-storage → refresh storage info for all repositories
-- GET /repositories/storage-summary → get aggregate storage statistics
-  - Handler: `handlers.BackupRepository.*`
+Backup Repository Management (Storage Monitoring Day 4 - Implemented 2025-10-05)
+- POST /api/v1/repositories → create new backup repository (Local, NFS, or CIFS)
+  - Request: `CreateRepositoryRequest` with name, type, config JSON, immutability settings
+  - Response: `RepositoryResponse` with storage info
+  - Handler: `handlers.Repository.CreateRepository`
+  - Authentication: Required
+- GET /api/v1/repositories → list all repositories
+  - Query Params: type (filter), enabled (true/false filter)
+  - Response: Array of `RepositoryResponse` with storage info for each
+  - Handler: `handlers.Repository.ListRepositories`
+  - Authentication: Required
+- GET /api/v1/repositories/{id}/storage → force immediate storage capacity check
+  - Response: Fresh `StorageInfo` (total_bytes, used_bytes, available_bytes, mount_point)
+  - Handler: `handlers.Repository.GetRepositoryStorage`
+  - Authentication: Required
+- POST /api/v1/repositories/test → test repository configuration without saving
+  - Request: `TestRepositoryRequest` with type and config JSON
+  - Response: `TestRepositoryResponse` with success flag and error details if failed
+  - Handler: `handlers.Repository.TestRepository`
+  - Authentication: Required
+- DELETE /api/v1/repositories/{id} → delete repository configuration
+  - Behavior: Fails with HTTP 409 Conflict if backups exist
+  - Handler: `handlers.Repository.DeleteRepository`
+  - Authentication: Required
   - Classification: Key (backup infrastructure)
+  - Repository Types: Local (disk_path), NFS (server, export_path, mount_point), CIFS/SMB (server, share_name, credentials)
+  - Backend: Uses `storage.RepositoryManager`, `storage.ConfigRepository`, `storage.MountManager`
 
 Backup Policy Management (Phase 1 - Added 2025-10-04)
 - GET /backup-policies → list all backup policies
