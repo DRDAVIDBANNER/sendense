@@ -45,6 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Full integration with storage repository layer (Task 1) and NBD server (Task 2)
   - Database tracking: backup_jobs table with status, progress, and error tracking
   - Foundation complete for Phase 1 VMware backup workflows
+- **NBD File Export Testing & Validation** (Task 2.3 - 2025-10-05):
+  - Complete unit test suite for backup export helpers (285 lines backup_export_helpers_test.go)
+  - Comprehensive integration tests (8 scenarios) validated on deployed server (10.245.246.136)
+  - SIGHUP reload functionality verified (dynamic export management without service restarts)
+  - QCOW2 file creation, validation, and incremental backup testing with qemu-img
+  - Export name generation with collision-proof naming and length compliance (<64 chars)
+  - Multiple concurrent exports tested (block devices + QCOW2 files)
+  - config.d pattern operational and verified
+  - Fixed QCOW2 validation logic (handle "no errors" message correctly)
+  - Task 2 NBD File Export: 100% COMPLETE (Phases 2.1, 2.2, 2.3 all done)
 
 ### Changed
 - Component naming: VMA/OMA → Capture Agent/Control Plane
