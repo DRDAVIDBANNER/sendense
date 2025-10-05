@@ -461,44 +461,33 @@ source/current/control-plane/api/handlers/
 
 ---
 
-### **Task 6: CLI Tools** (Week 4)
+### **Task 6: CLI Tools** (Week 4) - **DEFERRED** ⏸️
 
-**Goal:** Command-line tools for testing and admin
+**Decision:** CLI Tools deferred in favor of higher-priority customer-facing features.
 
-**Tools to Create:**
+**Rationale:**
+- REST APIs provide same functionality with greater flexibility
+- DevOps teams prefer API scripting over CLI tools
+- Customer priority is GUI integration, not command-line tools
+- Limited business impact vs development time investment
 
+**Alternative Approach:**
+Instead of CLI tools, focus resources on:
+1. **GUI Integration** - Customer-facing backup dashboard
+2. **Comprehensive Testing** - Production readiness (Task 7)
+3. **MSP API Extensions** - Revenue-generating platform features
+
+**CLI Functionality Available via API:**
 ```bash
-# Backup a VM
-sendense-ctl backup start --vm pgtest2 --type full
+# All CLI operations achievable via REST API
+curl -X POST /api/v1/backup/start -H "Content-Type: application/json" \
+  -d '{"vm_name":"pgtest2","backup_type":"full","repository_id":"local"}'
 
-# List backups
-sendense-ctl backup list --vm pgtest2
-
-# Mount backup for browsing
-sendense-ctl backup mount --backup-id backup-pgtest2-20251004 --path /tmp/restore
-
-# Extract a file
-sendense-ctl backup extract --backup-id backup-pgtest2-20251004 --file /var/www/index.php --output ./index.php
-
-# Show backup chain
-sendense-ctl backup chain --vm pgtest2
+curl "/api/v1/backup/list?vm_name=pgtest2"
+curl "/api/v1/backup/chain?vm_name=pgtest2"
 ```
 
-**Files to Create:**
-```
-source/current/control-plane/cmd/sendense-ctl/
-├── main.go
-└── commands/
-    ├── backup.go
-    ├── mount.go
-    └── restore.go
-```
-
-**Acceptance Criteria:**
-- [ ] CLI commands work end-to-end
-- [ ] User-friendly output
-- [ ] Progress indicators
-- [ ] Error messages clear
+**Status:** **DEFERRED** - Can be implemented later if customer demand warrants
 
 ---
 
