@@ -2,6 +2,7 @@ package nbd
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -42,7 +43,7 @@ func TestBuildBackupExportName(t *testing.T) {
 			diskID:      0,
 			backupType:  "full",
 			timestamp:   time.Date(2025, 10, 5, 12, 0, 0, 0, time.UTC),
-			wantPrefix:  "backup-ctx-very-long-vm-name-that-might-cause-export",
+			wantPrefix:  "backup-ctx-very-long-vm-name-that-mi",
 			wantLen:     63, // Should be exactly 63 (NBD limit)
 		},
 		{

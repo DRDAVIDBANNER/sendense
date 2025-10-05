@@ -121,9 +121,11 @@ func ValidateQCOW2File(qcow2Path string) error {
 		return fmt.Errorf("QCOW2 validation failed: %w (output: %s)", err, string(output))
 	}
 
-	// Check output for errors
+	// Check output for actual errors (not "no errors")
 	outputStr := strings.ToLower(string(output))
-	if strings.Contains(outputStr, "error") || strings.Contains(outputStr, "corrupt") {
+	if (strings.Contains(outputStr, "error") && !strings.Contains(outputStr, "no errors")) || 
+	   strings.Contains(outputStr, "corrupt") || 
+	   strings.Contains(outputStr, "leaked cluster") {
 		return fmt.Errorf("QCOW2 file appears corrupted: %s", string(output))
 	}
 
