@@ -138,4 +138,13 @@ Backup Repository System (Phase 1 - Added 2025-10-04)
   - Fields: disk_id, full_backup_id, latest_backup_id, total_backups INT, total_size_bytes BIGINT
   - Index: idx_vm_context
 
+File-Level Restore System (Task 4 - Added 2025-10-05)
+- restore_mounts
+  - PK: id (varchar 64)
+  - FK: backup_id → backup_jobs(id) CASCADE
+  - Fields: mount_path (varchar 512), nbd_device (varchar 32), filesystem_type (varchar 32), mount_mode ENUM('read-only'), status ENUM('mounting','mounted','unmounting','failed'), created_at, last_accessed_at, expires_at
+  - Indexes: idx_backup_id, idx_expires_at, idx_status, idx_nbd_device
+  - Unique Constraints: nbd_device (WHERE status IN ('mounting','mounted')), mount_path (WHERE status IN ('mounting','mounted'))
+  - Purpose: Track active QCOW2 backup mounts for file browsing and recovery
+
 

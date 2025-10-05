@@ -208,6 +208,55 @@ Backup Policy Management (Backup Copy Engine Day 5 - Implemented 2025-10-05)
   - Database: backup_policies, backup_copy_rules, backup_copies tables
   - Enterprise Features: Multi-repository copies, immutable storage support, automatic replication
 
+File-Level Restore (Task 4 - Implemented 2025-10-05)
+- POST /restore/mount → `handlers.Restore.MountBackup`
+  - Description: Mount QCOW2 backup for file browsing via qemu-nbd
+  - Request: { backup_id: string }
+  - Response: { mount_id: string, mount_path: string, nbd_device: string, filesystem_type: string, status: string, expires_at: timestamp }
+  - Classification: Key (customer file recovery)
+  - Security: Read-only mounts, automatic cleanup after 1 hour idle
+- DELETE /restore/{mount_id} → `handlers.Restore.UnmountBackup`
+  - Description: Unmount backup and release NBD device
+  - Response: { message: "backup unmounted successfully" }
+  - Classification: Key
+- GET /restore/mounts → `handlers.Restore.ListMounts`
+  - Description: List all active restore mounts
+  - Response: { mounts: [], count: number }
+  - Classification: Key
+- GET /restore/{mount_id}/files → `handlers.Restore.ListFiles`
+  - Description: Browse files and directories within mounted backup
+  - Query Params: path (default: "/"), recursive (boolean)
+  - Response: { files: [], total_count: number }
+  - Security: Path traversal protection, validates all paths against mount root
+  - Classification: Key (file browsing)
+- GET /restore/{mount_id}/file-info → `handlers.Restore.GetFileInfo`
+  - Description: Get detailed file metadata (size, permissions, modified time)
+  - Query Params: path (required)
+  - Response: FileInfo object with complete metadata
+  - Classification: Auxiliary
+- GET /restore/{mount_id}/download → `handlers.Restore.DownloadFile`
+  - Description: Download individual file via HTTP streaming
+  - Query Params: path (required)
+  - Response: File stream with appropriate Content-Type
+  - Classification: Key (file recovery)
+- GET /restore/{mount_id}/download-directory → `handlers.Restore.DownloadDirectory`
+  - Description: Download directory as ZIP or TAR.GZ archive
+  - Query Params: path (required), format ("zip" or "tar.gz", default: "zip")
+  - Response: Archive stream
+  - Classification: Key (bulk recovery)
+- GET /restore/resources → `handlers.Restore.GetResourceStatus`
+  - Description: Monitor restore resource utilization (NBD devices, mount slots)
+  - Response: { active_mounts, max_mounts, available_slots, allocated_devices, device_utilization }
+  - Classification: Auxiliary (monitoring)
+- GET /restore/cleanup-status → `handlers.Restore.GetCleanupStatus`
+  - Description: Cleanup service status and statistics
+  - Response: { running, cleanup_interval, idle_timeout, active_mount_count, expired_mount_count }
+  - Classification: Auxiliary (monitoring)
+  - Handler: `handlers.Restore.*`
+  - Architecture: qemu-nbd on /dev/nbd0-7, automatic cleanup service, path traversal protection
+  - Database: restore_mounts table with mount tracking
+  - Customer Value: Individual file recovery without full VM restore
+
 Backup Job Management (Phase 1 - Future Implementation)
 - POST /backups → create backup job
 - GET /backups/{backup_id} → get backup job status

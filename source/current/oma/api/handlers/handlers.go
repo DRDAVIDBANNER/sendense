@@ -41,6 +41,7 @@ type Handlers struct {
 	CloudStackSettings     *CloudStackSettingsHandler     // 🆕 NEW: CloudStack validation & settings
 	Repository             *RepositoryHandler             // 🆕 NEW: Backup repository management (Storage Monitoring Day 4)
 	Policy                 *PolicyHandler                 // 🆕 NEW: Backup policy management (Backup Copy Engine Day 5)
+	Restore                *RestoreHandlers               // 🆕 NEW: File-level restore (Task 4 - 2025-10-05)
 	
 	// Exposed services for job recovery integration
 	VMAProgressClient *services.VMAProgressClient // VMA API client
@@ -191,6 +192,11 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 			handlers.Policy = policyHandler
 			log.Info("✅ Backup policy management enabled (Enterprise 3-2-1 backup rule support)")
 		}
+
+		// Initialize Restore handler (Task 4: File-Level Restore)
+		restoreHandler := NewRestoreHandlers(db, repositoryHandler.repoManager)
+		handlers.Restore = restoreHandler
+		log.Info("✅ File-level restore enabled (Task 4: Mount backups, browse files, download)")
 	}
 
 	return handlers, nil

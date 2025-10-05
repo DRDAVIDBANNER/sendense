@@ -241,7 +241,13 @@ func (s *Server) setupRoutes() {
 		api.HandleFunc("/backups/{id}/copy", s.requireAuth(s.handlers.Policy.TriggerBackupCopy)).Methods("POST")
 	}
 
-	log.WithField("endpoints", 82).Info("OMA API routes configured - includes policy management (3-2-1 backup rule)")
+	// 🆕 NEW: File-Level Restore endpoints (Task 4 - 2025-10-05)
+	if s.handlers.Restore != nil {
+		s.handlers.Restore.RegisterRoutes(api)
+		log.Info("✅ File-level restore API routes registered (mount, browse, download)")
+	}
+
+	log.WithField("endpoints", 91).Info("OMA API routes configured - includes file-level restore (Task 4)")
 }
 
 // Middleware functions
