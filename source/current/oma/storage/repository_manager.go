@@ -390,3 +390,29 @@ func (rm *RepositoryManager) RefreshStorageInfo(ctx context.Context) error {
 
 	return nil
 }
+
+// GetBackupFromAnyRepository finds a backup by ID across all repositories.
+// Used by copy engine to locate source backups.
+func (rm *RepositoryManager) GetBackupFromAnyRepository(ctx context.Context, backupID string) (*Backup, error) {
+	rm.mu.RLock()
+	repoIDs := make([]string, 0, len(rm.repositories))
+	for repoID := range rm.repositories {
+		repoIDs = append(repoIDs, repoID)
+	}
+	rm.mu.RUnlock()
+
+	// Try each repository until we find the backup
+	for _, repoID := range repoIDs {
+		repo, err := rm.GetRepository(ctx, repoID)
+		if err != nil {
+			continue
+		}
+
+		backup, err := repo.GetBackup(ctx, backupID)
+		if err == nil {
+			return backup, nil
+		}
+	}
+
+	return nil, fmt.Errorf("backup not found in any repository: %s", backupID)
+}
