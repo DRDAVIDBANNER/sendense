@@ -89,10 +89,10 @@ func (rm *RepositoryManager) initializeRepository(ctx context.Context, config *R
 		return fmt.Errorf("failed to create repository: %w", err)
 	}
 
-	// Wrap with immutable repository if needed
+	// Wrap with immutable repository if needed (Enterprise ransomware protection)
 	if config.IsImmutable && config.ImmutableConfig != nil {
-		// TODO: Wrap with ImmutableRepository in Job Sheet 3
-		// For now, just use base repository
+		// Wrap repository with immutability protection
+		repo = NewImmutableRepository(repo, config.ImmutableConfig, rm.backupRepo)
 	}
 
 	// Store in maps
