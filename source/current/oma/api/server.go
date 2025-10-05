@@ -231,7 +231,17 @@ func (s *Server) setupRoutes() {
 		api.HandleFunc("/repositories/{id}", s.requireAuth(s.handlers.Repository.DeleteRepository)).Methods("DELETE")
 	}
 
-	log.WithField("endpoints", 76).Info("OMA API routes configured - includes repository management")
+	// 🆕 NEW: Backup Policy Management endpoints (Backup Copy Engine Day 5)
+	if s.handlers.Policy != nil {
+		api.HandleFunc("/policies", s.requireAuth(s.handlers.Policy.CreatePolicy)).Methods("POST")
+		api.HandleFunc("/policies", s.requireAuth(s.handlers.Policy.ListPolicies)).Methods("GET")
+		api.HandleFunc("/policies/{id}", s.requireAuth(s.handlers.Policy.GetPolicy)).Methods("GET")
+		api.HandleFunc("/policies/{id}", s.requireAuth(s.handlers.Policy.DeletePolicy)).Methods("DELETE")
+		api.HandleFunc("/backups/{id}/copies", s.requireAuth(s.handlers.Policy.GetBackupCopies)).Methods("GET")
+		api.HandleFunc("/backups/{id}/copy", s.requireAuth(s.handlers.Policy.TriggerBackupCopy)).Methods("POST")
+	}
+
+	log.WithField("endpoints", 82).Info("OMA API routes configured - includes policy management (3-2-1 backup rule)")
 }
 
 // Middleware functions

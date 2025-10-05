@@ -25,6 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Composition-based NFSRepository and CIFSRepository implementations
   - Full integration with MountManager for network storage operations
   - Protection against deleting repositories with existing backups
+- **Backup Policy Management API** (Backup Copy Engine Day 5 - 2025-10-05):
+  - 6 REST endpoints for enterprise 3-2-1 backup rule support (POST/GET/DELETE /api/v1/policies, /api/v1/backups/{id}/copies, /api/v1/backups/{id}/copy)
+  - Multi-repository backup copy rules with automatic replication
+  - Policy-based backup distribution across multiple storage locations
+  - Manual backup copy triggering for ad-hoc replication needs
+  - Copy rule management with retention periods and copy modes (full/incremental)
+  - Integration with immutable storage for ransomware protection
+  - BackupCopyEngine with worker pool for concurrent copy operations
+  - Checksum verification for backup integrity validation (sha256sum)
+  - Database tracking: backup_policies, backup_copy_rules, backup_copies tables
 
 ### Changed
 - Component naming: VMA/OMA → Capture Agent/Control Plane

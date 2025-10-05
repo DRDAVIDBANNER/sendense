@@ -40,6 +40,7 @@ type Handlers struct {
 	VMAReal                *VMARealHandler                // 🆕 NEW: VMA enrollment system (real implementation)
 	CloudStackSettings     *CloudStackSettingsHandler     // 🆕 NEW: CloudStack validation & settings
 	Repository             *RepositoryHandler             // 🆕 NEW: Backup repository management (Storage Monitoring Day 4)
+	Policy                 *PolicyHandler                 // 🆕 NEW: Backup policy management (Backup Copy Engine Day 5)
 	
 	// Exposed services for job recovery integration
 	VMAProgressClient *services.VMAProgressClient // VMA API client
@@ -180,6 +181,15 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 			log.WithError(err).Warn("Repository handler initialization failed - repository management endpoints unavailable")
 		} else {
 			handlers.Repository = repositoryHandler
+		}
+
+		// Initialize Policy handler (requires same SQL DB)
+		policyHandler, err := NewPolicyHandler(sqlDB)
+		if err != nil {
+			log.WithError(err).Warn("Policy handler initialization failed - backup policy endpoints unavailable")
+		} else {
+			handlers.Policy = policyHandler
+			log.Info("✅ Backup policy management enabled (Enterprise 3-2-1 backup rule support)")
 		}
 	}
 

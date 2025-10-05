@@ -175,38 +175,49 @@ Backup Repository Management (Storage Monitoring Day 4 - Implemented 2025-10-05)
   - Repository Types: Local (disk_path), NFS (server, export_path, mount_point), CIFS/SMB (server, share_name, credentials)
   - Backend: Uses `storage.RepositoryManager`, `storage.ConfigRepository`, `storage.MountManager`
 
-Backup Policy Management (Phase 1 - Added 2025-10-04)
-- GET /backup-policies → list all backup policies
-- POST /backup-policies → create backup policy
-- GET /backup-policies/{id} → get policy details
-- PATCH /backup-policies/{id} → update policy
-- DELETE /backup-policies/{id} → delete policy
-- POST /backup-policies/{policy_id}/copy-rules → add copy rule to policy
-- PATCH /backup-policies/{policy_id}/copy-rules/{rule_id} → update copy rule
-- DELETE /backup-policies/{policy_id}/copy-rules/{rule_id} → delete copy rule
-  - Handler: `handlers.BackupPolicy.*`
-  - Classification: Key (backup configuration)
+Backup Policy Management (Backup Copy Engine Day 5 - Implemented 2025-10-05)
+- POST /policies → `handlers.Policy.CreatePolicy`
+  - Description: Create backup policy with 3-2-1 backup rule support
+  - Request: PolicyRequest with name, enabled, primary_repository_id, retention_days, copy_rules
+  - Response: PolicyResponse with generated ID and timestamps
+  - Classification: Key (enterprise 3-2-1 backup rule)
+- GET /policies → `handlers.Policy.ListPolicies`
+  - Description: List all backup policies with copy rules
+  - Response: Array of PolicyResponse objects
+  - Classification: Key
+- GET /policies/{id} → `handlers.Policy.GetPolicy`
+  - Description: Get specific policy with copy rules
+  - Response: PolicyResponse
+  - Classification: Key
+- DELETE /policies/{id} → `handlers.Policy.DeletePolicy`
+  - Description: Delete policy and associated copy rules
+  - Response: Success message
+  - Classification: Key
+- GET /backups/{id}/copies → `handlers.Policy.GetBackupCopies`
+  - Description: List all copies of a backup across repositories
+  - Response: Array of BackupCopyResponse objects
+  - Callsites: GUI backup details view, copy status monitoring
+  - Classification: Key (multi-repository backup tracking)
+- POST /backups/{id}/copy → `handlers.Policy.TriggerBackupCopy`
+  - Description: Manually trigger backup copy to repository
+  - Request: { repository_id: string }
+  - Response: { copy_id: string, status: "pending" }
+  - Callsites: GUI manual copy operation
+  - Classification: Key (manual backup replication)
+  - Handler: `handlers.Policy.*`
+  - Database: backup_policies, backup_copy_rules, backup_copies tables
+  - Enterprise Features: Multi-repository copies, immutable storage support, automatic replication
 
-Backup Job Management (Phase 1 - Added 2025-10-04)
+Backup Job Management (Phase 1 - Future Implementation)
 - POST /backups → create backup job
 - GET /backups/{backup_id} → get backup job status
 - GET /backups → list backups (filter by vm_context_id, repository_id, status)
 - DELETE /backups/{backup_id} → delete backup (respects immutability)
 - GET /backups/chain → get backup chain for VM disk
 - POST /backups/chain/{chain_id}/consolidate → consolidate backup chain
-  - Handler: `handlers.BackupJob.*`
-  - Callsites: Scheduler service, GUI backup workflows
-  - Classification: Key (backup operations)
-
-Backup Copy Management (Phase 1 - Added 2025-10-04)
-- GET /backup-copies → list backup copies (filter by source_backup_id, repository_id, status)
-- POST /backup-copies → manually create backup copy
-- GET /backup-copies/{copy_id} → get copy status
-- POST /backup-copies/{copy_id}/verify → verify backup copy integrity
-- DELETE /backup-copies/{copy_id} → cancel copy operation
-  - Handler: `handlers.BackupCopy.*`
-  - Callsites: Backup copy engine (automatic), GUI manual copy workflows
-  - Classification: Key (multi-location backup support)
+  - Handler: `handlers.BackupJob.*` (NOT YET IMPLEMENTED)
+  - Status: Planned for Phase 1
+  - Classification: Future
 
 Legacy/Potentially Legacy Notes
 - Original failover handlers exist alongside enhanced; enhanced/unified are primary. The `RegisterFailoverRoutes` exports classic paths; prefer enhanced/unified.
