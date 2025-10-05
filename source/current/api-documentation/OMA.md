@@ -257,16 +257,40 @@ File-Level Restore (Task 4 - Implemented 2025-10-05)
   - Database: restore_mounts table with mount tracking
   - Customer Value: Individual file recovery without full VM restore
 
-Backup Job Management (Phase 1 - Future Implementation)
-- POST /backups → create backup job
-- GET /backups/{backup_id} → get backup job status
-- GET /backups → list backups (filter by vm_context_id, repository_id, status)
-- DELETE /backups/{backup_id} → delete backup (respects immutability)
-- GET /backups/chain → get backup chain for VM disk
-- POST /backups/chain/{chain_id}/consolidate → consolidate backup chain
-  - Handler: `handlers.BackupJob.*` (NOT YET IMPLEMENTED)
-  - Status: Planned for Phase 1
-  - Classification: Future
+Backup API Endpoints (Task 5 - Implemented 2025-10-05)
+- POST /api/v1/backup/start → `handlers.Backup.StartBackup`
+  - Description: Start a full or incremental backup of a VM disk
+  - Request: { vm_name, disk_id, backup_type: "full"|"incremental", repository_id, policy_id?, tags? }
+  - Response: BackupResponse with backup_id, status, file_path, progress
+  - Classification: **Key** (backup automation)
+  - Integration: Calls BackupEngine workflow, creates NBD export, triggers VMA replication
+
+- GET /api/v1/backup/list → `handlers.Backup.ListBackups`
+  - Description: List backups with optional filtering
+  - Query Params: vm_name, vm_context_id, repository_id, backup_type, status
+  - Response: { backups: [BackupResponse], total: number }
+  - Classification: **Key** (backup discovery)
+
+- GET /api/v1/backup/{backup_id} → `handlers.Backup.GetBackupDetails`
+  - Description: Get detailed information about a specific backup
+  - Response: BackupResponse with complete metadata and timestamps
+  - Classification: **Key** (backup monitoring)
+
+- DELETE /api/v1/backup/{backup_id} → `handlers.Backup.DeleteBackup`
+  - Description: Delete a backup from repository and database
+  - Response: { message, backup_id }
+  - Protection: CASCADE DELETE handles related records
+  - Classification: **Key** (backup lifecycle)
+
+- GET /api/v1/backup/chain → `handlers.Backup.GetBackupChain`
+  - Description: Get complete backup chain (full + incrementals) for a VM disk
+  - Query Params: vm_context_id or vm_name (required), disk_id (default: 0)
+  - Response: { chain_id, full_backup_id, backups: [], total_size_bytes, backup_count }
+  - Classification: **Key** (backup chain management)
+  - Handler: `handlers.Backup.*`
+  - Architecture: Integrates with BackupEngine (Task 3), Repository Manager (Task 1), NBD Export (Task 2)
+  - Database: backup_jobs table with backup chain relationships
+  - Customer Value: API-driven backup automation, GUI integration, scheduled backups
 
 Legacy/Potentially Legacy Notes
 - Original failover handlers exist alongside enhanced; enhanced/unified are primary. The `RegisterFailoverRoutes` exports classic paths; prefer enhanced/unified.

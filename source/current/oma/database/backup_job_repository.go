@@ -13,6 +13,7 @@ type BackupJob struct {
 	ID                 string     `gorm:"column:id;primaryKey" json:"id"`
 	VMContextID        string     `gorm:"column:vm_context_id;not null;index" json:"vm_context_id"`
 	VMName             string     `gorm:"column:vm_name;not null" json:"vm_name"`
+	DiskID             int        `gorm:"column:disk_id;not null;default:0" json:"disk_id"` // Added in Task 4 migration
 	RepositoryID       string     `gorm:"column:repository_id;not null;index" json:"repository_id"`
 	PolicyID           string     `gorm:"column:policy_id;index" json:"policy_id"`
 	BackupType         string     `gorm:"column:backup_type;not null" json:"backup_type"` // full, incremental, differential

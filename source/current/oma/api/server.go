@@ -247,7 +247,13 @@ func (s *Server) setupRoutes() {
 		log.Info("✅ File-level restore API routes registered (mount, browse, download)")
 	}
 
-	log.WithField("endpoints", 91).Info("OMA API routes configured - includes file-level restore (Task 4)")
+	// 🆕 NEW: Backup API endpoints (Task 5 - 2025-10-05)
+	if s.handlers.Backup != nil {
+		s.handlers.Backup.RegisterRoutes(api)
+		log.Info("✅ Backup API routes registered (start, list, get, delete, chain)")
+	}
+
+	log.WithField("endpoints", 96).Info("OMA API routes configured - includes file-level restore (Task 4) + backup operations (Task 5)")
 }
 
 // Middleware functions

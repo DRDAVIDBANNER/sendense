@@ -16,6 +16,7 @@ import (
 	"github.com/vexxhost/migratekit-oma/ossea"
 	"github.com/vexxhost/migratekit-oma/services"
 	"github.com/vexxhost/migratekit-oma/volume"
+	"github.com/vexxhost/migratekit-oma/workflows"
 )
 
 // Handlers contains all API endpoint handlers
@@ -42,6 +43,7 @@ type Handlers struct {
 	Repository             *RepositoryHandler             // 🆕 NEW: Backup repository management (Storage Monitoring Day 4)
 	Policy                 *PolicyHandler                 // 🆕 NEW: Backup policy management (Backup Copy Engine Day 5)
 	Restore                *RestoreHandlers               // 🆕 NEW: File-level restore (Task 4 - 2025-10-05)
+	Backup                 *BackupHandler                 // 🆕 NEW: Backup API endpoints (Task 5 - 2025-10-05)
 	
 	// Exposed services for job recovery integration
 	VMAProgressClient *services.VMAProgressClient // VMA API client
@@ -197,6 +199,13 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 		restoreHandler := NewRestoreHandlers(db, repositoryHandler.repoManager)
 		handlers.Restore = restoreHandler
 		log.Info("✅ File-level restore enabled (Task 4: Mount backups, browse files, download)")
+
+		// Initialize Backup handler (Task 5: Backup API Endpoints)
+		// Requires BackupEngine integration with repository manager
+		backupEngine := workflows.NewBackupEngine(db, repositoryHandler.repoManager, vmaAPIEndpoint)
+		backupHandler := NewBackupHandler(db, backupEngine)
+		handlers.Backup = backupHandler
+		log.Info("✅ Backup API endpoints enabled (Task 5: Start, list, delete backups via REST API)")
 	}
 
 	return handlers, nil
