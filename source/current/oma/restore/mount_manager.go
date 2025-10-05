@@ -346,8 +346,8 @@ func (mm *MountManager) exportQCOW2(qcow2Path, nbdDevice string) error {
 		"nbd_device":  nbdDevice,
 	}).Debug("📤 Exporting QCOW2 via qemu-nbd")
 
-	// Command: qemu-nbd --connect=/dev/nbdX --format=qcow2 --read-only /path/to/backup.qcow2
-	cmd := exec.Command("qemu-nbd",
+	// Command: sudo qemu-nbd --connect=/dev/nbdX --format=qcow2 --read-only /path/to/backup.qcow2
+	cmd := exec.Command("sudo", "qemu-nbd",
 		"--connect="+nbdDevice,
 		"--format=qcow2",
 		"--read-only",
@@ -420,8 +420,8 @@ func (mm *MountManager) mountFilesystem(device, mountPath string) error {
 		"mount_path": mountPath,
 	}).Debug("🔨 Mounting filesystem (read-only)")
 
-	// Command: mount -o ro /dev/nbdXp1 /mnt/sendense/restore/uuid
-	cmd := exec.Command("mount", "-o", "ro", device, mountPath)
+	// Command: sudo mount -o ro /dev/nbdXp1 /mnt/sendense/restore/uuid
+	cmd := exec.Command("sudo", "mount", "-o", "ro", device, mountPath)
 	
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -462,7 +462,7 @@ func (mm *MountManager) performUnmount(ctx context.Context, mountPath, nbdDevice
 func (mm *MountManager) unmountFilesystem(mountPath string) error {
 	log.WithField("mount_path", mountPath).Debug("🔓 Unmounting filesystem")
 
-	cmd := exec.Command("umount", mountPath)
+	cmd := exec.Command("sudo", "umount", mountPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("umount failed: %w, output: %s", err, string(output))
@@ -476,8 +476,8 @@ func (mm *MountManager) unmountFilesystem(mountPath string) error {
 func (mm *MountManager) disconnectNBD(nbdDevice string) error {
 	log.WithField("nbd_device", nbdDevice).Debug("🔌 Disconnecting qemu-nbd")
 
-	// Command: qemu-nbd --disconnect /dev/nbdX
-	cmd := exec.Command("qemu-nbd", "--disconnect", nbdDevice)
+	// Command: sudo qemu-nbd --disconnect /dev/nbdX
+	cmd := exec.Command("sudo", "qemu-nbd", "--disconnect", nbdDevice)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("qemu-nbd disconnect failed: %w, output: %s", err, string(output))

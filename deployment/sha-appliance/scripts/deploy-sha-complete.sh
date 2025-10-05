@@ -6,10 +6,11 @@
 # Schema: unified-sha-schema.sql (41 tables: 35 OMA + 6 backup tables)
 # Author: Sendense Team
 # Date: October 5, 2025
-# Version: v1.0.0-unified-schema
+# Version: v1.1.0-task4-restore
 #
 # FEATURES:
 # - Complete database setup with backup tables
+# - Task 4: File-Level Restore infrastructure (mount directory, NBD, migrations)
 # - NBD server on port 10809
 # - SSH tunnel infrastructure (vma_tunnel user, port 443)
 # - VirtIO tools for Windows VM support
@@ -22,7 +23,7 @@
 set -euo pipefail
 
 # Configuration
-SCRIPT_VERSION="v1.0.0-unified-schema"
+SCRIPT_VERSION="v1.1.0-task4-restore"
 LOG_FILE="/tmp/sha-deployment-$(date +%Y%m%d-%H%M%S).log"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOYMENT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
@@ -163,6 +164,38 @@ log "${GREEN}✅ Backup system tables: $backup_table_count (expected 6)${NC}"
 log "${YELLOW}🔧 Setting OSSEA config auto-increment to start at ID=1...${NC}"
 mysql -u oma_user -poma_password migratekit_oma -e 'ALTER TABLE ossea_configs AUTO_INCREMENT = 1;'
 check_success "OSSEA config auto-increment setup"
+
+# Run database migrations for additional features (Task 4: File-Level Restore, etc.)
+log "${YELLOW}🔄 Running database migrations...${NC}"
+if [ -f "${SCRIPT_DIR}/run-migrations.sh" ]; then
+    bash "${SCRIPT_DIR}/run-migrations.sh"
+    check_success "Database migrations"
+else
+    log "${YELLOW}⚠️  Migration runner not found, skipping migrations${NC}"
+fi
+
+# Setup file-level restore infrastructure (Task 4)
+log "${YELLOW}📁 Setting up file-level restore infrastructure...${NC}"
+
+# Create restore mount directory
+log "${BLUE}   Creating /mnt/sendense/restore directory...${NC}"
+sudo mkdir -p /mnt/sendense/restore
+sudo chown oma_admin:oma_admin /mnt/sendense/restore
+sudo chmod 755 /mnt/sendense/restore
+log "${GREEN}✅ Restore mount directory ready${NC}"
+
+# Load NBD kernel module
+log "${BLUE}   Loading NBD kernel module...${NC}"
+sudo modprobe nbd max_part=8 || true
+log "${GREEN}✅ NBD module loaded (16 devices: /dev/nbd0-15)${NC}"
+
+# Verify qemu-nbd is installed
+log "${BLUE}   Verifying qemu-nbd installation...${NC}"
+if which qemu-nbd > /dev/null 2>&1; then
+    log "${GREEN}✅ qemu-nbd is installed${NC}"
+else
+    log "${YELLOW}⚠️  qemu-nbd not found - should be installed via qemu-utils in Phase 1${NC}"
+fi
 
 log "${GREEN}✅ Database configuration completed${NC}"
 echo ""

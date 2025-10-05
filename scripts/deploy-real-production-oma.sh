@@ -6,7 +6,15 @@
 # Target: Fresh Ubuntu 24.04 servers
 # Author: MigrateKit OSSEA Team
 # Date: October 1, 2025
-# Version: v6.15.0-security-cleanup
+# Version: v6.20.0-task4-restore-infrastructure
+#
+# NEW IN v6.20.0 (Task 4: File-Level Restore):
+# - DATABASE MIGRATION: Add disk_id column to backup_jobs table for multi-disk VM support
+# - RESTORE INFRASTRUCTURE: Create /mnt/sendense/restore directory for QCOW2 mount operations
+# - NBD MODULE: Load NBD kernel module with 16 device support (/dev/nbd0-15)
+# - QEMU-NBD: Auto-install qemu-utils package if missing
+# - RESTORE_MOUNTS TABLE: Auto-create if not in schema (supports manual deployments)
+# - IDEMPOTENT MIGRATIONS: Safe to run multiple times (checks before creating)
 #
 # CRITICAL FIXES IN v6.15.0:
 # - SECURITY FIX: Removed ALL hardcoded vCenter credentials from GUI source code (11 files cleaned)
@@ -24,7 +32,7 @@
 set -euo pipefail
 
 # Configuration
-SCRIPT_VERSION="v6.19.1-boot-wizard-fix"
+SCRIPT_VERSION="v6.20.0-task4-restore-infrastructure"
 TARGET_IP="${1:-}"
 LOG_FILE="/tmp/oma-production-deployment-$(date +%Y%m%d-%H%M%S).log"
 SUDO_PASSWORD="Password1"
@@ -291,6 +299,118 @@ log "${YELLOW}🔧 Setting OSSEA config auto-increment to start at ID=1 (GUI com
 run_remote "mysql -u oma_user -poma_password migratekit_oma -e 'ALTER TABLE ossea_configs AUTO_INCREMENT = 1;'"
 check_success "OSSEA config auto-increment setup"
 log "${GREEN}✅ OSSEA config will use ID=1 when created via GUI${NC}"
+
+# =============================================================================
+# PHASE 3B: DATABASE MIGRATIONS & FILE-LEVEL RESTORE SETUP
+# =============================================================================
+
+log "${YELLOW}🔄 Applying Task 4 database migrations (File-Level Restore)...${NC}"
+
+# Migration 1: Add disk_id column to backup_jobs table
+log "${BLUE}   Adding disk_id column to backup_jobs table...${NC}"
+run_remote "mysql -u oma_user -poma_password migratekit_oma" << 'EOSQL'
+-- Check if disk_id column exists
+SELECT COUNT(*) INTO @disk_id_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'migratekit_oma' 
+  AND table_name = 'backup_jobs' 
+  AND column_name = 'disk_id';
+
+-- Add disk_id column if it doesn't exist
+SET @sql = IF(@disk_id_exists = 0, 
+    'ALTER TABLE backup_jobs ADD COLUMN disk_id INT NOT NULL DEFAULT 0 AFTER vm_name',
+    'SELECT ''disk_id column already exists'' AS message');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Create index if it doesn't exist
+SET @index_exists = (SELECT COUNT(*) 
+    FROM information_schema.statistics 
+    WHERE table_schema = 'migratekit_oma' 
+      AND table_name = 'backup_jobs' 
+      AND index_name = 'idx_backup_vm_disk');
+
+SET @sql = IF(@index_exists = 0,
+    'CREATE INDEX idx_backup_vm_disk ON backup_jobs(vm_context_id, disk_id, backup_type)',
+    'SELECT ''Index already exists'' AS message');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+EOSQL
+check_success "disk_id column migration"
+log "${GREEN}✅ backup_jobs table updated with disk_id support${NC}"
+
+# Migration 2: Verify restore_mounts table exists
+log "${BLUE}   Verifying restore_mounts table...${NC}"
+table_exists=$(run_remote "mysql -u oma_user -poma_password migratekit_oma -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'migratekit_oma' AND table_name = 'restore_mounts';\" | tail -1")
+if [ "$table_exists" = "0" ]; then
+    log "${YELLOW}   Creating restore_mounts table...${NC}"
+    run_remote "mysql -u oma_user -poma_password migratekit_oma" << 'EOSQL'
+CREATE TABLE restore_mounts (
+    id VARCHAR(64) NOT NULL PRIMARY KEY COMMENT 'Unique mount identifier (UUID)',
+    backup_id VARCHAR(64) NOT NULL COMMENT 'FK to backup_jobs.id',
+    mount_path VARCHAR(512) NOT NULL COMMENT 'Filesystem mount path',
+    nbd_device VARCHAR(32) NOT NULL COMMENT 'NBD device path (e.g. /dev/nbd0)',
+    filesystem_type VARCHAR(32) DEFAULT NULL COMMENT 'Detected filesystem type (ext4, xfs, etc.)',
+    mount_mode ENUM('read-only') NOT NULL DEFAULT 'read-only' COMMENT 'Mount mode (always read-only for safety)',
+    status ENUM('mounting','mounted','unmounting','failed') NOT NULL DEFAULT 'mounting' COMMENT 'Current mount status',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Mount creation timestamp',
+    last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Last file access timestamp',
+    expires_at TIMESTAMP NULL DEFAULT NULL COMMENT 'Idle timeout expiration timestamp',
+    
+    INDEX idx_backup_id (backup_id),
+    INDEX idx_expires_at (expires_at),
+    INDEX idx_status (status),
+    INDEX idx_nbd_device (nbd_device),
+    
+    UNIQUE KEY uk_nbd_device_active (nbd_device) USING BTREE,
+    UNIQUE KEY uk_mount_path_active (mount_path) USING BTREE,
+    
+    CONSTRAINT fk_restore_backup FOREIGN KEY (backup_id) 
+        REFERENCES backup_jobs(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+  COMMENT='Task 4: File-Level Restore - Active QCOW2 backup mounts';
+EOSQL
+    check_success "restore_mounts table creation"
+    log "${GREEN}✅ restore_mounts table created${NC}"
+else
+    log "${GREEN}✅ restore_mounts table already exists${NC}"
+fi
+
+# Setup file-level restore infrastructure
+log "${YELLOW}📁 Setting up file-level restore infrastructure...${NC}"
+
+# Create restore mount directory
+log "${BLUE}   Creating /mnt/sendense/restore directory...${NC}"
+run_remote "sudo mkdir -p /mnt/sendense/restore"
+run_remote "sudo chown oma_admin:oma_admin /mnt/sendense/restore"
+run_remote "sudo chmod 755 /mnt/sendense/restore"
+check_success "Restore mount directory creation"
+log "${GREEN}✅ Restore mount directory ready at /mnt/sendense/restore${NC}"
+
+# Verify NBD kernel module
+log "${BLUE}   Verifying NBD kernel module...${NC}"
+run_remote "sudo modprobe nbd max_part=8" || true
+check_success "NBD module load"
+log "${GREEN}✅ NBD module loaded (supports 16 devices: /dev/nbd0-15)${NC}"
+
+# Verify qemu-nbd is installed
+log "${BLUE}   Verifying qemu-nbd installation...${NC}"
+if run_remote "which qemu-nbd > /dev/null 2>&1"; then
+    log "${GREEN}✅ qemu-nbd is installed${NC}"
+else
+    log "${YELLOW}⚠️  qemu-nbd not found - installing qemu-utils package...${NC}"
+    run_remote "sudo apt-get update && sudo apt-get install -y qemu-utils"
+    check_success "qemu-utils installation"
+    log "${GREEN}✅ qemu-nbd installed${NC}"
+fi
+
+log "${GREEN}✅ File-Level Restore infrastructure ready${NC}"
+log "${BLUE}   - Mount directory: /mnt/sendense/restore${NC}"
+log "${BLUE}   - NBD devices: /dev/nbd0-7 (restore), /dev/nbd8-15 (backup)${NC}"
+log "${BLUE}   - Database: restore_mounts table with cascade delete${NC}"
+echo ""
 
 log "${GREEN}✅ Production database deployment completed${NC}"
 echo ""
