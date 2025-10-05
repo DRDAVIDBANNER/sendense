@@ -780,3 +780,147 @@ func isNBDServerRunning() bool {
 	log.WithField("running", running).Debug("NBD server status check")
 	return running
 }
+
+// CreateFileExport creates a new NBD export for a QCOW2 backup file
+// This uses the config.d pattern with SIGHUP reload (no service restart needed)
+//
+// Parameters:
+// - vmContextID: VM context identifier
+// - diskID: Disk number (0, 1, 2...)
+// - backupType: "full" or "incr"
+// - qcow2Path: Path to QCOW2 backup file
+// - readWrite: true for incremental writes, false for read-only
+//
+// Returns: ExportInfo with export details, error
+func CreateFileExport(vmContextID string, diskID int, backupType, qcow2Path string, readWrite bool) (*ExportInfo, error) {
+	const nbdPort = 10809 // Single port architecture
+	timestamp := time.Now()
+
+	log.WithFields(log.Fields{
+		"vm_context_id": vmContextID,
+		"disk_id":       diskID,
+		"backup_type":   backupType,
+		"qcow2_path":    qcow2Path,
+		"read_write":    readWrite,
+	}).Info("🔗 Creating NBD file export for backup (config.d + SIGHUP)")
+
+	// Validate QCOW2 file exists and is valid
+	if err := ValidateQCOW2File(qcow2Path); err != nil {
+		return nil, fmt.Errorf("QCOW2 validation failed: %w", err)
+	}
+
+	// Get QCOW2 virtual size for NBD export
+	fileSize, err := GetQCOW2FileSize(qcow2Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get QCOW2 file size: %w", err)
+	}
+
+	// Generate collision-proof export name
+	exportName := BuildBackupExportName(vmContextID, diskID, backupType, timestamp)
+
+	log.WithFields(log.Fields{
+		"export_name": exportName,
+		"file_size":   fileSize,
+		"length":      len(exportName),
+	}).Info("📛 Generated backup export name")
+
+	// Create NBD config manager instance (config.d pattern)
+	configManager := NewNBDConfigManager(
+		"/opt/migratekit/nbd-configs/nbd-server.conf",
+		"/opt/migratekit/nbd-configs/conf.d",
+		nbdPort,
+	)
+
+	// Create NBD export structure
+	export := &NBDExport{
+		Name:       exportName,
+		ExportPath: qcow2Path,
+		ReadOnly:   !readWrite,
+		IsFile:     true,
+		Metadata: map[string]string{
+			"vm_context_id": vmContextID,
+			"disk_id":       fmt.Sprintf("%d", diskID),
+			"backup_type":   backupType,
+			"file_size":     fmt.Sprintf("%d", fileSize),
+			"created_at":    timestamp.Format(time.RFC3339),
+		},
+	}
+
+	// Add export to NBD server via config.d (SIGHUP reload)
+	if err := configManager.AddExport(export); err != nil {
+		return nil, fmt.Errorf("failed to add file export to NBD server: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"export_name": exportName,
+		"qcow2_path":  qcow2Path,
+		"port":        nbdPort,
+		"read_write":  readWrite,
+	}).Info("✅ NBD file export created successfully via SIGHUP reload")
+
+	// Build and return export info
+	exportInfo := &ExportInfo{
+		ExportName: exportName,
+		Port:       nbdPort,
+		DevicePath: qcow2Path, // For file exports, DevicePath contains file path
+		Status:     "active",
+		ConfigPath: fmt.Sprintf("/opt/migratekit/nbd-configs/conf.d/%s.conf", exportName),
+	}
+
+	return exportInfo, nil
+}
+
+// RemoveFileExport removes a backup file export from NBD server
+// Uses config.d pattern with SIGHUP reload (no service restart)
+func RemoveFileExport(exportName string) error {
+	log.WithField("export_name", exportName).Info("🗑️ Removing NBD file export via SIGHUP reload")
+
+	// Validate it's a backup export
+	if !IsBackupExport(exportName) {
+		return fmt.Errorf("not a backup export: %s", exportName)
+	}
+
+	// Create NBD config manager instance
+	configManager := NewNBDConfigManager(
+		"/opt/migratekit/nbd-configs/nbd-server.conf",
+		"/opt/migratekit/nbd-configs/conf.d",
+		10809,
+	)
+
+	// Remove export via config.d (SIGHUP reload)
+	if err := configManager.RemoveExport(exportName); err != nil {
+		return fmt.Errorf("failed to remove file export: %w", err)
+	}
+
+	log.WithField("export_name", exportName).Info("✅ NBD file export removed successfully")
+	return nil
+}
+
+// ListFileExports returns all active backup file exports
+func ListFileExports() ([]*NBDExport, error) {
+	log.Debug("📋 Listing NBD file exports from conf.d")
+
+	// Create NBD config manager instance
+	configManager := NewNBDConfigManager(
+		"/opt/migratekit/nbd-configs/nbd-server.conf",
+		"/opt/migratekit/nbd-configs/conf.d",
+		10809,
+	)
+
+	// Get all exports
+	allExports, err := configManager.ListExports()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list exports: %w", err)
+	}
+
+	// Filter for backup exports (files)
+	var fileExports []*NBDExport
+	for _, export := range allExports {
+		if export.IsFile {
+			fileExports = append(fileExports, export)
+		}
+	}
+
+	log.WithField("count", len(fileExports)).Info("📋 Listed NBD file exports")
+	return fileExports, nil
+}
