@@ -46,23 +46,25 @@
 
 ---
 
-### **Job 4: File-Level Restore** 🔴 ACTIVE
+### **Job 4: File-Level Restore** ✅ COMPLETED
 **File:** `job-sheets/2025-10-05-file-level-restore.md`  
-**Status:** 🔴 **READY TO START** (2025-10-05)  
-**Duration:** 1-2 weeks  
+**Status:** ✅ **COMPLETED** (2025-10-05)  
+**Duration:** 1 day (accelerated implementation)  
 **Owner:** Backend Engineering Team  
 **Priority:** Critical (Customer file recovery)
 
 **Description:** Mount QCOW2 backups and extract individual files via REST API
 
-**Dependencies:** ✅ Tasks 1, 2, 3 complete - foundation ready
+**Dependencies:** ✅ Tasks 1, 2, 3 complete - foundation used
 
 **Progress:**
-- [ ] Phase 1: QCOW2 mount management (Days 1-3)
-- [ ] Phase 2: File browser API (Days 4-6)  
-- [ ] Phase 3: File download & extraction (Days 5-7)
-- [ ] Phase 4: Safety & cleanup (Days 6-8)
-- [ ] Phase 5: API integration (Days 8-10)
+- [x] Phase 1: QCOW2 mount management (mount_manager.go - 495 lines) ✅
+- [x] Phase 2: File browser API (file_browser.go - 422 lines) ✅
+- [x] Phase 3: File download & extraction (file_downloader.go - 390 lines) ✅
+- [x] Phase 4: Safety & cleanup (cleanup_service.go - 376 lines) ✅
+- [x] Phase 5: API integration (restore_handlers.go - 415 lines) ✅
+
+**Deployed:** v2.8.0 binary operational on preprod (10.245.246.136)
 
 ---
 
@@ -87,20 +89,19 @@ Task 1 Total: [██████▱▱▱▱] 67% (~10-12 days total)
 
 ## 🎯 CURRENT FOCUS
 
-**This Week:** Task 2 Complete! Ready for Task 4
+**This Week:** Task 4 Complete! Ready for Task 5
 
-**✅ JUST COMPLETED:** Task 2 - NBD File Export (100%)
-- All unit tests passing (5 test suites)
-- All integration tests passing (8 scenarios) 
-- Validated on deployed server (10.245.246.136)
-- SIGHUP reload confirmed working
-- config.d pattern operational
+**✅ JUST COMPLETED:** Task 4 - File-Level Restore (100%)
+- 2,382 lines across 6 core files  
+- 9 REST API endpoints for complete file recovery workflow
+- Deployed and operational on preprod (10.245.246.136)
+- qemu-nbd integration, automatic cleanup, security features
 
-**NEXT TASK:** Task 4 - File-Level Restore
-- Mount QCOW2 backups via qemu-nbd
-- File browser API for navigating backup contents
-- Individual file extraction from backups
-- Safety mechanisms and cleanup
+**NEXT TASK:** Task 5 - Backup API Endpoints
+- Expose BackupEngine workflow via REST API
+- Start/stop/monitor backup operations
+- Backup listing and management endpoints  
+- Integration with existing backup infrastructure
 
 ---
 
@@ -143,6 +144,14 @@ Task 1 Total: [██████▱▱▱▱] 67% (~10-12 days total)
   - Full and incremental backup workflows
   - Task 1+2 integration, VMA API integration, CBT change tracking
   - Total: 722 lines of workflow automation
+- [x] **Task 4: File-Level Restore** - 100% COMPLETE ✅
+  - MountManager with qemu-nbd integration (495 lines)
+  - FileBrowser with security validation (422 lines)
+  - FileDownloader with streaming + archives (390 lines)
+  - CleanupService with automatic timeout (376 lines)
+  - RestoreHandlers with 9 REST endpoints (415 lines)
+  - Database repository with migration files (286 lines)
+  - Total: 2,382 lines + migrations + deployment
 
 **Project Setup (2025-10-04):**
 - [x] Created project governance framework
@@ -179,17 +188,18 @@ Task 1 Total: [██████▱▱▱▱] 67% (~10-12 days total)
 Task 1: Repository Abstraction     [██████████] 100% (Week 1-2) ✅ COMPLETE
 Task 2: NBD File Export            [██████████] 100% (Week 1-2) ✅ COMPLETE
 Task 3: Backup Workflow            [██████████] 100% (Week 2-3) ✅ COMPLETE  
-Task 4: File-Level Restore         [▱▱▱▱▱▱▱▱▱▱]   0% (Week 3-4) ⏸️ Ready
+Task 4: File-Level Restore         [██████████] 100% (Week 3-4) ✅ COMPLETE
 Task 5: API Endpoints              [▱▱▱▱▱▱▱▱▱▱]   0% (Week 4)   ⏸️ Ready
 Task 6: CLI Tools                  [▱▱▱▱▱▱▱▱▱▱]   0% (Week 4)   ⏸️ Waiting
 Task 7: Testing & Validation       [▱▱▱▱▱▱▱▱▱▱]   0% (Week 5-6) ⏸️ Waiting
 
-Phase 1 Total: [████▱▱▱▱▱▱] 43% complete (3 of 7 tasks done)
+Phase 1 Total: [█████▓▱▱▱▱] 57% complete (4 of 7 tasks done)
 ```
 
 **Recent Completions:**
-- Task 2 (NBD File Export) - 100% complete with full testing validation ✅
-- Task 3 (Backup Workflow) - Full orchestration engine operational ✅
+- Task 2 (NBD File Export) - 100% complete with production testing ✅
+- Task 3 (Backup Workflow) - Full orchestration engine operational ✅  
+- Task 4 (File-Level Restore) - Complete file recovery system deployed ✅
 
 ---
 
