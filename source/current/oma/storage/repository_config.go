@@ -115,12 +115,14 @@ type BackupPolicy struct {
 
 // BackupCopyRule defines a rule for copying backups to another repository.
 type BackupCopyRule struct {
-	ID                      string   `json:"id"`
-	DestinationRepositoryID string   `json:"destination_repository_id"`
-	CopyMode                CopyMode `json:"copy_mode"`
-	Priority                int      `json:"priority"` // Order of copies (1, 2, 3)
-	Enabled                 bool     `json:"enabled"`
-	VerifyAfterCopy         bool     `json:"verify_after_copy"`
+	ID                      string    `json:"id"`
+	PolicyID                string    `json:"policy_id"`
+	DestinationRepositoryID string    `json:"destination_repository_id"`
+	CopyMode                CopyMode  `json:"copy_mode"`
+	Priority                int       `json:"priority"` // Order of copies (1, 2, 3)
+	Enabled                 bool      `json:"enabled"`
+	VerifyAfterCopy         bool      `json:"verify_after_copy"`
+	CreatedAt               time.Time `json:"created_at"`
 }
 
 // CopyMode defines when backup copies are created.
