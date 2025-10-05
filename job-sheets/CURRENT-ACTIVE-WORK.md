@@ -2,7 +2,7 @@
 
 **Last Updated:** 2025-10-05  
 **Current Phase:** Phase 1 - VMware Backups (Week 2-3)  
-**Active Job Sheets:** 1 (Task 2 Phase 3-4 pending)
+**Active Job Sheets:** 0 (Task 3 complete - choosing next priority)
 
 ---
 
@@ -86,19 +86,22 @@ Task 1 Total: [██████▱▱▱▱] 67% (~10-12 days total)
 
 ## 🎯 CURRENT FOCUS
 
-**This Week:** Task 2 Phase 3-4 - NBD File Export Testing & Validation
+**This Week:** Choose Next Priority
 
-**Key Deliverables:**
-1. Read-write file export support for incremental backups
-2. File locking and concurrent access safety  
-3. Integration testing with existing NBD server
-4. Capture Agent connectivity testing (VMA → NBD file exports)
-5. Performance validation and stress testing
-6. Complete Task 2 acceptance criteria
+**Available Options:**
+1. **Task 2.3:** NBD File Export Testing & Validation (complete Task 2 to 100%)
+   - Read-write file export support for incremental backups
+   - File locking and concurrent access safety
+   - Integration testing with existing NBD server
+   - Capture Agent connectivity testing (VMA → NBD file exports)
+   - Performance validation and stress testing
 
-**Next Available Tasks:**
-- Task 4: File-Level Restore (mount QCOW2 backups, file browsing)
-- Task 5: API Endpoints (REST endpoints for backup workflows)
+2. **Task 4:** File-Level Restore (mount QCOW2 backups, file browsing)
+   - Mount backups via qemu-nbd
+   - File browser API
+   - File extraction capabilities
+
+**Recommendation:** Complete Task 2.3 first (testing/validation) to ensure NBD file exports are production-ready before moving to Task 4.
 
 ---
 
@@ -173,15 +176,17 @@ Task 1 Total: [██████▱▱▱▱] 67% (~10-12 days total)
 
 ```
 Task 1: Repository Abstraction     [██████████] 100% (Week 1-2) ✅ COMPLETE
-Task 2: NBD File Export            [██████▓▓▓▓]  67% (Week 1-2) 🟢 IN PROGRESS (Phase 3-4 pending)
+Task 2: NBD File Export            [██████▓▓▓▓]  67% (Week 1-2) 🟢 IN PROGRESS (Phase 2.3 pending)
 Task 3: Backup Workflow            [██████████] 100% (Week 2-3) ✅ COMPLETE  
 Task 4: File-Level Restore         [▱▱▱▱▱▱▱▱▱▱]   0% (Week 3-4) ⏸️ Ready
 Task 5: API Endpoints              [▱▱▱▱▱▱▱▱▱▱]   0% (Week 4)   ⏸️ Ready
 Task 6: CLI Tools                  [▱▱▱▱▱▱▱▱▱▱]   0% (Week 4)   ⏸️ Waiting
 Task 7: Testing & Validation       [▱▱▱▱▱▱▱▱▱▱]   0% (Week 5-6) ⏸️ Waiting
 
-Phase 1 Total: [███▓▱▱▱▱▱▱] 38% complete (2.67 of 7 tasks done)
+Phase 1 Total: [████▱▱▱▱▱▱] 42% complete (2.67 of 7 tasks done)
 ```
+
+**Recent Completion:** Task 3 (Backup Workflow) - Full orchestration engine operational
 
 ---
 

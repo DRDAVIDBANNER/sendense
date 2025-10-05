@@ -35,6 +35,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - BackupCopyEngine with worker pool for concurrent copy operations
   - Checksum verification for backup integrity validation (sha256sum)
   - Database tracking: backup_policies, backup_copy_rules, backup_copies tables
+- **Backup Workflow Orchestration** (Task 3 - 2025-10-05):
+  - Full and incremental backup workflow implementation (481 lines workflows/backup.go)
+  - BackupEngine orchestrates complete backup lifecycle (QCOW2 creation → NBD export → VMA replication → status tracking)
+  - BackupJobRepository for database operations (262 lines database/backup_job_repository.go)
+  - Integration with NBD file export system for QCOW2 backup files
+  - VMA API client integration for triggering Capture Agent replication
+  - CBT (Changed Block Tracking) support for incremental backups with change ID tracking
+  - Full integration with storage repository layer (Task 1) and NBD server (Task 2)
+  - Database tracking: backup_jobs table with status, progress, and error tracking
+  - Foundation complete for Phase 1 VMware backup workflows
 
 ### Changed
 - Component naming: VMA/OMA → Capture Agent/Control Plane
