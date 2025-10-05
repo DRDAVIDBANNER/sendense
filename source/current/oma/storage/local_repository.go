@@ -64,8 +64,8 @@ func (lr *LocalRepository) CreateBackup(ctx context.Context, req BackupRequest) 
 	// Generate backup ID
 	backupID := GenerateBackupID(req.VMName, req.DiskID)
 
-	// Get or create chain
-	chain, err := lr.chainMgr.GetOrCreateChain(ctx, req.VMContextID, req.DiskID)
+	// Get or create chain (TODO: use returned chain for validation)
+	_, err := lr.chainMgr.GetOrCreateChain(ctx, req.VMContextID, req.DiskID)
 	if err != nil {
 		return nil, err
 	}
