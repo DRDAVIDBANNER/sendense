@@ -149,6 +149,24 @@ source/current/oma/nbd/
 └── models.go                 # Add FileExport type, update Export struct
 ```
 
+**Export Naming Strategy (Collision Avoidance):**
+
+Current migration exports use: `migration-vm-{vmID}-disk{diskNumber}`  
+New backup exports will use: `backup-{vmContextID}-disk{diskID}-{backupType}-{timestamp}`
+
+**Examples:**
+- `backup-ctx-pgtest2-20251005-120000-disk0-full-20251005T120000`
+- `backup-ctx-pgtest2-20251005-120000-disk0-incr-20251005T130000`  
+- `backup-ctx-pgtest2-20251005-120000-disk1-full-20251005T120000`
+
+**Collision Prevention:**
+- ✅ **Unique VM Context ID** - No VM name collisions
+- ✅ **Backup prefix** - Distinguished from `migration-` exports
+- ✅ **Disk ID** - Multi-disk VM support
+- ✅ **Backup type** - full/incr distinction
+- ✅ **Timestamp** - Multiple backup chain support
+- ✅ **Length limit** - NBD export names <64 chars
+
 **Implementation Notes:**
 - **Pattern Consistency:** Align OMA NBD with proven Volume Daemon architecture
 - **Dynamic Exports:** Add/remove exports without NBD server restart (SIGHUP only)
@@ -159,9 +177,9 @@ source/current/oma/nbd/
   /opt/migratekit/nbd-configs/
   ├── nbd-server.conf          # Base config with includedir
   └── conf.d/                  # Individual export files
-      ├── backup-vm1-disk0.conf
-      ├── backup-vm2-disk0.conf
-      └── migration-job-123.conf
+      ├── backup-ctx-pgtest2-20251005-120000-disk0-full-20251005T120000.conf
+      ├── backup-ctx-pgtest2-20251005-120000-disk0-incr-20251005T130000.conf
+      └── migration-vm-a1b2c3d4-e5f6-7890-abcd-ef1234567890-disk0.conf
   ```
 
 **Benefits:**
@@ -170,9 +188,38 @@ source/current/oma/nbd/
 - ✅ **Proven Architecture** - Reuses Volume Daemon's working pattern
 - ✅ **Clean Separation** - Block device vs file exports managed consistently
 
+**Export Naming Implementation:**
+```go
+// BuildBackupExportName generates unique NBD export name for backup
+func BuildBackupExportName(vmContextID string, diskID int, backupType string, timestamp time.Time) string {
+    // Format: backup-{vmContextID}-disk{diskID}-{backupType}-{timestamp}
+    // Example: backup-ctx-pgtest2-20251005-120000-disk0-full-20251005T120000
+    
+    timestampStr := timestamp.Format("20060102T150405")
+    exportName := fmt.Sprintf("backup-%s-disk%d-%s-%s", 
+        vmContextID, diskID, backupType, timestampStr)
+    
+    // Ensure name length < 64 characters (NBD limit)
+    if len(exportName) > 63 {
+        // Truncate vmContextID if needed, preserve other components
+        maxContextLen := 63 - len(fmt.Sprintf("backup--disk%d-%s-%s", diskID, backupType, timestampStr))
+        if maxContextLen > 0 {
+            truncatedContext := vmContextID[:maxContextLen]
+            exportName = fmt.Sprintf("backup-%s-disk%d-%s-%s", 
+                truncatedContext, diskID, backupType, timestampStr)
+        }
+    }
+    
+    return exportName
+}
+```
+
 **Acceptance Criteria:**
 - [ ] NBD server migrated to config.d pattern with SIGHUP reload
 - [ ] NBD server can export QCOW2 files alongside block devices
+- [ ] Backup exports use unique naming scheme (no collisions with migrations)
+- [ ] Export names support multi-disk VMs and multiple backup types
+- [ ] Export names remain under 64 character NBD limit
 - [ ] Capture Agent can connect to file exports (same as block device exports)
 - [ ] Data writes to QCOW2 file correctly with proper file locking
 - [ ] No regression on existing block device exports
