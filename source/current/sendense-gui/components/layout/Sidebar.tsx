@@ -24,6 +24,7 @@ const menuItems = [
   { name: "Protection Flows", href: "/protection-flows", icon: Shield },
   { name: "Protection Groups", href: "/protection-groups", icon: Database },
   { name: "Appliances", href: "/appliances", icon: Server },
+  { name: "Repositories", href: "/repositories", icon: Database },
   { name: "Report Center", href: "/report-center", icon: BarChart3 },
   { name: "Settings", href: "/settings/sources", icon: Settings },
   { name: "Users", href: "/users", icon: Users },

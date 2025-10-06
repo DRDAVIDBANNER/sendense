@@ -302,7 +302,13 @@ export function FlowDetailsModal({ flow, isOpen, onClose, onReplicationAction, o
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="
+        max-w-[90vw] w-[90vw]
+        max-h-[85vh] h-[85vh]
+        min-w-[900px]
+        p-6
+        overflow-hidden flex flex-col
+      ">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <div className="flex items-center gap-2">
