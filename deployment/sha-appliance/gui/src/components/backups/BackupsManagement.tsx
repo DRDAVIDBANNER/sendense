@@ -1,9 +1,32 @@
 'use client';
 
-import { HiArchive, HiCheckCircle, HiClock } from 'react-icons/hi';
-import { Card } from 'flowbite-react';
+import { useState } from 'react';
+import { HiArchive, HiCheckCircle, HiClock, HiPlus } from 'react-icons/hi';
+import { Card, Button } from 'flowbite-react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { BackupJob } from '@/lib/types';
+import { BackupJobsList } from './BackupJobsList';
 
 export function BackupsManagement() {
+  const [selectedBackup, setSelectedBackup] = useState<BackupJob | null>(null);
+
+  // Fetch all backups for statistics
+  const { data: backupsData } = useQuery({
+    queryKey: ['backups-all'],
+    queryFn: () => api.listBackups({}),
+    refetchInterval: 10000, // Refresh every 10 seconds
+  });
+
+  const allBackups = backupsData?.backups || [];
+  const completedBackups = allBackups.filter(b => b.status === 'completed').length;
+  const runningBackups = allBackups.filter(b => b.status === 'running').length;
+
+  const handleBrowseFiles = (backup: BackupJob) => {
+    // TODO: Open file browser modal (Phase 4)
+    console.log('Browse files for backup:', backup.backup_id);
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -17,6 +40,10 @@ export function BackupsManagement() {
             Manage VM backups, monitor progress, and restore individual files
           </p>
         </div>
+        <Button color="blue">
+          <HiPlus className="w-4 h-4 mr-2" />
+          Start Backup
+        </Button>
       </div>
 
       {/* Statistics Cards */}
@@ -28,7 +55,9 @@ export function BackupsManagement() {
             </div>
             <div className="ml-4">
               <p className="text-sm text-gray-600 dark:text-gray-400">Total Backups</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">-</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {allBackups.length}
+              </p>
             </div>
           </div>
         </Card>
@@ -40,7 +69,9 @@ export function BackupsManagement() {
             </div>
             <div className="ml-4">
               <p className="text-sm text-gray-600 dark:text-gray-400">Completed</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">-</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {completedBackups}
+              </p>
             </div>
           </div>
         </Card>
@@ -52,47 +83,19 @@ export function BackupsManagement() {
             </div>
             <div className="ml-4">
               <p className="text-sm text-gray-600 dark:text-gray-400">In Progress</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">-</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {runningBackups}
+              </p>
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Main Content Card */}
-      <Card>
-        <div className="text-center py-12">
-          <HiArchive className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-600 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            Backup Management Ready
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-            Backup infrastructure is operational. The backup jobs list and controls will be implemented in the next phase.
-          </p>
-          <div className="space-y-3 max-w-md mx-auto text-left">
-            <div className="flex items-start">
-              <HiCheckCircle className="w-5 h-5 text-green-600 mt-0.5 mr-2" />
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Task 5: Backup API Endpoints</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Complete - 5 REST endpoints operational</p>
-              </div>
-            </div>
-            <div className="flex items-start">
-              <HiCheckCircle className="w-5 h-5 text-green-600 mt-0.5 mr-2" />
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Task 4: File-Level Restore</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Complete - 9 REST endpoints operational</p>
-              </div>
-            </div>
-            <div className="flex items-start">
-              <HiClock className="w-5 h-5 text-yellow-600 mt-0.5 mr-2" />
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">GUI Integration</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Phase 1 - Navigation complete, components next</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
+      {/* Backup Jobs List */}
+      <BackupJobsList
+        onBackupSelect={setSelectedBackup}
+        onBrowseFiles={handleBrowseFiles}
+      />
     </div>
   );
 }
