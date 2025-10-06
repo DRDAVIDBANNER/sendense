@@ -1,0 +1,329 @@
+"use client";
+
+import { useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Server, CheckCircle } from "lucide-react";
+
+interface VM {
+  id: string;
+  name: string;
+  status: 'running' | 'stopped' | 'suspended';
+  host: string;
+  os: string;
+  cpu: number;
+  memory: number;
+}
+
+interface CreateGroupModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreate: (groupData: {
+    name: string;
+    description: string;
+    policy: string;
+    schedule: string;
+    vmIds: string[];
+  }) => void;
+}
+
+const mockVMs: VM[] = [
+  { id: '1', name: 'web-server-01', status: 'running', host: 'esxi-01', os: 'Ubuntu 22.04', cpu: 2, memory: 4 },
+  { id: '2', name: 'web-server-02', status: 'running', host: 'esxi-01', os: 'Ubuntu 22.04', cpu: 2, memory: 4 },
+  { id: '3', name: 'database-01', status: 'running', host: 'esxi-02', os: 'Windows Server 2022', cpu: 4, memory: 16 },
+  { id: '4', name: 'app-server-01', status: 'running', host: 'esxi-01', os: 'CentOS 8', cpu: 2, memory: 8 },
+  { id: '5', name: 'dev-server-01', status: 'stopped', host: 'esxi-03', os: 'Ubuntu 20.04', cpu: 1, memory: 2 },
+  { id: '6', name: 'test-server-01', status: 'running', host: 'esxi-03', os: 'Ubuntu 22.04', cpu: 1, memory: 2 },
+];
+
+export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModalProps) {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    policy: 'daily',
+    schedule: '',
+    vmIds: [] as string[]
+  });
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleVMSelection = (vmId: string, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      vmIds: checked
+        ? [...prev.vmIds, vmId]
+        : prev.vmIds.filter(id => id !== vmId)
+    }));
+  };
+
+  const handleNext = () => {
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleSubmit = () => {
+    onCreate(formData);
+    // Reset form
+    setFormData({
+      name: '',
+      description: '',
+      policy: 'daily',
+      schedule: '',
+      vmIds: []
+    });
+    setCurrentStep(1);
+    onClose();
+  };
+
+  const selectedVMs = mockVMs.filter(vm => formData.vmIds.includes(vm.id));
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'running':
+        return <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Running</Badge>;
+      case 'stopped':
+        return <Badge className="bg-gray-500/10 text-gray-400 border-gray-500/20">Stopped</Badge>;
+      case 'suspended':
+        return <Badge className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20">Suspended</Badge>;
+      default:
+        return <Badge variant="secondary">Unknown</Badge>;
+    }
+  };
+
+  const canProceedToNext = () => {
+    switch (currentStep) {
+      case 1:
+        return formData.name.trim() && formData.description.trim();
+      case 2:
+        return formData.policy && formData.schedule;
+      case 3:
+        return formData.vmIds.length > 0;
+      default:
+        return false;
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden">
+        <DialogHeader>
+          <DialogTitle>Create Protection Group</DialogTitle>
+          <DialogDescription>
+            Set up a new protection group with backup policies and VM assignments.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center justify-center mb-6">
+          <div className="flex items-center space-x-4">
+            {[1, 2, 3].map((step) => (
+              <div key={step} className="flex items-center">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  step <= currentStep
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
+                }`}>
+                  {step}
+                </div>
+                {step < 3 && (
+                  <div className={`w-12 h-0.5 mx-2 ${
+                    step < currentStep ? 'bg-primary' : 'bg-muted'
+                  }`} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          {currentStep === 1 && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="group-name">Group Name</Label>
+                <Input
+                  id="group-name"
+                  placeholder="e.g., Production Web Servers"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="group-description">Description</Label>
+                <Textarea
+                  id="group-description"
+                  placeholder="Describe the purpose and scope of this protection group..."
+                  value={formData.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+
+          {currentStep === 2 && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="backup-policy">Backup Policy</Label>
+                <Select value={formData.policy} onValueChange={(value) => handleInputChange('policy', value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily Backup</SelectItem>
+                    <SelectItem value="weekly">Weekly Backup</SelectItem>
+                    <SelectItem value="monthly">Monthly Archive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="backup-schedule">Schedule</Label>
+                <Select value={formData.schedule} onValueChange={(value) => handleInputChange('schedule', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select backup schedule" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formData.policy === 'daily' && (
+                      <>
+                        <SelectItem value="daily-02:00">Daily at 02:00 AM</SelectItem>
+                        <SelectItem value="daily-22:00">Daily at 10:00 PM</SelectItem>
+                        <SelectItem value="every-6h">Every 6 hours</SelectItem>
+                        <SelectItem value="every-12h">Every 12 hours</SelectItem>
+                      </>
+                    )}
+                    {formData.policy === 'weekly' && (
+                      <>
+                        <SelectItem value="weekly-sunday-03:00">Weekly on Sunday at 03:00 AM</SelectItem>
+                        <SelectItem value="weekly-saturday-02:00">Weekly on Saturday at 02:00 AM</SelectItem>
+                      </>
+                    )}
+                    {formData.policy === 'monthly' && (
+                      <>
+                        <SelectItem value="monthly-1st-04:00">Monthly on 1st at 04:00 AM</SelectItem>
+                        <SelectItem value="monthly-15th-04:00">Monthly on 15th at 04:00 AM</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Policy Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm space-y-1">
+                    <div><strong>Policy:</strong> {formData.policy.charAt(0).toUpperCase() + formData.policy.slice(1)} Backup</div>
+                    <div><strong>Schedule:</strong> {formData.schedule.replace(/-/g, ' ').replace(/(\d{2}):(\d{2})/, '$1:$2')}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {currentStep === 3 && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-medium mb-4">Select Virtual Machines</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Choose which VMs to include in this protection group ({formData.vmIds.length} selected)
+                </p>
+
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  {mockVMs.map((vm) => (
+                    <div
+                      key={vm.id}
+                      className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50"
+                    >
+                      <Checkbox
+                        id={`vm-${vm.id}`}
+                        checked={formData.vmIds.includes(vm.id)}
+                        onCheckedChange={(checked) => handleVMSelection(vm.id, checked as boolean)}
+                      />
+                      <div className="flex items-center gap-3 flex-1">
+                        <Server className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{vm.name}</span>
+                            {getStatusBadge(vm.status)}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {vm.host} • {vm.os} • {vm.cpu} CPU • {vm.memory} GB RAM
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {selectedVMs.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Selected VMs ({selectedVMs.length})</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {selectedVMs.map((vm) => (
+                        <div key={vm.id} className="flex items-center gap-2 text-sm">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>{vm.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={currentStep === 1 ? onClose : handlePrevious}
+          >
+            {currentStep === 1 ? 'Cancel' : 'Previous'}
+          </Button>
+
+          {currentStep < 3 ? (
+            <Button
+              type="button"
+              onClick={handleNext}
+              disabled={!canProceedToNext()}
+            >
+              Next
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!canProceedToNext()}
+            >
+              Create Group
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
