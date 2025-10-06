@@ -55,6 +55,15 @@ interface VMContext {
   datacenter: string;
   power_state: 'poweredOn' | 'poweredOff' | 'suspended';
   last_discovered_at: string;
+  groups?: GroupMembership[]; // VMs can be in multiple groups
+  group_count?: number;
+}
+
+interface GroupMembership {
+  group_id: string;
+  group_name: string;
+  priority: number;
+  enabled: boolean;
 }
 
 export default function ProtectionGroupsPage() {
@@ -71,9 +80,9 @@ export default function ProtectionGroupsPage() {
   const [managingGroup, setManagingGroup] = useState<ProtectionGroup | null>(null);
   const [isDiscoveryModalOpen, setIsDiscoveryModalOpen] = useState(false);
 
-  // Ungrouped VMs state
-  const [ungroupedVMs, setUngroupedVMs] = useState<VMContext[]>([]);
-  const [isLoadingUngroupedVMs, setIsLoadingUngroupedVMs] = useState(false);
+  // All VMs state (not just ungrouped - VMs can be in multiple groups)
+  const [allVMs, setAllVMs] = useState<VMContext[]>([]);
+  const [isLoadingVMs, setIsLoadingVMs] = useState(false);
 
   const handleCreateGroup = () => {
     setIsCreateModalOpen(true);
@@ -126,20 +135,20 @@ export default function ProtectionGroupsPage() {
     setIsDiscoveryModalOpen(true);
   };
 
-  const fetchUngroupedVMs = async () => {
-    setIsLoadingUngroupedVMs(true);
+  const fetchAllVMs = async () => {
+    setIsLoadingVMs(true);
     try {
-      const response = await fetch('/api/v1/discovery/ungrouped-vms');
+      const response = await fetch('/api/v1/vm-contexts');
       if (response.ok) {
         const data = await response.json();
-        setUngroupedVMs(data.vms || []);
+        setAllVMs(data.vm_contexts || []);
       } else {
-        console.error('Failed to fetch ungrouped VMs:', response.statusText);
+        console.error('Failed to fetch VMs:', response.statusText);
       }
     } catch (error) {
-      console.error('Failed to fetch ungrouped VMs:', error);
+      console.error('Failed to fetch VMs:', error);
     } finally {
-      setIsLoadingUngroupedVMs(false);
+      setIsLoadingVMs(false);
     }
   };
 
@@ -147,7 +156,7 @@ export default function ProtectionGroupsPage() {
   useEffect(() => {
     fetchGroups();
     fetchSchedules();
-    fetchUngroupedVMs();
+    fetchAllVMs();
   }, []);
 
   const handleCreateGroupSubmit = (groupData: {
@@ -158,8 +167,9 @@ export default function ProtectionGroupsPage() {
     priority: number;
     vmIds: string[];
   }) => {
-    // Refresh groups after creation (API call happens in modal)
+    // Refresh groups and VMs after creation (API call happens in modal)
     fetchGroups();
+    fetchAllVMs();
     setIsCreateModalOpen(false);
   };
 
@@ -463,11 +473,11 @@ export default function ProtectionGroupsPage() {
           <div className="mt-8">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-semibold text-foreground mb-1">
+                              <h2 className="text-lg font-semibold text-foreground mb-1">
                   Virtual Machines
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  {isLoadingUngroupedVMs ? 'Loading...' : `${ungroupedVMs.length} ungrouped • ${groups.reduce((sum, g) => sum + g.total_vms, 0)} in groups`}
+                  {isLoadingVMs ? 'Loading...' : `${allVMs.length} total VMs • ${allVMs.filter(vm => !vm.groups || vm.groups.length === 0).length} ungrouped`}
                 </p>
               </div>
               <Button variant="outline" onClick={handleAddVMs} className="gap-2">
@@ -491,7 +501,7 @@ export default function ProtectionGroupsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {isLoadingUngroupedVMs ? (
+                    {isLoadingVMs ? (
                       // Loading rows
                       Array.from({ length: 3 }).map((_, i) => (
                         <tr key={i}>
@@ -504,7 +514,7 @@ export default function ProtectionGroupsPage() {
                         </tr>
                       ))
                     ) : (
-                      ungroupedVMs.map((vm) => (
+                      allVMs.map((vm) => (
                         <tr key={vm.context_id} className="border-b hover:bg-muted/50 transition-colors">
                           <td className="p-3">
                             <div className="flex items-center gap-2">
@@ -519,9 +529,24 @@ export default function ProtectionGroupsPage() {
                             </Badge>
                           </td>
                           <td className="p-3">
-                            <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-400/20">
-                              Ungrouped
-                            </Badge>
+                            {!vm.groups || vm.groups.length === 0 ? (
+                              <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-400/20">
+                                Ungrouped
+                              </Badge>
+                            ) : vm.groups.length === 1 ? (
+                              <Badge variant="outline" className="text-xs text-green-400 border-green-400/20">
+                                {vm.groups[0].group_name}
+                              </Badge>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <Badge variant="outline" className="text-xs text-green-400 border-green-400/20">
+                                  {vm.groups[0].group_name}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs text-blue-400 border-blue-400/20">
+                                  +{vm.groups.length - 1} more
+                                </Badge>
+                              </div>
+                            )}
                           </td>
                           <td className="p-3">
                             <Badge variant="secondary" className="text-xs">
@@ -563,7 +588,7 @@ export default function ProtectionGroupsPage() {
                                             if (response.ok) {
                                               console.log(`✅ Added VM to group ${group.name}`);
                                               fetchGroups();
-                                              fetchUngroupedVMs();
+                                              fetchAllVMs();
                                             } else {
                                               const error = await response.json();
                                               console.error('Failed to add VM to group:', error);
@@ -589,11 +614,11 @@ export default function ProtectionGroupsPage() {
                   </tbody>
                 </table>
 
-                {!isLoadingUngroupedVMs && ungroupedVMs.length === 0 && (
+                {!isLoadingVMs && allVMs.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <Server className="h-12 w-12 mb-2 opacity-50" />
-                    <p className="text-sm">No ungrouped VMs</p>
-                    <p className="text-xs">All discovered VMs are assigned to groups</p>
+                    <p className="text-sm">No VMs discovered</p>
+                    <p className="text-xs">Use "Add VMs" to discover VMs from vCenter</p>
                   </div>
                 )}
               </div>
@@ -614,6 +639,7 @@ export default function ProtectionGroupsPage() {
         onClose={() => setEditingGroup(null)}
         onUpdate={() => {
           fetchGroups();
+          fetchAllVMs();
           setEditingGroup(null);
         }}
         group={editingGroup}
@@ -624,7 +650,7 @@ export default function ProtectionGroupsPage() {
         onClose={() => setManagingGroup(null)}
         onUpdate={() => {
           fetchGroups();
-          fetchUngroupedVMs();
+          fetchAllVMs();
           setManagingGroup(null);
         }}
         group={managingGroup}
@@ -632,7 +658,7 @@ export default function ProtectionGroupsPage() {
       <VMDiscoveryModal
         isOpen={isDiscoveryModalOpen}
         onClose={() => setIsDiscoveryModalOpen(false)}
-        onDiscoveryComplete={fetchUngroupedVMs}
+        onDiscoveryComplete={fetchAllVMs}
       />
     </div>
   );

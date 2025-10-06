@@ -18,17 +18,19 @@ import (
 
 // VMContextHandler handles VM context API endpoints
 type VMContextHandler struct {
-	db            database.Connection
-	vmContextRepo *database.VMReplicationContextRepository
-	jobTracker    *joblog.Tracker
+	db             database.Connection
+	vmContextRepo  *database.VMReplicationContextRepository
+	schedulerRepo  *database.SchedulerRepository
+	jobTracker     *joblog.Tracker
 }
 
 // NewVMContextHandler creates a new VM context handler
 func NewVMContextHandler(db database.Connection, jobTracker *joblog.Tracker) *VMContextHandler {
 	return &VMContextHandler{
-		db:            db,
-		vmContextRepo: database.NewVMReplicationContextRepository(db),
-		jobTracker:    jobTracker,
+		db:             db,
+		vmContextRepo:  database.NewVMReplicationContextRepository(db),
+		schedulerRepo:  database.NewSchedulerRepository(db),
+		jobTracker:     jobTracker,
 	}
 }
 
@@ -102,8 +104,23 @@ func (h *VMContextHandler) GetVMContext(w http.ResponseWriter, r *http.Request) 
 
 // ListVMContexts retrieves all VM contexts with summary information
 // GET /api/v1/vm-contexts
+// VMContextWithGroups represents a VM context with its group memberships
+type VMContextWithGroups struct {
+	database.VMReplicationContext
+	Groups      []GroupMembershipInfo `json:"groups"`
+	GroupCount  int                   `json:"group_count"`
+}
+
+// GroupMembershipInfo represents a group membership for display
+type GroupMembershipInfo struct {
+	GroupID   string `json:"group_id"`
+	GroupName string `json:"group_name"`
+	Priority  int    `json:"priority"`
+	Enabled   bool   `json:"enabled"`
+}
+
 func (h *VMContextHandler) ListVMContexts(w http.ResponseWriter, r *http.Request) {
-	log.Info("Listing all VM contexts")
+	log.Info("Listing all VM contexts with group memberships")
 
 	contexts, err := h.vmContextRepo.ListVMContexts()
 	if err != nil {
@@ -112,12 +129,48 @@ func (h *VMContextHandler) ListVMContexts(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	response := map[string]interface{}{
-		"vm_contexts": contexts,
-		"count":       len(contexts),
+	// Enhance with group membership information
+	enhancedContexts := make([]VMContextWithGroups, 0, len(contexts))
+	for _, ctx := range contexts {
+		// Get group memberships for this VM
+		memberships, err := h.schedulerRepo.GetVMGroupMemberships(ctx.ContextID)
+		if err != nil {
+			log.WithError(err).WithField("context_id", ctx.ContextID).Warn("Failed to get group memberships for VM")
+			// Continue with empty groups rather than failing the whole request
+			memberships = []database.VMGroupMembership{}
+		}
+
+		// Build group info list
+		groupInfos := make([]GroupMembershipInfo, 0, len(memberships))
+		for _, membership := range memberships {
+			// Get group details to include name
+			group, err := h.schedulerRepo.GetGroupByID(membership.GroupID)
+			if err != nil {
+				log.WithError(err).WithField("group_id", membership.GroupID).Warn("Failed to get group details")
+				continue
+			}
+
+			groupInfos = append(groupInfos, GroupMembershipInfo{
+				GroupID:   membership.GroupID,
+				GroupName: group.Name,
+				Priority:  membership.Priority,
+				Enabled:   membership.Enabled,
+			})
+		}
+
+		enhancedContexts = append(enhancedContexts, VMContextWithGroups{
+			VMReplicationContext: ctx,
+			Groups:               groupInfos,
+			GroupCount:           len(groupInfos),
+		})
 	}
 
-	log.WithField("count", len(contexts)).Info("Successfully retrieved VM contexts")
+	response := map[string]interface{}{
+		"vm_contexts": enhancedContexts,
+		"count":       len(enhancedContexts),
+	}
+
+	log.WithField("count", len(enhancedContexts)).Info("Successfully retrieved VM contexts with groups")
 	h.writeJSONResponse(w, http.StatusOK, response)
 }
 
