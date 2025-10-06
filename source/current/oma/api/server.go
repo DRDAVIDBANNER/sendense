@@ -227,6 +227,7 @@ func (s *Server) setupRoutes() {
 		api.HandleFunc("/repositories", s.requireAuth(s.handlers.Repository.CreateRepository)).Methods("POST")
 		api.HandleFunc("/repositories", s.requireAuth(s.handlers.Repository.ListRepositories)).Methods("GET")
 		api.HandleFunc("/repositories/test", s.requireAuth(s.handlers.Repository.TestRepository)).Methods("POST")
+		api.HandleFunc("/repositories/refresh-storage", s.requireAuth(s.handlers.Repository.RefreshStorage)).Methods("POST")
 		api.HandleFunc("/repositories/{id}/storage", s.requireAuth(s.handlers.Repository.GetRepositoryStorage)).Methods("GET")
 		api.HandleFunc("/repositories/{id}", s.requireAuth(s.handlers.Repository.DeleteRepository)).Methods("DELETE")
 	}

@@ -390,7 +390,12 @@ func (h *RepositoryHandler) DeleteRepository(w http.ResponseWriter, r *http.Requ
 	repoID := vars["id"]
 
 	if repoID == "" {
-		http.Error(w, "Repository ID is required", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Repository ID is required",
+		})
 		return
 	}
 
@@ -401,11 +406,21 @@ func (h *RepositoryHandler) DeleteRepository(w http.ResponseWriter, r *http.Requ
 		
 		// Check if error is due to existing backups
 		if err.Error() == "cannot delete repository with existing backups" {
-			http.Error(w, "Cannot delete repository with existing backups", http.StatusConflict)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   "Cannot delete repository with existing backups",
+			})
 			return
 		}
 		
-		http.Error(w, fmt.Sprintf("Failed to delete repository: %v", err), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to delete repository: %v", err),
+		})
 		return
 	}
 
@@ -413,8 +428,64 @@ func (h *RepositoryHandler) DeleteRepository(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
 		"message": "Repository deleted successfully",
 		"id":      repoID,
+	})
+}
+
+// RefreshStorage handles POST /api/v1/repositories/refresh-storage
+// Refreshes storage info for all repositories
+func (h *RepositoryHandler) RefreshStorage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get all repositories
+	repos, err := h.repoManager.ListRepositories(ctx)
+	if err != nil {
+		log.WithError(err).Error("Failed to list repositories for refresh")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to list repositories: %v", err),
+		})
+		return
+	}
+
+	// Refresh storage info for each repository
+	refreshedCount := 0
+	failedCount := 0
+	for _, repoConfig := range repos {
+		repo, err := h.repoManager.GetRepository(ctx, repoConfig.ID)
+		if err != nil {
+			log.WithError(err).WithField("repo_id", repoConfig.ID).Warn("Failed to get repository for refresh")
+			failedCount++
+			continue
+		}
+
+		// GetStorageInfo automatically updates the database
+		_, err = repo.GetStorageInfo(ctx)
+		if err != nil {
+			log.WithError(err).WithField("repo_id", repoConfig.ID).Warn("Failed to refresh storage info")
+			failedCount++
+			continue
+		}
+
+		refreshedCount++
+	}
+
+	log.WithFields(log.Fields{
+		"refreshed": refreshedCount,
+		"failed":    failedCount,
+	}).Info("Storage refresh completed")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":         true,
+		"message":         fmt.Sprintf("Storage information refreshed for %d repositories", refreshedCount),
+		"refreshed_count": refreshedCount,
+		"failed_count":    failedCount,
 	})
 }
