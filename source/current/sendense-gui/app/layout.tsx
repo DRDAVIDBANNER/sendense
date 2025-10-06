@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { QueryProvider } from "@/components/common/QueryProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,8 +19,6 @@ export const metadata: Metadata = {
   description: "Enterprise-grade backup and replication management",
 };
 
-const queryClient = new QueryClient();
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,16 +29,14 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <QueryClientProvider client={queryClient}>
-          <ErrorBoundary>
-            <div className="flex h-screen">
-              <Sidebar />
-              <main className="flex-1 overflow-auto">
-                {children}
-              </main>
-            </div>
-          </ErrorBoundary>
-        </QueryClientProvider>
+        <QueryProvider>
+          <div className="flex h-screen">
+            <Sidebar />
+            <main className="flex-1 overflow-auto">
+              {children}
+            </main>
+          </div>
+        </QueryProvider>
       </body>
     </html>
   );
