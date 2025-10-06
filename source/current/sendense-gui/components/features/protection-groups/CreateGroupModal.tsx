@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Server, CheckCircle, Plus, Loader2 } from "lucide-react";
+import { Server, CheckCircle, Plus, Loader2, AlertCircle } from "lucide-react";
 import { CreateScheduleModal } from "./CreateScheduleModal";
 
 interface VMContext {
@@ -25,28 +25,44 @@ interface VMContext {
   last_discovered_at: string;
 }
 
+interface Schedule {
+  id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  cron_expression: string;
+  vm_group_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface CreateGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (groupData: {
     name: string;
     description: string;
-    policy: string;
     schedule: string;
+    maxConcurrentVMs: number;
+    priority: number;
     vmIds: string[];
   }) => void;
+  schedules: Schedule[];
 }
 
-export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModalProps) {
+export function CreateGroupModal({ isOpen, onClose, onCreate, schedules }: CreateGroupModalProps) {
   // State for available VMs loaded from API
   const [availableVMs, setAvailableVMs] = useState<VMContext[]>([]);
   const [isLoadingVMs, setIsLoadingVMs] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    policy: 'daily',
     schedule: '',
+    maxConcurrentVMs: 10,
+    priority: 50,
     vmIds: [] as string[]
   });
   const [isCreateScheduleModalOpen, setIsCreateScheduleModalOpen] = useState(false);
@@ -60,8 +76,8 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
       try {
         const response = await fetch('/api/v1/discovery/ungrouped-vms');
         if (response.ok) {
-          const vms = await response.json();
-          setAvailableVMs(vms);
+          const data = await response.json();
+          setAvailableVMs(data.vms || []); // Extract vms array from response
         } else {
           console.error('Failed to fetch ungrouped VMs:', response.statusText);
         }
@@ -100,18 +116,96 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
     }
   };
 
-  const handleSubmit = () => {
-    onCreate(formData);
-    // Reset form
+  const handleSubmit = async () => {
+    // Validate
+    if (!formData.name || !formData.schedule) {
+      setError('Name and schedule are required');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // ✅ Call backend API to create group
+      const response = await fetch('/api/v1/machine-groups', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          description: formData.description || null,
+          schedule_id: formData.schedule, // Schedule ID from dropdown
+          max_concurrent_vms: formData.maxConcurrentVMs || 10,
+          priority: formData.priority || 50,
+          created_by: 'gui-user',
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Group created:', result.id);
+
+        // If VMs selected, assign them to the group
+        if (formData.vmIds.length > 0) {
+          await assignVMsToGroup(result.id, formData.vmIds);
+        }
+
+        onCreate({
+          ...formData,
+          vmIds: formData.vmIds,
+        });
+        onClose();
+        resetForm();
+      } else {
+        const errorResult = await response.json();
+        setError(errorResult.error || 'Failed to create group');
+      }
+    } catch (err) {
+      setError('Failed to create group');
+      console.error('Error creating group:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Helper function to assign VMs to group
+  const assignVMsToGroup = async (groupId: string, vmIds: string[]) => {
+    try {
+      const response = await fetch(`/api/v1/machine-groups/${groupId}/vms`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          vm_context_ids: vmIds,
+          priority: 50,
+          enabled: true,
+        }),
+      });
+
+      if (response.ok) {
+        console.log(`✅ Assigned ${vmIds.length} VMs to group ${groupId}`);
+      } else {
+        console.error('Failed to assign VMs:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Failed to assign VMs:', error);
+    }
+  };
+
+  const resetForm = () => {
     setFormData({
       name: '',
       description: '',
-      policy: 'daily',
       schedule: '',
+      maxConcurrentVMs: 10,
+      priority: 50,
       vmIds: []
     });
     setCurrentStep(1);
-    onClose();
+    setError(null);
   };
 
   const selectedVMs = availableVMs.filter(vm => formData.vmIds.includes(vm.context_id));
@@ -151,7 +245,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
       case 1:
         return formData.name.trim() && formData.description.trim();
       case 2:
-        return formData.policy && formData.schedule;
+        return formData.schedule; // Schedule is required
       case 3:
         return formData.vmIds.length > 0;
       default:
@@ -168,6 +262,13 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
             Set up a new protection group with backup policies and VM assignments.
           </DialogDescription>
         </DialogHeader>
+
+        {error && (
+          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-destructive" />
+            <span className="text-sm text-destructive">{error}</span>
+          </div>
+        )}
 
         <div className="flex items-center justify-center mb-6">
           <div className="flex items-center space-x-4">
@@ -219,70 +320,59 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
           {currentStep === 2 && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="backup-policy">Backup Policy</Label>
-                <Select value={formData.policy} onValueChange={(value) => handleInputChange('policy', value)}>
+                <Label htmlFor="schedule">Schedule</Label>
+                <Select
+                  value={formData.schedule}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, schedule: value }))}
+                >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select schedule" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="daily">Daily Backup</SelectItem>
-                    <SelectItem value="weekly">Weekly Backup</SelectItem>
-                    <SelectItem value="monthly">Monthly Archive</SelectItem>
+                    {schedules.map((schedule) => (
+                      <SelectItem key={schedule.id} value={schedule.id}>
+                        {schedule.name} - {schedule.cron_expression}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="backup-schedule">Schedule</Label>
-                <Select value={formData.schedule} onValueChange={(value) => {
-                  if (value === 'create-new') {
-                    setIsCreateScheduleModalOpen(true);
-                  } else {
-                    handleInputChange('schedule', value);
-                  }
-                }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select backup schedule" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {formData.policy === 'daily' && (
-                      <>
-                        <SelectItem value="daily-02:00">Daily at 02:00 AM</SelectItem>
-                        <SelectItem value="daily-22:00">Daily at 10:00 PM</SelectItem>
-                        <SelectItem value="every-6h">Every 6 hours</SelectItem>
-                        <SelectItem value="every-12h">Every 12 hours</SelectItem>
-                      </>
-                    )}
-                    {formData.policy === 'weekly' && (
-                      <>
-                        <SelectItem value="weekly-sunday-03:00">Weekly on Sunday at 03:00 AM</SelectItem>
-                        <SelectItem value="weekly-saturday-02:00">Weekly on Saturday at 02:00 AM</SelectItem>
-                      </>
-                    )}
-                    {formData.policy === 'monthly' && (
-                      <>
-                        <SelectItem value="monthly-1st-04:00">Monthly on 1st at 04:00 AM</SelectItem>
-                        <SelectItem value="monthly-15th-04:00">Monthly on 15th at 04:00 AM</SelectItem>
-                      </>
-                    )}
-                    <SelectItem value="create-new" className="border-t mt-2 pt-2">
-                      <div className="flex items-center gap-2 text-primary">
-                        <Plus className="h-4 w-4" />
-                        Create New Schedule
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="maxConcurrentVMs">Max Concurrent VMs</Label>
+                  <Input
+                    id="maxConcurrentVMs"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={formData.maxConcurrentVMs}
+                    onChange={(e) => setFormData(prev => ({ ...prev, maxConcurrentVMs: parseInt(e.target.value) }))}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="priority">Priority</Label>
+                  <Input
+                    id="priority"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.priority}
+                    onChange={(e) => setFormData(prev => ({ ...prev, priority: parseInt(e.target.value) }))}
+                  />
+                </div>
               </div>
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">Policy Summary</CardTitle>
+                  <CardTitle className="text-sm">Group Configuration</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-sm space-y-1">
-                    <div><strong>Policy:</strong> {formData.policy.charAt(0).toUpperCase() + formData.policy.slice(1)} Backup</div>
-                    <div><strong>Schedule:</strong> {formData.schedule.replace(/-/g, ' ').replace(/(\d{2}):(\d{2})/, '$1:$2')}</div>
+                    <div><strong>Schedule:</strong> {schedules.find(s => s.id === formData.schedule)?.name || 'None selected'}</div>
+                    <div><strong>Max Concurrent VMs:</strong> {formData.maxConcurrentVMs}</div>
+                    <div><strong>Priority:</strong> {formData.priority}</div>
                   </div>
                 </CardContent>
               </Card>
@@ -390,8 +480,9 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
             <Button
               type="button"
               onClick={handleSubmit}
-              disabled={!canProceedToNext()}
+              disabled={!canProceedToNext() || isSubmitting}
             >
+              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Create Group
             </Button>
           )}

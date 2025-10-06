@@ -165,26 +165,29 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
     setError(null);
 
     try {
-      // Get VM names from IDs
+      // Get VM names from already-discovered VMs
       const selectedVMNames = selectedVMIds
         .map(id => discoveredVMs.find(vm => vm.id === id)?.name)
         .filter((name): name is string => !!name);
 
-      const response = await fetch('/api/v1/discovery/add-vms', {  // ✅ CORRECT ENDPOINT
+      // ✅ OPTIMIZED: Use discover-vms with create_context=true
+      // This creates contexts using already-discovered data (no re-query!)
+      const response = await fetch('/api/v1/discovery/discover-vms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          credential_id: selectedCredentialId, // ✅ Supported by this endpoint
-          vm_names: selectedVMNames,           // ✅ Correct field name
-          added_by: 'gui-user'                 // ✅ Track who added these VMs
+          credential_id: selectedCredentialId,
+          create_context: true,           // ✅ Create contexts
+          selected_vms: selectedVMNames,  // ✅ Only these VMs
         }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        console.log(`Successfully added ${result.vms_added || selectedVMNames.length} VMs to management`);
+        const addedCount = result.addition_result?.successfully_added || 0;
+        console.log(`✅ Successfully added ${addedCount} VMs to management`);
         onDiscoveryComplete();
         onClose();
         resetModal();
