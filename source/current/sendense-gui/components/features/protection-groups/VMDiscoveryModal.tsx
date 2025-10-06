@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -181,11 +181,15 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
   };
 
   // Handle modal open/close
-  const handleOpenChange = (open: boolean) => {
-    if (open) {
+  // Load credentials when modal opens
+  useEffect(() => {
+    if (isOpen) {
       resetModal();
       loadCredentials();
     }
+  }, [isOpen]);
+
+  const handleOpenChange = (open: boolean) => {
     if (!open) {
       onClose();
     }
