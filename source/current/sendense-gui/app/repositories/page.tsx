@@ -44,13 +44,13 @@ const transformRepository = (backendRepo: any): Repository => {
     type: backendRepo.type,
     status,
     capacity: {
-      total: bytesToGB(backendRepo.storage?.total_bytes || 0),
-      used: bytesToGB(backendRepo.storage?.used_bytes || 0),
-      available: bytesToGB(backendRepo.storage?.available_bytes || 0),
+      total: bytesToGB(backendRepo.storage_info?.total_bytes || 0),
+      used: bytesToGB(backendRepo.storage_info?.used_bytes || 0),
+      available: bytesToGB(backendRepo.storage_info?.available_bytes || 0),
       unit: 'GB'
     },
     description: backendRepo.config?.description || undefined,
-    lastTested: backendRepo.storage?.last_check_at || undefined,
+    lastTested: backendRepo.storage_info?.last_check_at || undefined,
     location: getLocation()
   };
 };
@@ -149,8 +149,14 @@ export default function RepositoriesPage() {
         throw new Error(data.error || 'Failed to create repository');
       }
 
+      // Close modal first for immediate feedback
+      setIsAddModalOpen(false);
+      
       // Reload repositories to get fresh data including the new one
       await loadRepositories();
+      
+      // Show success notification
+      alert(`Repository "${repositoryData.name}" created successfully!`);
     } catch (error) {
       console.error('Failed to create repository:', error);
       throw error;
