@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Repository GUI Storage Display and Modal UX** (October 6, 2025):
+  - Fixed storage_info field name mismatch in frontend (was checking `storage`, should be `storage_info`)
+  - Repository capacities now display correctly (491GB instead of 0GB)
+  - Modal now closes immediately after successful repository creation
+  - Added success alert notification after repository creation
+  - Improved user feedback for repository operations
+  
 - **Repository API JSON Error Handling** (October 6, 2025):
   - Fixed all repository API endpoints to return proper JSON error responses
   - Changed `http.Error()` plain text responses to `{ success: false, error: "message" }` format
