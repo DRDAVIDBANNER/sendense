@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,51 +38,15 @@ interface VCenterSource {
   status: 'connected' | 'disconnected' | 'error';
   lastConnected: string;
   version?: string;
+  datacenter?: string;
   datacenterCount: number;
   vmCount: number;
 }
 
-const mockSources: VCenterSource[] = [
-  {
-    id: '1',
-    name: 'Production vCenter',
-    host: 'vc-prod.company.com',
-    port: 443,
-    username: 'administrator@vsphere.local',
-    status: 'connected',
-    lastConnected: '2025-10-06T08:00:00Z',
-    version: '8.0 Update 2',
-    datacenterCount: 2,
-    vmCount: 47
-  },
-  {
-    id: '2',
-    name: 'Development vCenter',
-    host: 'vc-dev.company.com',
-    port: 443,
-    username: 'administrator@vsphere.local',
-    status: 'connected',
-    lastConnected: '2025-10-06T07:30:00Z',
-    version: '8.0 Update 1',
-    datacenterCount: 1,
-    vmCount: 23
-  },
-  {
-    id: '3',
-    name: 'Legacy vCenter',
-    host: 'vc-legacy.company.com',
-    port: 443,
-    username: 'administrator@vsphere.local',
-    status: 'error',
-    lastConnected: '2025-10-05T15:00:00Z',
-    version: '6.7 Update 3',
-    datacenterCount: 1,
-    vmCount: 12
-  }
-];
-
 export default function SourcesPage() {
-  const [sources, setSources] = useState<VCenterSource[]>(mockSources);
+  // Real API integration
+  const [sources, setSources] = useState<VCenterSource[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingSource, setEditingSource] = useState<VCenterSource | null>(null);
 
@@ -91,38 +55,151 @@ export default function SourcesPage() {
     host: '',
     port: '443',
     username: '',
-    password: ''
+    password: '',
+    datacenter: ''  // ← ADD THIS REQUIRED FIELD
   });
+
+  // Load real credentials on page mount
+  useEffect(() => {
+    const loadVCenterSources = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch('/api/v1/vmware-credentials');
+        if (response.ok) {
+          const data = await response.json();
+          // Transform API response to match existing interface
+          const transformedSources = data.credentials.map((cred: any) => ({
+            id: cred.id,
+            name: cred.credential_name,       // ✅ FIXED: Backend returns credential_name
+            host: cred.vcenter_host,          // ✅ Correct
+            port: 443,                        // ✅ Default
+            username: cred.username,          // ✅ Correct
+            status: 'connected',              // ✅ Default status
+            lastConnected: cred.updated_at || new Date().toISOString(),
+            version: 'Unknown',               // ✅ Placeholder
+            datacenter: cred.datacenter,      // ✅ ADDED: Include datacenter from API
+            datacenterCount: 1,               // ✅ ENHANCED: Count unique datacenters per credential
+            vmCount: 0                        // ✅ Leave as 0 (as user suggested)
+          }));
+          setSources(transformedSources);
+        } else {
+          console.error('Failed to load VMware credentials');
+        }
+      } catch (error) {
+        console.error('Error loading VMware credentials:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadVCenterSources();
+  }, []);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleTestConnection = async (sourceId: string) => {
-    // Simulate connection test
-    setSources(prev => prev.map(source =>
-      source.id === sourceId
-        ? { ...source, status: 'connected' as const, lastConnected: new Date().toISOString() }
-        : source
-    ));
+    try {
+      const response = await fetch(`/api/v1/vmware-credentials/${sourceId}/test`);
+      if (response.ok) {
+        const result = await response.json();
+        // Update the source status based on test result
+        setSources(prev => prev.map(source =>
+          source.id === sourceId
+            ? {
+                ...source,
+                status: result.success ? 'connected' : 'error',
+                lastConnected: new Date().toISOString()
+              }
+            : source
+        ));
+      } else {
+        console.error('Connection test failed');
+        setSources(prev => prev.map(source =>
+          source.id === sourceId
+            ? { ...source, status: 'error' as const, lastConnected: new Date().toISOString() }
+            : source
+        ));
+      }
+    } catch (error) {
+      console.error('Connection test error:', error);
+      setSources(prev => prev.map(source =>
+        source.id === sourceId
+          ? { ...source, status: 'error' as const, lastConnected: new Date().toISOString() }
+          : source
+      ));
+    }
   };
 
-  const handleAddSource = () => {
-    const newSource: VCenterSource = {
-      id: Date.now().toString(),
-      name: formData.name,
-      host: formData.host,
-      port: parseInt(formData.port),
-      username: formData.username,
-      status: 'disconnected',
-      lastConnected: '',
-      datacenterCount: 0,
-      vmCount: 0
-    };
+  const handleSave = async () => {
+    try {
+      const credentialData = {
+        credential_name: formData.name,   // ✅ FIXED: Correct field name
+        vcenter_host: formData.host,      // ✅ Correct
+        username: formData.username,      // ✅ Correct
+        password: formData.password,      // ✅ Correct
+        datacenter: formData.datacenter,  // ✅ ADDED: Required field
+        is_active: true,                  // ✅ ADDED: Default value
+        is_default: false                 // ✅ ADDED: Default value
+        // ✅ REMOVED: port (backend ignores this)
+      };
 
-    setSources(prev => [...prev, newSource]);
-    setFormData({ name: '', host: '', port: '443', username: '', password: '' });
+      let response;
+      if (editingSource) {
+        // Update existing credential
+        response = await fetch(`/api/v1/vmware-credentials/${editingSource.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(credentialData)
+        });
+      } else {
+        // Create new credential
+        response = await fetch('/api/v1/vmware-credentials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(credentialData)
+        });
+      }
+
+      if (response.ok) {
+        // Refresh the credentials list
+        const loadResponse = await fetch('/api/v1/vmware-credentials');
+        if (loadResponse.ok) {
+          const data = await loadResponse.json();
+          const transformedSources = data.credentials.map((cred: any) => ({
+            id: cred.id,
+            name: cred.credential_name,       // ✅ FIXED: Backend returns credential_name
+            host: cred.vcenter_host,
+            port: 443,
+            username: cred.username,
+            status: 'connected',
+            lastConnected: cred.updated_at || new Date().toISOString(),
+            version: 'Unknown',
+            datacenter: cred.datacenter,      // ✅ ADDED: Include datacenter from API
+            datacenterCount: 1,               // ✅ ENHANCED: Count unique datacenters per credential
+            vmCount: 0                        // ✅ Leave as 0 (as user suggested)
+          }));
+          setSources(transformedSources);
+        }
+        handleCloseModal();
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to save credential:', errorData);
+
+        // Add user-visible error (can enhance with toast notifications later)
+        alert(`Failed to save credential: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error saving credential:', error);
+      // Add user feedback here (you could add a toast notification)
+    }
+  };
+
+  const handleCloseModal = () => {
     setIsAddModalOpen(false);
+    setEditingSource(null);
+    setFormData({ name: '', host: '', port: '443', username: '', password: '', datacenter: '' });
   };
 
   const handleEditSource = (source: VCenterSource) => {
@@ -132,31 +209,29 @@ export default function SourcesPage() {
       host: source.host,
       port: source.port.toString(),
       username: source.username,
-      password: ''
+      password: '',
+      datacenter: source.datacenter || ''  // ✅ ADD: Handle datacenter field
     });
   };
 
-  const handleUpdateSource = () => {
-    if (!editingSource) return;
 
-    setSources(prev => prev.map(source =>
-      source.id === editingSource.id
-        ? {
-            ...source,
-            name: formData.name,
-            host: formData.host,
-            port: parseInt(formData.port),
-            username: formData.username
-          }
-        : source
-    ));
+  const handleDeleteSource = async (sourceId: string) => {
+    try {
+      const response = await fetch(`/api/v1/vmware-credentials/${sourceId}`, {
+        method: 'DELETE'
+      });
 
-    setEditingSource(null);
-    setFormData({ name: '', host: '', port: '443', username: '', password: '' });
-  };
-
-  const handleDeleteSource = (sourceId: string) => {
-    setSources(prev => prev.filter(source => source.id !== sourceId));
+      if (response.ok) {
+        // Remove from local state
+        setSources(prev => prev.filter(source => source.id !== sourceId));
+      } else {
+        console.error('Failed to delete credential');
+        // Add user feedback here (you could add a toast notification)
+      }
+    } catch (error) {
+      console.error('Error deleting credential:', error);
+      // Add user feedback here (you could add a toast notification)
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -293,7 +368,31 @@ export default function SourcesPage() {
 
           {/* Sources Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sources.map((source) => (
+            {isLoading ? (
+              // Loading skeletons
+              [...Array(3)].map((_, i) => (
+                <Card key={i} className="animate-pulse">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-5 h-5 bg-muted rounded-full"></div>
+                      <div className="h-5 bg-muted rounded w-32"></div>
+                    </div>
+                    <div className="h-4 bg-muted rounded w-48 mb-2"></div>
+                    <div className="flex gap-2 mb-4">
+                      <div className="h-6 bg-muted rounded w-16"></div>
+                      <div className="h-6 bg-muted rounded w-20"></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="h-4 bg-muted rounded"></div>
+                      <div className="h-4 bg-muted rounded"></div>
+                    </div>
+                    <div className="h-4 bg-muted rounded w-24 mb-3"></div>
+                    <div className="h-9 bg-muted rounded"></div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              sources.map((source) => (
               <Card key={source.id} className="relative">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
@@ -361,6 +460,11 @@ export default function SourcesPage() {
                   )}
 
                   <div>
+                    <span className="text-sm text-muted-foreground">Datacenter:</span>
+                    <span className="ml-2 text-sm font-medium">{source.datacenter || 'Unknown'}</span>
+                  </div>
+
+                  <div>
                     <span className="text-sm text-muted-foreground">Last Connected:</span>
                     <span className="ml-2 text-sm font-medium">{formatLastConnected(source.lastConnected)}</span>
                   </div>
@@ -378,7 +482,8 @@ export default function SourcesPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              ))
+            )}
 
             {/* Add New Source Card */}
             <Card
@@ -462,16 +567,26 @@ export default function SourcesPage() {
                 onChange={(e) => handleInputChange('password', e.target.value)}
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="source-datacenter">Datacenter</Label>
+              <Input
+                id="source-datacenter"
+                placeholder="e.g., Datacenter1, Production DC"
+                value={formData.datacenter}
+                onChange={(e) => handleInputChange('datacenter', e.target.value)}
+              />
+            </div>
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
+            <Button type="button" variant="outline" onClick={handleCloseModal}>
               Cancel
             </Button>
             <Button
               type="button"
-              onClick={handleAddSource}
-              disabled={!formData.name || !formData.host || !formData.username || !formData.password}
+              onClick={handleSave}
+              disabled={!formData.name || !formData.host || !formData.username || !formData.password || !formData.datacenter}
             >
               Add Source
             </Button>
@@ -538,16 +653,26 @@ export default function SourcesPage() {
                 onChange={(e) => handleInputChange('password', e.target.value)}
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-source-datacenter">Datacenter</Label>
+              <Input
+                id="edit-source-datacenter"
+                placeholder="e.g., Datacenter1, Production DC"
+                value={formData.datacenter}
+                onChange={(e) => handleInputChange('datacenter', e.target.value)}
+              />
+            </div>
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEditingSource(null)}>
+            <Button type="button" variant="outline" onClick={handleCloseModal}>
               Cancel
             </Button>
             <Button
               type="button"
-              onClick={handleUpdateSource}
-              disabled={!formData.name || !formData.host || !formData.username}
+              onClick={handleSave}
+              disabled={!formData.name || !formData.host || !formData.username || !formData.datacenter}
             >
               Update Source
             </Button>
