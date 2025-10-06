@@ -70,8 +70,8 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
     try {
       const response = await fetch('/api/v1/vmware-credentials');
       if (response.ok) {
-        const creds = await response.json();
-        setCredentials(creds);
+        const data = await response.json();
+        setCredentials(data.credentials || []);
       } else {
         setError('Failed to load VMware credentials');
       }
@@ -91,7 +91,9 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
     setConnectionTestResult(null);
 
     try {
-      const response = await fetch(`/api/v1/vmware-credentials/${selectedCredentialId}/test`);
+      const response = await fetch(`/api/v1/vmware-credentials/${selectedCredentialId}/test`, {
+        method: 'POST'
+      });
       const result = await response.json();
 
       setConnectionTestResult({
