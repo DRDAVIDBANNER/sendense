@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Repository Management GUI Integration Job Sheet** (October 6, 2025):
+  - Comprehensive Grok prompt for wiring up Repositories page to backend API
+  - Complete data transformation guide (bytes→GB, enabled→status mappings)
+  - 7 detailed implementation tasks for repository CRUD operations
+  - Test connection integration with `/api/v1/repositories/test` endpoint
+  - Safety checks for repository deletion (blocks if backups exist)
+  - UI/UX enhancements: loading skeletons, error states, success toasts
+  - 30+ test scenarios covering all repository operations
+  - Location extraction logic for all repository types (Local/NFS/CIFS/S3/Azure)
+  - Config building helpers to transform GUI form data to backend structure
 - **Multi-Group VM Membership Support** (Protection Groups - October 6, 2025):
   - VMs can now belong to multiple protection groups simultaneously
   - Enhanced `/api/v1/vm-contexts` endpoint to include group membership arrays
