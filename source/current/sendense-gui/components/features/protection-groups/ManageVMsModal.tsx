@@ -101,25 +101,46 @@ export function ManageVMsModal({ isOpen, onClose, onUpdate, group }: ManageVMsMo
 
     setIsAssigning(true);
     try {
-      const response = await fetch(`/api/v1/machine-groups/${group.id}/vms`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          vm_context_ids: selectedVMIds,
-          priority: 50,
-          enabled: true,
-        }),
-      });
+      // Loop through each VM and assign individually (no bulk endpoint exists)
+      let successCount = 0;
+      let failCount = 0;
 
-      if (response.ok) {
-        console.log(`✅ Assigned ${selectedVMIds.length} VMs to group`);
-        setSelectedVMIds([]);
-        fetchAssignedVMs();
-        fetchAvailableVMs();
-        onUpdate();
+      for (const vmContextId of selectedVMIds) {
+        try {
+          const response = await fetch(`/api/v1/machine-groups/${group.id}/vms`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              vm_context_id: vmContextId, // Singular, not array
+              priority: 50,
+              enabled: true,
+            }),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            failCount++;
+            const error = await response.json();
+            console.error(`Failed to assign VM ${vmContextId}:`, error);
+          }
+        } catch (error) {
+          failCount++;
+          console.error(`Error assigning VM ${vmContextId}:`, error);
+        }
       }
+
+      console.log(`✅ Assigned ${successCount}/${selectedVMIds.length} VMs to group`);
+      if (failCount > 0) {
+        alert(`${failCount} VM(s) failed to assign. Check console for details.`);
+      }
+
+      setSelectedVMIds([]);
+      fetchAssignedVMs();
+      fetchAvailableVMs();
+      onUpdate();
     } catch (error) {
       console.error('Failed to assign VMs:', error);
     } finally {

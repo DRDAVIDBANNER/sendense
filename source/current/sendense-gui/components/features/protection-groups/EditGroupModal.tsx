@@ -64,7 +64,7 @@ export function EditGroupModal({ isOpen, onClose, onUpdate, group, schedules }: 
       setFormData({
         name: group.name,
         description: group.description || '',
-        schedule_id: group.schedule_id || '',
+        schedule_id: group.schedule_id || 'none', // Use 'none' instead of empty string
         max_concurrent_vms: group.max_concurrent_vms,
         priority: group.priority,
       });
@@ -91,7 +91,7 @@ export function EditGroupModal({ isOpen, onClose, onUpdate, group, schedules }: 
         body: JSON.stringify({
           name: formData.name,
           description: formData.description || null,
-          schedule_id: formData.schedule_id || null,
+          schedule_id: formData.schedule_id === 'none' ? null : formData.schedule_id || null,
           max_concurrent_vms: formData.max_concurrent_vms,
           priority: formData.priority,
         }),
@@ -162,7 +162,7 @@ export function EditGroupModal({ isOpen, onClose, onUpdate, group, schedules }: 
                 <SelectValue placeholder="Select schedule (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No schedule</SelectItem>
+                <SelectItem value="none">No schedule (manual backups)</SelectItem>
                 {schedules.map((schedule) => (
                   <SelectItem key={schedule.id} value={schedule.id}>
                     {schedule.name} - {schedule.cron_expression}
