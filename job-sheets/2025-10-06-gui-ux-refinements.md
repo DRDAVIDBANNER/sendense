@@ -3,8 +3,8 @@
 **Date Created:** 2025-10-06  
 **Status:** 🔴 **READY TO START**  
 **Project Goal Link:** [Phase 3 GUI Redesign - Post-completion refinements]  
-**Duration:** 2-3 days  
-**Priority:** High (Enterprise credibility and user workflow completion)
+**Duration:** 4-5 days (expanded scope with appliance management)  
+**Priority:** High (Enterprise credibility and appliance fleet management)
 
 ---
 
@@ -216,7 +216,132 @@ interface ProtectionGroupFormProps {
 />
 ```
 
-### **Task 4: Integration & Testing (Day 3)**
+### **Task 4: Appliances Management (Day 3-4)**
+
+**NEW REQUIREMENT:** Appliance fleet management for enterprise deployments
+
+**Issue:** Missing appliance management interface for distributed deployment model
+
+**Sub-Tasks:**
+
+- [ ] **Add Appliances Navigation Item**
+  - **File:** `components/layout/Sidebar.tsx`
+  - **Position:** Between "Protection Groups" and "Report Center"
+  - **Icon:** Server or HardDrive icon (consistent with Lucide theme)
+  - **Evidence:** 8th navigation item accessible and functional
+
+- [ ] **Create Appliances Management Page**
+  - **File:** `app/appliances/page.tsx`
+  - **Layout:** Table view with appliance cards/rows
+  - **Features:** Appliance approval, naming, health monitoring
+  - **Evidence:** Complete appliance management interface
+
+- [ ] **Appliance Types Support**
+  - **SNA (Sendense Node Appliances):** Source-side capture agents
+  - **SHA (Sendense Hub Appliances):** On-prem orchestration (MSP Control Appliances only)
+  - **Type Detection:** Automatic appliance type identification
+  - **Evidence:** Different appliance types displayed appropriately
+
+- [ ] **Appliance Approval Workflow**
+  - **Features:** Pending approval queue, approve/reject actions
+  - **Security:** Verification of appliance certificates/credentials
+  - **Naming:** Logical appliance naming (site-based or functional)
+  - **Evidence:** Appliances can be approved and named systematically
+
+- [ ] **Site-Based Grouping**
+  - **Feature:** Group appliances by physical or logical sites
+  - **Site Creation:** Create/edit sites within appliances section
+  - **Site Management:** Assign appliances to sites, site health overview
+  - **Evidence:** Appliances organized by site with proper grouping
+
+- [ ] **Health & Performance Monitoring**
+  - **Metrics:** Appliance connectivity, throughput, system health
+  - **Status Indicators:** Online/offline, healthy/degraded/critical
+  - **Performance Charts:** Throughput graphs per appliance
+  - **Evidence:** Real-time appliance health monitoring
+
+**Component Structure:**
+```typescript
+// Main appliances management interface
+interface ApplianceManagerProps {
+  appliances: Appliance[];
+  sites: Site[];
+  onApproveAppliance: (id: string) => void;
+  onCreateSite: (site: SiteRequest) => void;
+}
+
+interface Appliance {
+  id: string;
+  name: string;
+  type: 'SNA' | 'SHA';
+  status: 'pending' | 'approved' | 'online' | 'offline' | 'degraded';
+  site_id: string;
+  last_seen: string;
+  performance: ApplianceMetrics;
+}
+
+interface Site {
+  id: string;
+  name: string;
+  description: string;
+  appliance_count: number;
+  status: 'healthy' | 'degraded' | 'offline';
+}
+```
+
+### **Task 5: Dashboard Integration (Day 4)**
+
+**Integration Requirement:** Dashboard needs appliance status display
+
+**Sub-Tasks:**
+
+- [ ] **Add Appliance Status Cards to Dashboard**
+  - **File:** `app/dashboard/page.tsx`
+  - **Cards:** Total Appliances, Online Count, Site Status, Performance Average
+  - **Design:** Consistent with existing health cards
+  - **Evidence:** Appliance metrics visible on main dashboard
+
+- [ ] **Appliance Health Overview Widget**
+  - **Component:** ApplIance health summary with site breakdown
+  - **Features:** Site-by-site appliance status, quick drill-down
+  - **Integration:** Links to full Appliances management page
+  - **Evidence:** Dashboard shows appliance fleet health at a glance
+
+### **Task 6: Protection Groups Integration (Day 4-5)**
+
+**Integration Requirement:** Protection Groups need appliance selection for VM discovery
+
+**Sub-Tasks:**
+
+- [ ] **Add Appliance Selection to Protection Groups**
+  - **File:** Protection Groups creation modal
+  - **Feature:** Appliance/Site selector for VM discovery scope
+  - **Logic:** Selected appliance determines which VMs are discovered
+  - **Evidence:** Protection Groups can be scoped to specific appliances/sites
+
+- [ ] **Site-Based VM Discovery**
+  - **Concept:** VMs discovered based on selected appliance's site
+  - **Integration:** Connect appliance selection to VM discovery APIs
+  - **User Flow:** Select Appliance → Discover VMs → Create Protection Group
+  - **Evidence:** VM discovery scoped to appliance/site selection
+
+**Enhanced Protection Group Form:**
+```typescript
+interface CreateProtectionGroupProps {
+  appliances: Appliance[];
+  sites: Site[];
+  onSelectAppliance: (applianceId: string) => void;
+}
+
+// Protection Group creation workflow:
+// 1. Select Site/Appliance for VM discovery
+// 2. Discover VMs from selected appliance
+// 3. Select VMs for protection
+// 4. Configure schedule (with inline creation)
+// 5. Create protection group
+```
+
+### **Task 7: Integration & Testing (Day 5)**
 
 - [ ] **Cross-Browser Testing**
   - **Browsers:** Chrome, Firefox, Safari, Edge
