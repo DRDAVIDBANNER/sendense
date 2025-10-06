@@ -32,10 +32,16 @@ func (vcs *VMwareCredentialService) GetCredentials(ctx context.Context, credenti
 		return nil, fmt.Errorf("failed to get VMware credentials: %w", err)
 	}
 
-	// Decrypt password
-	password, err := vcs.encryptionService.DecryptPassword(credential.PasswordEncrypted)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt password: %w", err)
+	// Decrypt password (handle nil encryption service)
+	var password string
+	if vcs.encryptionService != nil {
+		password, err = vcs.encryptionService.DecryptPassword(credential.PasswordEncrypted)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt password: %w", err)
+		}
+	} else {
+		// Development mode: password stored as plaintext
+		password = credential.PasswordEncrypted
 	}
 
 	// Update last used timestamp
@@ -79,10 +85,19 @@ func (vcs *VMwareCredentialService) GetDefaultCredentials(ctx context.Context) (
 
 // CreateCredentials stores new encrypted credential set
 func (vcs *VMwareCredentialService) CreateCredentials(ctx context.Context, creds *database.VMwareCredentials) (*database.VMwareCredential, error) {
-	// Encrypt password
-	encryptedPassword, err := vcs.encryptionService.EncryptPassword(creds.Password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt password: %w", err)
+	var encryptedPassword string
+	var err error
+	
+	// Handle encryption gracefully (development mode support)
+	if vcs.encryptionService != nil {
+		encryptedPassword, err = vcs.encryptionService.EncryptPassword(creds.Password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encrypt password: %w", err)
+		}
+	} else {
+		// Development mode: store plaintext with warning
+		encryptedPassword = creds.Password
+		log.Warn("⚠️ Storing password in plaintext (encryption service unavailable)")
 	}
 
 	// If this is set as default, unset other defaults

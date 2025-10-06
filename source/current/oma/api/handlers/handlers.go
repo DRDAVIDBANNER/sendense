@@ -140,6 +140,10 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 
 	// 🆕 NEW: Initialize VMware credentials management services
 	// Note: encryptionService already initialized earlier for OSSEA config repository
+	// Handle nil encryptionService gracefully
+	if encryptionService == nil {
+		log.Warn("⚠️ VMware credential service running without encryption (development mode)")
+	}
 	vmwareCredentialService := services.NewVMwareCredentialService(&db, encryptionService)
 
 	// 🆕 NEW: Initialize VMA enrollment services (commented out for simple version)
