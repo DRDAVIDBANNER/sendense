@@ -1,9 +1,10 @@
 # Current Active Work - Sendense Project
 
-**Last Updated:** 2025-10-05  
-**Current Phase:** Phase 1 - VMware Backups (Week 4-5)  
-**Active Job Sheets:** 1 (Task 5 ready to start)  
-**PROJECT OVERSEER:** Active - ensuring governance compliance
+**Last Updated:** 2025-10-06  
+**Current Phase:** Phase 1 - VMware Backups + GUI Integration (Week 5-6)  
+**Active Job Sheets:** 1 (VMware backup GUI integration)  
+**PROJECT OVERSEER:** Active - ensuring governance compliance  
+**CRITICAL BLOCKER:** Preprod GUI deployment/cache issues preventing discovery workflow
 
 ---
 
@@ -107,9 +108,29 @@ Task 1 Total: [██████▱▱▱▱] 67% (~10-12 days total)
 
 ---
 
+## 🚨 ACTIVE JOB (October 6, 2025)
+
+### **VMware Backup GUI Integration** 🔴 IN PROGRESS
+**File:** `job-sheets/2025-10-06-vmware-backup-gui-integration.md`  
+**Status:** 🟡 95% Complete - Final deployment debugging  
+**Priority:** CRITICAL  
+**Blocker:** Preprod GUI not showing discovered VMs despite backend working
+
+**Progress:**
+- [x] GROK implementation: Protection Groups + Add VMs button, VMDiscoveryModal, real API integration ✅
+- [x] Systematic investigation: Frontend-backend schema mismatch identified and fixed ✅
+- [x] Source code fixes: API parsing, data types, useEffect hooks, POST methods ✅
+- [x] Preprod deployment: GUI service running on 10.245.246.136:3001 ✅
+- [ ] **BLOCKER**: VMDiscoveryModal not discovering VMs in browser (curl works) ❌
+
+**Issue:** Backend returns 98 VMs successfully, but browser shows "No VMs found"  
+**Next Session:** Verify deployed code has latest fixes, debug deployment/cache issues
+
+---
+
 ## 🚨 BLOCKERS & ISSUES
 
-**Current Status:** Major milestones complete - Phase 1 (71%), Phase 3 GUI (100%)
+**Current Status:** Phase 1 (71%), Phase 3 GUI (100%), GUI Integration (95%)
 
 **Success Status:**
 - ✅ **Phase 1 Backup Infrastructure:** Tasks 1-5 complete, full backup platform operational
