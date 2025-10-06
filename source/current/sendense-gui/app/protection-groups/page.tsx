@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Users, Calendar, Settings, MoreHorizontal } from "lucide-react";
+import { Plus, Users, Calendar, Settings, MoreHorizontal, Server } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
-import { CreateGroupModal } from "@/components/features/protection-groups";
+import { CreateGroupModal, VMDiscoveryModal } from "@/components/features/protection-groups";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,17 @@ interface ProtectionGroup {
   lastRun: string;
   status: 'active' | 'inactive' | 'error';
   policy: 'daily' | 'weekly' | 'monthly';
+}
+
+interface VMContext {
+  context_id: string;
+  vm_name: string;
+  vmware_vm_id: string;
+  vcenter_host: string;
+  current_status: 'discovered' | 'replicating' | 'ready_for_failover';
+  datacenter: string;
+  power_state: 'poweredOn' | 'poweredOff' | 'suspended';
+  last_discovered_at: string;
 }
 
 const mockGroups: ProtectionGroup[] = [
@@ -81,10 +92,41 @@ export default function ProtectionGroupsPage() {
 
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isDiscoveryModalOpen, setIsDiscoveryModalOpen] = useState(false);
+
+  // Ungrouped VMs state
+  const [ungroupedVMs, setUngroupedVMs] = useState<VMContext[]>([]);
+  const [isLoadingUngroupedVMs, setIsLoadingUngroupedVMs] = useState(false);
 
   const handleCreateGroup = () => {
     setIsCreateModalOpen(true);
   };
+
+  const handleAddVMs = () => {
+    setIsDiscoveryModalOpen(true);
+  };
+
+  const fetchUngroupedVMs = async () => {
+    setIsLoadingUngroupedVMs(true);
+    try {
+      const response = await fetch('/api/v1/discovery/ungrouped-vms');
+      if (response.ok) {
+        const vms = await response.json();
+        setUngroupedVMs(vms);
+      } else {
+        console.error('Failed to fetch ungrouped VMs:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Failed to fetch ungrouped VMs:', error);
+    } finally {
+      setIsLoadingUngroupedVMs(false);
+    }
+  };
+
+  // Fetch ungrouped VMs on component mount
+  useEffect(() => {
+    fetchUngroupedVMs();
+  }, []);
 
   const handleCreateGroupSubmit = (groupData: {
     name: string;
@@ -172,10 +214,16 @@ export default function ProtectionGroupsPage() {
           { label: "Protection Groups" }
         ]}
         actions={
-          <Button onClick={handleCreateGroup} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Group
-          </Button>
+          <div className="flex gap-3">
+            <Button onClick={handleAddVMs} variant="outline" className="gap-2">
+              <Server className="h-4 w-4" />
+              Add VMs
+            </Button>
+            <Button onClick={handleCreateGroup} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Create Group
+            </Button>
+          </div>
         }
       />
 
@@ -352,6 +400,90 @@ export default function ProtectionGroupsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Ungrouped VMs Section */}
+          {(ungroupedVMs.length > 0 || isLoadingUngroupedVMs) && (
+            <div className="mt-8">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-foreground mb-2">
+                  Discovered Virtual Machines
+                </h2>
+                <p className="text-muted-foreground">
+                  VMs discovered from vCenter that are not yet assigned to protection groups
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {isLoadingUngroupedVMs ? (
+                  // Loading skeletons
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <Card key={i} className="p-4">
+                      <div className="space-y-3">
+                        <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+                        <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
+                        <div className="flex gap-2">
+                          <div className="h-6 bg-muted rounded animate-pulse w-16" />
+                          <div className="h-6 bg-muted rounded animate-pulse w-20" />
+                        </div>
+                      </div>
+                    </Card>
+                  ))
+                ) : (
+                  ungroupedVMs.map((vm) => (
+                    <Card key={vm.context_id} className="p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h3 className="font-medium text-sm mb-1">{vm.vm_name}</h3>
+                          <p className="text-xs text-muted-foreground">{vm.datacenter}</p>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs ${
+                            vm.power_state === 'poweredOn'
+                              ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                              : vm.power_state === 'poweredOff'
+                              ? 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+                              : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                          }`}
+                        >
+                          {vm.power_state}
+                        </Badge>
+                      </div>
+
+                      <div className="text-xs text-muted-foreground mb-3">
+                        vCenter: {vm.vcenter_host}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 text-xs"
+                          onClick={() => {
+                            // TODO: Open group selection modal for this VM
+                            console.log('Add to group:', vm.context_id);
+                          }}
+                        >
+                          Add to Group
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 text-xs"
+                          onClick={() => {
+                            // TODO: Navigate to create flow with this VM
+                            console.log('Create flow:', vm.context_id);
+                          }}
+                        >
+                          Create Flow
+                        </Button>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -360,6 +492,11 @@ export default function ProtectionGroupsPage() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateGroupSubmit}
+      />
+      <VMDiscoveryModal
+        isOpen={isDiscoveryModalOpen}
+        onClose={() => setIsDiscoveryModalOpen(false)}
+        onDiscoveryComplete={fetchUngroupedVMs}
       />
     </div>
   );

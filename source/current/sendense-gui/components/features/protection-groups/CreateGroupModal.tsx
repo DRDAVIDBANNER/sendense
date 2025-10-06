@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,17 +11,18 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Server, CheckCircle, Plus } from "lucide-react";
+import { Server, CheckCircle, Plus, Loader2 } from "lucide-react";
 import { CreateScheduleModal } from "./CreateScheduleModal";
 
-interface VM {
-  id: string;
-  name: string;
-  status: 'running' | 'stopped' | 'suspended';
-  host: string;
-  os: string;
-  cpu: number;
-  memory: number;
+interface VMContext {
+  context_id: string;
+  vm_name: string;
+  vmware_vm_id: string;
+  vcenter_host: string;
+  current_status: 'discovered' | 'replicating' | 'ready_for_failover';
+  datacenter: string;
+  power_state: 'poweredOn' | 'poweredOff' | 'suspended';
+  last_discovered_at: string;
 }
 
 interface CreateGroupModalProps {
@@ -36,16 +37,10 @@ interface CreateGroupModalProps {
   }) => void;
 }
 
-const mockVMs: VM[] = [
-  { id: '1', name: 'web-server-01', status: 'running', host: 'esxi-01', os: 'Ubuntu 22.04', cpu: 2, memory: 4 },
-  { id: '2', name: 'web-server-02', status: 'running', host: 'esxi-01', os: 'Ubuntu 22.04', cpu: 2, memory: 4 },
-  { id: '3', name: 'database-01', status: 'running', host: 'esxi-02', os: 'Windows Server 2022', cpu: 4, memory: 16 },
-  { id: '4', name: 'app-server-01', status: 'running', host: 'esxi-01', os: 'CentOS 8', cpu: 2, memory: 8 },
-  { id: '5', name: 'dev-server-01', status: 'stopped', host: 'esxi-03', os: 'Ubuntu 20.04', cpu: 1, memory: 2 },
-  { id: '6', name: 'test-server-01', status: 'running', host: 'esxi-03', os: 'Ubuntu 22.04', cpu: 1, memory: 2 },
-];
-
 export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModalProps) {
+  // State for available VMs loaded from API
+  const [availableVMs, setAvailableVMs] = useState<VMContext[]>([]);
+  const [isLoadingVMs, setIsLoadingVMs] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     name: '',
@@ -55,6 +50,30 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
     vmIds: [] as string[]
   });
   const [isCreateScheduleModalOpen, setIsCreateScheduleModalOpen] = useState(false);
+
+  // Fetch available VMs when modal opens
+  useEffect(() => {
+    const fetchAvailableVMs = async () => {
+      if (!isOpen) return; // Only fetch when modal opens
+
+      setIsLoadingVMs(true);
+      try {
+        const response = await fetch('/api/v1/discovery/ungrouped-vms');
+        if (response.ok) {
+          const vms = await response.json();
+          setAvailableVMs(vms);
+        } else {
+          console.error('Failed to fetch ungrouped VMs:', response.statusText);
+        }
+      } catch (error) {
+        console.error('Failed to fetch ungrouped VMs:', error);
+      } finally {
+        setIsLoadingVMs(false);
+      }
+    };
+
+    fetchAvailableVMs();
+  }, [isOpen]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -95,7 +114,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
     onClose();
   };
 
-  const selectedVMs = mockVMs.filter(vm => formData.vmIds.includes(vm.id));
+  const selectedVMs = availableVMs.filter(vm => formData.vmIds.includes(vm.context_id));
 
   const handleCreateSchedule = async (scheduleData: any) => {
     // Mock schedule creation - in real implementation this would call API
@@ -114,11 +133,11 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
     return mockSchedule;
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'running':
+  const getStatusBadge = (powerState: string) => {
+    switch (powerState) {
+      case 'poweredOn':
         return <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Running</Badge>;
-      case 'stopped':
+      case 'poweredOff':
         return <Badge className="bg-gray-500/10 text-gray-400 border-gray-500/20">Stopped</Badge>;
       case 'suspended':
         return <Badge className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20">Suspended</Badge>;
@@ -278,32 +297,55 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
                   Choose which VMs to include in this protection group ({formData.vmIds.length} selected)
                 </p>
 
-                <div className="space-y-3 max-h-60 overflow-y-auto">
-                  {mockVMs.map((vm) => (
-                    <div
-                      key={vm.id}
-                      className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50"
-                    >
-                      <Checkbox
-                        id={`vm-${vm.id}`}
-                        checked={formData.vmIds.includes(vm.id)}
-                        onCheckedChange={(checked) => handleVMSelection(vm.id, checked as boolean)}
-                      />
-                      <div className="flex items-center gap-3 flex-1">
-                        <Server className="h-4 w-4 text-muted-foreground" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{vm.name}</span>
-                            {getStatusBadge(vm.status)}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {vm.host} • {vm.os} • {vm.cpu} CPU • {vm.memory} GB RAM
+                {isLoadingVMs ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex items-center space-x-3 p-3 rounded-lg border">
+                        <div className="w-4 h-4 bg-muted rounded animate-pulse" />
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="w-4 h-4 bg-muted rounded animate-pulse" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+                            <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : availableVMs.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Server className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No ungrouped VMs available.</p>
+                    <p className="text-sm">Use "Add VMs" to discover VMs from vCenter first.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                    {availableVMs.map((vm) => (
+                      <div
+                        key={vm.context_id}
+                        className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50"
+                      >
+                        <Checkbox
+                          id={`vm-${vm.context_id}`}
+                          checked={formData.vmIds.includes(vm.context_id)}
+                          onCheckedChange={(checked) => handleVMSelection(vm.context_id, checked as boolean)}
+                        />
+                        <div className="flex items-center gap-3 flex-1">
+                          <Server className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{vm.vm_name}</span>
+                              {getStatusBadge(vm.power_state)}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {vm.datacenter} • vCenter: {vm.vcenter_host}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {selectedVMs.length > 0 && (
@@ -314,9 +356,9 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
                   <CardContent>
                     <div className="space-y-2">
                       {selectedVMs.map((vm) => (
-                        <div key={vm.id} className="flex items-center gap-2 text-sm">
+                        <div key={vm.context_id} className="flex items-center gap-2 text-sm">
                           <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span>{vm.name}</span>
+                          <span>{vm.vm_name}</span>
                         </div>
                       ))}
                     </div>
