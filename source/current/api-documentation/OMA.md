@@ -46,9 +46,20 @@ Progress Proxy and Job Status
 
 VM-Centric Architecture
 - GET /vm-contexts → `handlers.VMContext.ListVMContexts`
+  - Description: List all VM contexts with group membership information (supports multi-group VMs)
+  - Request: None
+  - Response: { vm_contexts: [VMContextWithGroups], count: number }
+  - VMContextWithGroups includes: VMReplicationContext fields PLUS groups: [GroupMembershipInfo], group_count: number
+  - GroupMembershipInfo: { group_id, group_name, priority, enabled }
+  - **Multi-Group Support**: VMs can be in multiple groups simultaneously
+  - Database: Queries vm_replication_contexts + vm_group_memberships + vm_machine_groups
+  - Classification: Key (GUI relies on this for VM table with group badges)
+  
 - GET /vm-contexts/{vm_name} → `handlers.VMContext.GetVMContext`
+  - Classification: Key (individual VM details)
+  
 - GET /vm-contexts/{context_id}/recent-jobs → `handlers.VMContext.GetRecentJobs`
-  - Classification: Key (GUI relies on these)
+  - Classification: Key (job history)
 
 Discovery (Enhanced) - VM Discovery Without Immediate Replication
 - POST /discovery/discover-vms → `handlers.EnhancedDiscovery.DiscoverVMs`

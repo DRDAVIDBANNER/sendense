@@ -10,6 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Multi-Group VM Membership Support** (Protection Groups - October 6, 2025):
+  - VMs can now belong to multiple protection groups simultaneously
+  - Enhanced `/api/v1/vm-contexts` endpoint to include group membership arrays
+  - Compact group display in GUI: single badge, or "GroupName +N more" for multiple groups
+  - Backend: VMContextWithGroups type with groups array and group_count fields
+  - Frontend: GroupMembership interface tracking group_id, group_name, priority, enabled status
+  - Database: Confirmed unique_vm_group constraint allows multi-group membership
+  - GUI Protection Groups page shows ALL VMs (not just ungrouped) with group status
+  - Binary: sendense-hub-v2.10.0-vm-multi-group
+- **Protection Groups GUI Fixes** (October 6, 2025):
+  - Fixed EditGroupModal SelectItem empty value error (changed to 'none' value)
+  - Fixed ManageVMsModal bulk assignment (loop through VMs individually with singular vm_context_id)
+  - Fixed payload mismatch in Add to Group (vm_context_id vs vm_context_ids)
+  - Added per-VM error handling with success/fail counts and user feedback alerts
+  - Schedule now optional for group creation (manual backups only mode)
 - Complete project roadmap and documentation (24 documents)
 - PROJECT_RULES.md with mandatory development standards
 - MASTER_AI_PROMPT.md for AI assistant context loading
@@ -65,6 +80,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Task 2 NBD File Export: 100% COMPLETE (Phases 2.1, 2.2, 2.3 all done)
 
 ### Changed
+- **VM Contexts Endpoint Enhancement** (October 6, 2025):
+  - GET /api/v1/vm-contexts now returns group membership information for all VMs
+  - Response structure changed: VMReplicationContext → VMContextWithGroups
+  - Added fields: groups (array), group_count (number)
+  - Breaking change: GUI must handle new response structure (backward compatible with undefined checks)
+  - Impact: Protection Groups page now shows comprehensive VM-to-group relationships
 - Component naming: VMA/OMA → Capture Agent/Control Plane
 - Project scope: Migration tool → Universal backup platform
 - Navigation design: Simple menu → Aviation-inspired cockpit interface
