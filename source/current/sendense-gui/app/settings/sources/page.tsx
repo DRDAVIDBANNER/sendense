@@ -101,7 +101,9 @@ export default function SourcesPage() {
 
   const handleTestConnection = async (sourceId: string) => {
     try {
-      const response = await fetch(`/api/v1/vmware-credentials/${sourceId}/test`);
+      const response = await fetch(`/api/v1/vmware-credentials/${sourceId}/test`, {
+        method: 'POST'
+      });
       if (response.ok) {
         const result = await response.json();
         // Update the source status based on test result
