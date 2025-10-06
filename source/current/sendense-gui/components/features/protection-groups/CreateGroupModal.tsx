@@ -118,8 +118,8 @@ export function CreateGroupModal({ isOpen, onClose, onCreate, schedules }: Creat
 
   const handleSubmit = async () => {
     // Validate
-    if (!formData.name || !formData.schedule) {
-      setError('Name and schedule are required');
+    if (!formData.name) {
+      setError('Group name is required');
       return;
     }
 
@@ -136,7 +136,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreate, schedules }: Creat
         body: JSON.stringify({
           name: formData.name,
           description: formData.description || null,
-          schedule_id: formData.schedule, // Schedule ID from dropdown
+          schedule_id: formData.schedule || null, // Schedule ID from dropdown (optional)
           max_concurrent_vms: formData.maxConcurrentVMs || 10,
           priority: formData.priority || 50,
           created_by: 'gui-user',
@@ -245,7 +245,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreate, schedules }: Creat
       case 1:
         return formData.name.trim() && formData.description.trim();
       case 2:
-        return formData.schedule; // Schedule is required
+        return true; // Schedule is optional, always allow proceeding
       case 3:
         return formData.vmIds.length > 0;
       default:
@@ -320,22 +320,31 @@ export function CreateGroupModal({ isOpen, onClose, onCreate, schedules }: Creat
           {currentStep === 2 && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="schedule">Schedule</Label>
+                <Label htmlFor="schedule">Schedule (Optional)</Label>
                 <Select
                   value={formData.schedule}
                   onValueChange={(value) => setFormData(prev => ({ ...prev, schedule: value }))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select schedule" />
+                    <SelectValue placeholder="No schedule (manual backups)" />
                   </SelectTrigger>
                   <SelectContent>
-                    {schedules.map((schedule) => (
-                      <SelectItem key={schedule.id} value={schedule.id}>
-                        {schedule.name} - {schedule.cron_expression}
-                      </SelectItem>
-                    ))}
+                    {schedules.length === 0 ? (
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        No schedules available. Create one first.
+                      </div>
+                    ) : (
+                      schedules.map((schedule) => (
+                        <SelectItem key={schedule.id} value={schedule.id}>
+                          {schedule.name} - {schedule.cron_expression}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Without a schedule, backups will be manual only
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -370,7 +379,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreate, schedules }: Creat
                 </CardHeader>
                 <CardContent>
                   <div className="text-sm space-y-1">
-                    <div><strong>Schedule:</strong> {schedules.find(s => s.id === formData.schedule)?.name || 'None selected'}</div>
+                    <div><strong>Schedule:</strong> {schedules.find(s => s.id === formData.schedule)?.name || <span className="text-muted-foreground">None (manual backups only)</span>}</div>
                     <div><strong>Max Concurrent VMs:</strong> {formData.maxConcurrentVMs}</div>
                     <div><strong>Priority:</strong> {formData.priority}</div>
                   </div>
