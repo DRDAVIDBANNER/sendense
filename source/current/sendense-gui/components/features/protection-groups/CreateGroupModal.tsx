@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Server, CheckCircle } from "lucide-react";
+import { Server, CheckCircle, Plus } from "lucide-react";
+import { CreateScheduleModal } from "./CreateScheduleModal";
 
 interface VM {
   id: string;
@@ -53,6 +54,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
     schedule: '',
     vmIds: [] as string[]
   });
+  const [isCreateScheduleModalOpen, setIsCreateScheduleModalOpen] = useState(false);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -94,6 +96,23 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
   };
 
   const selectedVMs = mockVMs.filter(vm => formData.vmIds.includes(vm.id));
+
+  const handleCreateSchedule = async (scheduleData: any) => {
+    // Mock schedule creation - in real implementation this would call API
+    const mockSchedule = {
+      id: `schedule-${Date.now()}`,
+      name: scheduleData.name,
+      displayName: scheduleData.name
+    };
+
+    // For now, just set the schedule to the new one
+    setFormData(prev => ({
+      ...prev,
+      schedule: mockSchedule.id
+    }));
+
+    return mockSchedule;
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -196,7 +215,13 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
 
               <div className="space-y-2">
                 <Label htmlFor="backup-schedule">Schedule</Label>
-                <Select value={formData.schedule} onValueChange={(value) => handleInputChange('schedule', value)}>
+                <Select value={formData.schedule} onValueChange={(value) => {
+                  if (value === 'create-new') {
+                    setIsCreateScheduleModalOpen(true);
+                  } else {
+                    handleInputChange('schedule', value);
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select backup schedule" />
                   </SelectTrigger>
@@ -221,6 +246,12 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
                         <SelectItem value="monthly-15th-04:00">Monthly on 15th at 04:00 AM</SelectItem>
                       </>
                     )}
+                    <SelectItem value="create-new" className="border-t mt-2 pt-2">
+                      <div className="flex items-center gap-2 text-primary">
+                        <Plus className="h-4 w-4" />
+                        Create New Schedule
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -324,6 +355,14 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
           )}
         </DialogFooter>
       </DialogContent>
+
+      {/* Create Schedule Modal */}
+      <CreateScheduleModal
+        isOpen={isCreateScheduleModalOpen}
+        onClose={() => setIsCreateScheduleModalOpen(false)}
+        onCreate={handleCreateSchedule}
+        policyType={formData.policy as 'daily' | 'weekly' | 'monthly'}
+      />
     </Dialog>
   );
 }

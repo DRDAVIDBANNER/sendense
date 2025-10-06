@@ -73,11 +73,11 @@ export function FlowsTable({
   };
 
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
-      <Table>
+    <div className="border border-border rounded-lg overflow-hidden protection-flows-table-container">
+      <Table className="protection-flows-table">
         <TableHeader>
           <TableRow className="bg-muted/50">
-            <TableHead className="w-[300px]">
+            <TableHead className="column-name min-w-[200px] w-auto">
               <button
                 className="flex items-center gap-2 hover:text-primary transition-colors"
                 onClick={() => handleSort('name')}
@@ -86,7 +86,7 @@ export function FlowsTable({
                 {getSortIcon('name')}
               </button>
             </TableHead>
-            <TableHead className="w-[120px]">
+            <TableHead className="column-type min-w-[100px] w-[120px]">
               <button
                 className="flex items-center gap-2 hover:text-primary transition-colors"
                 onClick={() => handleSort('type')}
@@ -95,7 +95,7 @@ export function FlowsTable({
                 {getSortIcon('type')}
               </button>
             </TableHead>
-            <TableHead className="w-[120px]">
+            <TableHead className="column-status min-w-[100px] w-[120px]">
               <button
                 className="flex items-center gap-2 hover:text-primary transition-colors"
                 onClick={() => handleSort('status')}
@@ -104,7 +104,7 @@ export function FlowsTable({
                 {getSortIcon('status')}
               </button>
             </TableHead>
-            <TableHead className="w-[160px]">
+            <TableHead className="column-last-run min-w-[140px] w-[160px]">
               <button
                 className="flex items-center gap-2 hover:text-primary transition-colors"
                 onClick={() => handleSort('lastRun')}
@@ -113,7 +113,7 @@ export function FlowsTable({
                 {getSortIcon('lastRun')}
               </button>
             </TableHead>
-            <TableHead className="w-[160px]">
+            <TableHead className="column-next-run min-w-[140px] w-[160px]">
               <button
                 className="flex items-center gap-2 hover:text-primary transition-colors"
                 onClick={() => handleSort('nextRun')}
@@ -122,7 +122,7 @@ export function FlowsTable({
                 {getSortIcon('nextRun')}
               </button>
             </TableHead>
-            <TableHead className="w-[100px]">Actions</TableHead>
+            <TableHead className="column-actions min-w-[100px] w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

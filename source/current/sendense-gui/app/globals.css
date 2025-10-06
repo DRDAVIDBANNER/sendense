@@ -146,3 +146,72 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Professional Dark Theme Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Firefox scrollbar styling */
+.scrollable-area {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+
+/* Responsive Table Styles */
+.protection-flows-table-container {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.protection-flows-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+/* Responsive column behavior */
+@media (max-width: 1200px) {
+  .column-next-run { display: none; }
+}
+
+@media (max-width: 1024px) {
+  .column-last-run { display: none; }
+  .column-name { width: 50%; min-width: 200px; }
+}
+
+@media (max-width: 768px) {
+  .column-type { display: none; }
+  .column-status { display: none; }
+  .column-actions { min-width: 120px; }
+}
+
+/* Panel layering fixes */
+.flow-details-panel {
+  z-index: 10;
+  position: relative;
+  background: hsl(var(--card));
+}
+
+.job-log-panel {
+  z-index: 20;
+  position: relative;
+  background: hsl(var(--card));
+}

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Activity, Database, Shield, TrendingUp, Clock, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
+import { RefreshCw, Activity, Database, Shield, TrendingUp, Clock, CheckCircle, AlertTriangle, XCircle, Server } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { PerformanceChart } from "@/components/features/dashboard";
 
@@ -54,6 +54,37 @@ const systemHealthCards: SystemHealthCard[] = [
     status: "warning",
     icon: Database,
     description: "Total backup storage consumption"
+  }
+];
+
+const applianceHealthCards: SystemHealthCard[] = [
+  {
+    title: "Appliances",
+    value: 4,
+    status: "warning",
+    icon: Server,
+    description: "Total appliances in fleet"
+  },
+  {
+    title: "Online Appliances",
+    value: 2,
+    status: "good",
+    icon: CheckCircle,
+    description: "Appliances currently online"
+  },
+  {
+    title: "Pending Approval",
+    value: 1,
+    status: "warning",
+    icon: Clock,
+    description: "Appliances awaiting approval"
+  },
+  {
+    title: "Fleet Health",
+    value: "75%",
+    status: "warning",
+    icon: AlertTriangle,
+    description: "Overall appliance fleet health"
   }
 ];
 
@@ -207,6 +238,31 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Appliance Health Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {applianceHealthCards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <Card key={card.title} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.location.href = '/appliances'}>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
+                    <Icon className={`h-4 w-4 ${
+                      card.status === 'good' ? 'text-green-500' :
+                      card.status === 'warning' ? 'text-yellow-500' :
+                      'text-red-500'
+                    }`} />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{card.value}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {card.description}
+                    </p>
                   </CardContent>
                 </Card>
               );
