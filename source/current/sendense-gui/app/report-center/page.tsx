@@ -86,8 +86,8 @@ const kpiData = {
 
 export default function ReportCenterPage() {
   const [dateRange, setDateRange] = useState<{
-    from: Date | undefined;
-    to: Date | undefined;
+    from?: Date;
+    to?: Date;
   }>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date())
@@ -146,12 +146,13 @@ export default function ReportCenterPage() {
                 <Calendar
                   initialFocus
                   mode="range"
+                  required
                   defaultMonth={dateRange.from}
                   selected={{
                     from: dateRange.from,
                     to: dateRange.to
                   }}
-                  onSelect={(range) => setDateRange(range || { from: undefined, to: undefined })}
+                  onSelect={setDateRange}
                   numberOfMonths={2}
                 />
               </PopoverContent>

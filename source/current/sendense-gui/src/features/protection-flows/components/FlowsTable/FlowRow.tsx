@@ -78,15 +78,15 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(flow); }}>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit?.(flow); }}>
               Edit Flow
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRunNow(flow); }}>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRunNow?.(flow); }}>
               Run Now
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={(e) => { e.stopPropagation(); onDelete(flow); }}
+              onClick={(e) => { e.stopPropagation(); onDelete?.(flow); }}
               className="text-destructive focus:text-destructive"
             >
               Delete Flow
