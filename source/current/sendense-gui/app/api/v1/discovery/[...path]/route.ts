@@ -19,8 +19,9 @@ const DISCOVERY_TIMEOUT = 60000; // 60 seconds for vCenter operations
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
+  const params = await context.params;
   const path = params.path.join('/');
   const url = `${BACKEND_URL}/api/v1/discovery/${path}`;
   
@@ -53,8 +54,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
+  const params = await context.params;
   const path = params.path.join('/');
   const url = `${BACKEND_URL}/api/v1/discovery/${path}`;
   

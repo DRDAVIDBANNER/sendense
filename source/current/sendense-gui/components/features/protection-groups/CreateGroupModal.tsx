@@ -503,7 +503,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreate, schedules }: Creat
         isOpen={isCreateScheduleModalOpen}
         onClose={() => setIsCreateScheduleModalOpen(false)}
         onCreate={handleCreateSchedule}
-        policyType={formData.policy as 'daily' | 'weekly' | 'monthly'}
+        policyType={'daily'}
       />
     </Dialog>
   );
