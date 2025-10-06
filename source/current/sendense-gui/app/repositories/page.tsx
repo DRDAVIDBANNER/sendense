@@ -2,94 +2,84 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Plus, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { RepositoryCard, AddRepositoryModal, Repository, RepositoryCapacity } from "@/components/features/repositories";
 
-// Mock repositories for demonstration
-const mockRepositories: Repository[] = [
-  {
-    id: '1',
-    name: 'Primary Local Storage',
-    type: 'local',
-    status: 'online',
-    capacity: {
-      total: 2000,
-      used: 450,
-      available: 1550,
-      unit: 'GB'
-    },
-    description: 'Local SSD storage for critical backups',
-    lastTested: '2025-10-06T10:00:00Z',
-    location: '/mnt/primary-storage'
-  },
-  {
-    id: '2',
-    name: 'Cloud Backup - S3',
-    type: 's3',
-    status: 'online',
-    capacity: {
-      total: 50000,
-      used: 12500,
-      available: 37500,
-      unit: 'GB'
-    },
-    description: 'Offsite cloud storage with encryption',
-    lastTested: '2025-10-06T09:30:00Z',
-    location: 'sendense-backups (us-east-1)'
-  },
-  {
-    id: '3',
-    name: 'NAS Archive',
-    type: 'nfs',
-    status: 'warning',
-    capacity: {
-      total: 10000,
-      used: 8500,
-      available: 1500,
-      unit: 'GB'
-    },
-    description: 'Network attached storage for long-term retention',
-    lastTested: '2025-10-05T14:00:00Z',
-    location: 'nas-server:/export/archive'
-  },
-  {
-    id: '4',
-    name: 'File Server Share',
-    type: 'cifs',
-    status: 'offline',
-    capacity: {
-      total: 5000,
-      used: 0,
-      available: 0,
-      unit: 'GB'
-    },
-    description: 'Windows file server backup destination',
-    lastTested: '2025-10-04T08:00:00Z',
-    location: '\\\\fileserver\\BackupShare'
+// Helper function to transform backend repository data to GUI format
+const transformRepository = (backendRepo: any): Repository => {
+  // Convert bytes to GB
+  const bytesToGB = (bytes: number) => Math.round(bytes / 1073741824);
+
+  // Determine status based on enabled and usage percentage
+  let status: 'online' | 'offline' | 'warning' = 'offline';
+  if (backendRepo.enabled) {
+    const usagePercent = backendRepo.storage?.used_percentage || 0;
+    status = usagePercent > 85 ? 'warning' : 'online';
   }
-];
+
+  // Extract location from config based on type
+  const getLocation = () => {
+    const config = backendRepo.config || {};
+    switch (backendRepo.type) {
+      case 'local':
+        return config.path || '';
+      case 'nfs':
+        return `${config.server || 'unknown'}:${config.export_path || ''}`;
+      case 'cifs':
+        return `\\\\${config.server || 'unknown'}\\${config.share_name || ''}`;
+      case 's3':
+        return `${config.bucket || 'unknown'} (${config.region || 'us-east-1'})`;
+      case 'azure':
+        return `${config.account_name || 'unknown'}/${config.container || ''}`;
+      default:
+        return 'Unknown';
+    }
+  };
+
+  return {
+    id: backendRepo.id,
+    name: backendRepo.name,
+    type: backendRepo.type,
+    status,
+    capacity: {
+      total: bytesToGB(backendRepo.storage?.total_bytes || 0),
+      used: bytesToGB(backendRepo.storage?.used_bytes || 0),
+      available: bytesToGB(backendRepo.storage?.available_bytes || 0),
+      unit: 'GB'
+    },
+    description: backendRepo.config?.description || undefined,
+    lastTested: backendRepo.storage?.last_check_at || undefined,
+    location: getLocation()
+  };
+};
 
 export default function RepositoriesPage() {
-  const [repositories, setRepositories] = useState<Repository[]>(mockRepositories);
+  const [repositories, setRepositories] = useState<Repository[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingRepository, setEditingRepository] = useState<Repository | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Simulate API calls
+  // Load repositories from backend API
   const loadRepositories = async () => {
     setIsLoading(true);
+    setError(null);
     try {
-      // In a real app, this would call the repository API
-      // const response = await fetch('/api/v1/repositories');
-      // const data = await response.json();
-      // setRepositories(data);
+      const response = await fetch('/api/v1/repositories');
+      const data = await response.json();
 
-      // For now, just simulate loading
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setRepositories(mockRepositories);
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load repositories');
+      }
+
+      // Transform backend data to GUI format
+      const transformedRepos = data.repositories.map(transformRepository);
+      setRepositories(transformedRepos);
     } catch (error) {
       console.error('Failed to load repositories:', error);
+      setError('Failed to load repositories. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -97,23 +87,70 @@ export default function RepositoriesPage() {
 
   const handleCreateRepository = async (repositoryData: Omit<Repository, 'id' | 'status' | 'lastTested'>) => {
     try {
-      // In a real app, this would call the create API
-      // const response = await fetch('/api/v1/repositories', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(repositoryData)
-      // });
-      // const newRepository = await response.json();
+      // Build backend config object from repository data
+      const buildConfig = () => {
+        const config: any = {};
 
-      // Mock implementation
-      const newRepository: Repository = {
-        ...repositoryData,
-        id: Date.now().toString(),
-        status: 'online',
-        lastTested: new Date().toISOString()
+        // Extract location into proper config fields
+        switch (repositoryData.type) {
+          case 'local':
+            config.path = repositoryData.location || '';
+            break;
+          case 'nfs':
+            // Parse "server:/export/path" format
+            const nfsParts = (repositoryData.location || '').split(':');
+            config.server = nfsParts[0] || '';
+            config.export_path = nfsParts[1] || '';
+            break;
+          case 'cifs':
+            // Parse "\\server\share" format
+            const cifsParts = (repositoryData.location || '').replace(/\\\\/g, '').split('\\');
+            config.server = cifsParts[0] || '';
+            config.share_name = cifsParts[1] || '';
+            break;
+          case 's3':
+            // Parse "bucket (region)" format
+            const s3Match = (repositoryData.location || '').match(/(.+?)\s*\((.+?)\)/);
+            config.bucket = s3Match ? s3Match[1] : repositoryData.location;
+            config.region = s3Match ? s3Match[2] : 'us-east-1';
+            break;
+          case 'azure':
+            // Parse "account/container" format
+            const azureParts = (repositoryData.location || '').split('/');
+            config.account_name = azureParts[0] || '';
+            config.container = azureParts[1] || '';
+            break;
+        }
+
+        if (repositoryData.description) {
+          config.description = repositoryData.description;
+        }
+
+        return config;
       };
 
-      setRepositories(prev => [...prev, newRepository]);
+      const requestBody = {
+        name: repositoryData.name,
+        type: repositoryData.type,
+        enabled: true,
+        is_immutable: false,
+        config: buildConfig()
+      };
+
+      const response = await fetch('/api/v1/repositories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to create repository');
+      }
+
+      // Reload repositories to get fresh data including the new one
+      await loadRepositories();
     } catch (error) {
       console.error('Failed to create repository:', error);
       throw error;
@@ -131,40 +168,85 @@ export default function RepositoriesPage() {
     }
 
     try {
-      // In a real app, this would call the delete API
-      // await fetch(`/api/v1/repositories/${repository.id}`, { method: 'DELETE' });
+      const response = await fetch(`/api/v1/repositories/${repository.id}`, {
+        method: 'DELETE'
+      });
 
-      // Mock implementation
+      const data = await response.json();
+
+      if (!data.success) {
+        // Backend returns specific error for repos with backups
+        if (data.backup_count) {
+          alert(`Cannot delete repository: ${data.backup_count} backups exist. Delete backups first.`);
+        } else {
+          throw new Error(data.error || 'Failed to delete repository');
+        }
+        return;
+      }
+
+      // Remove from local state
       setRepositories(prev => prev.filter(r => r.id !== repository.id));
     } catch (error) {
       console.error('Failed to delete repository:', error);
+      alert('Failed to delete repository. See console for details.');
     }
   };
 
   const handleTestRepository = async (repository: Repository) => {
     try {
-      // In a real app, this would call the test API
-      // const response = await fetch(`/api/v1/repositories/${repository.id}/test`, {
-      //   method: 'POST'
-      // });
-      // const result = await response.json();
+      // Backend test endpoint requires repository ID
+      const response = await fetch(`/api/v1/repositories/${repository.id}/test`, {
+        method: 'POST'
+      });
 
-      // Mock implementation - simulate testing
-      console.log('Testing repository:', repository.name);
+      const data = await response.json();
 
-      // Update last tested timestamp
+      if (!data.success) {
+        alert(`Connection test failed: ${data.error || 'Unknown error'}`);
+        return;
+      }
+
+      // Update last tested timestamp on success
       setRepositories(prev => prev.map(r =>
         r.id === repository.id
           ? { ...r, lastTested: new Date().toISOString() }
           : r
       ));
+
+      alert(`Connection test successful for "${repository.name}"`);
     } catch (error) {
       console.error('Failed to test repository:', error);
+      alert('Connection test failed. See console for details.');
     }
   };
 
-  const handleRefresh = () => {
-    loadRepositories();
+  const handleRefresh = async () => {
+    setIsLoading(true);
+    try {
+      // Call backend refresh endpoint to update storage info for all repos
+      const response = await fetch('/api/v1/repositories/refresh-storage', {
+        method: 'POST'
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to refresh storage');
+      }
+
+      console.log(`Refreshed storage for ${data.refreshed_count} repositories`);
+      if (data.failed_count > 0) {
+        console.warn(`${data.failed_count} repositories failed to refresh`);
+      }
+
+      // Reload repositories to get updated storage info
+      await loadRepositories();
+    } catch (error) {
+      console.error('Failed to refresh storage:', error);
+      alert('Failed to refresh storage. See console for details.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -251,6 +333,21 @@ export default function RepositoriesPage() {
             </div>
           </div>
 
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-4">
+              <p className="text-red-400">{error}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setError(null); loadRepositories(); }}
+                className="mt-2"
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+
           {/* Repository Grid */}
           <div className="flex-1 overflow-auto p-6">
             <div className="mb-6">
@@ -262,7 +359,22 @@ export default function RepositoriesPage() {
               </p>
             </div>
 
-            {repositories.length === 0 ? (
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map(i => (
+                  <Card key={i} className="animate-pulse">
+                    <CardHeader>
+                      <div className="h-6 bg-muted rounded w-3/4" />
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="h-4 bg-muted rounded w-1/2" />
+                      <div className="h-2 bg-muted rounded w-full" />
+                      <div className="h-4 bg-muted rounded w-2/3" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : repositories.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-muted-foreground mb-4">
                   No repositories configured yet

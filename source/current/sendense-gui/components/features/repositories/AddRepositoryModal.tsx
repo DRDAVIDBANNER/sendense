@@ -154,12 +154,79 @@ export function AddRepositoryModal({ isOpen, onClose, onCreate, editingRepositor
     setTestResult(null);
 
     try {
-      // Simulate API call to test repository connection
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Build config object based on selected type and form data
+      const buildTestConfig = () => {
+        const config: any = {};
 
-      // Mock test result - in real app, this would call the actual API
-      setTestResult(Math.random() > 0.3 ? 'success' : 'error');
+        switch (selectedType.id) {
+          case 'local':
+            config.path = formData.path;
+            break;
+          case 'nfs':
+            config.server = formData.host;
+            config.export_path = formData.path;
+            if (formData.mountOptions) {
+              config.mount_options = formData.mountOptions.split(',').map(o => o.trim());
+            }
+            break;
+          case 'cifs':
+            config.server = formData.host;
+            config.share_name = formData.share;
+            config.username = formData.username;
+            config.password = formData.password;
+            if (formData.domain) {
+              config.domain = formData.domain;
+            }
+            break;
+          case 's3':
+            config.bucket = formData.bucket;
+            config.region = formData.region;
+            config.access_key = formData.accessKey;
+            config.secret_key = formData.secretKey;
+            if (formData.endpoint) {
+              config.endpoint = formData.endpoint;
+            }
+            break;
+          case 'azure':
+            config.account_name = formData.accountName;
+            config.container = formData.container;
+            config.account_key = formData.accountKey;
+            break;
+        }
+
+        return config;
+      };
+
+      const requestBody = {
+        type: selectedType.id,
+        config: buildTestConfig()
+      };
+
+      const response = await fetch('/api/v1/repositories/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setTestResult('success');
+
+        // Optionally update capacity estimate if backend returns it
+        if (data.storage) {
+          console.log('Storage info:', {
+            total: Math.round(data.storage.total_bytes / 1073741824),
+            available: Math.round(data.storage.available_bytes / 1073741824),
+            writable: data.storage.writable
+          });
+        }
+      } else {
+        setTestResult('error');
+        console.error('Test failed:', data.error || data.message);
+      }
     } catch (error) {
+      console.error('Test connection error:', error);
       setTestResult('error');
     } finally {
       setIsTesting(false);
@@ -171,17 +238,30 @@ export function AddRepositoryModal({ isOpen, onClose, onCreate, editingRepositor
 
     setIsCreating(true);
     try {
-      const capacity: RepositoryCapacity = {
-        total: 1000,
-        used: 250,
-        available: 750,
-        unit: 'GB'
+      // Build location string for parent component
+      const getLocationString = () => {
+        switch (selectedType.id) {
+          case 'local':
+            return formData.path;
+          case 's3':
+            return `${formData.bucket} (${formData.region})`;
+          case 'nfs':
+            return `${formData.host}:${formData.path}`;
+          case 'cifs':
+            return `\\\\${formData.host}\\${formData.share}`;
+          case 'azure':
+            return `${formData.accountName}/${formData.container}`;
+          default:
+            return '';
+        }
       };
 
+      // Pass repository data to parent's onCreate handler
+      // Parent will transform this into backend format and make API call
       await onCreate({
         name: formData.name,
         type: selectedType.id,
-        capacity,
+        capacity: { total: 0, used: 0, available: 0, unit: 'GB' }, // Will be filled by backend
         description: formData.description,
         location: getLocationString()
       });
@@ -191,19 +271,6 @@ export function AddRepositoryModal({ isOpen, onClose, onCreate, editingRepositor
       console.error('Failed to create repository:', error);
     } finally {
       setIsCreating(false);
-    }
-  };
-
-  const getLocationString = () => {
-    if (!selectedType) return '';
-
-    switch (selectedType.id) {
-      case 'local': return formData.path;
-      case 's3': return `${formData.bucket} (${formData.region})`;
-      case 'nfs': return `${formData.host}:${formData.path}`;
-      case 'cifs': return `\\\\${formData.host}\\${formData.share}`;
-      case 'azure': return `${formData.accountName}/${formData.container}`;
-      default: return '';
     }
   };
 

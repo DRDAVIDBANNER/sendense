@@ -237,8 +237,14 @@ func (h *RepositoryHandler) ListRepositories(w http.ResponseWriter, r *http.Requ
 		})
 	}
 
+	// Return consistent API response format
+	response := map[string]interface{}{
+		"success":      true,
+		"repositories": responses,
+	}
+	
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(responses)
+	json.NewEncoder(w).Encode(response)
 }
 
 // GetRepositoryStorage handles GET /api/v1/repositories/{id}/storage
