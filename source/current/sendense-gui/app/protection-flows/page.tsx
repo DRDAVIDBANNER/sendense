@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { FlowsTable, FlowDetailsPanel, JobLogPanel, CreateFlowModal, EditFlowModal, DeleteConfirmModal } from "@/components/features/protection-flows";
-import { Flow } from "@/components/features/protection-flows/types";
+import { Flow } from "@/src/features/protection-flows/types";
 
 const mockFlows: Flow[] = [
   {
