@@ -20,7 +20,7 @@ BEFORE: Aviation Cockpit Theme
 
 AFTER: Professional Enterprise Design
 - Clean, business-focused interface
-- Reavyr-inspired familiarity
+- Enterprise-inspired familiarity
 - Modern component architecture
 ```
 
@@ -54,7 +54,7 @@ AFTER: Professional Enterprise Design
 - ✅ **TypeScript Strict:** Zero tolerance for `any` types
 
 **Sophisticated Interaction Design:**
-- ✅ **Draggable Panels:** Advanced UX matching Reavyr functionality
+- ✅ **Draggable Panels:** Advanced UX matching enterprise standards
 - ✅ **State Persistence:** User preferences saved across sessions
 - ✅ **Responsive Constraints:** Proper min/max limits prevent UI breakage
 - ✅ **Smooth Animations:** Professional interaction feedback
@@ -186,7 +186,7 @@ Should this replace existing GUI entirely, or run in parallel during transition?
 
 **Rationale:**
 - Professional design approach is strategically correct
-- Reavyr-inspired patterns will ease user adoption
+- Enterprise-standard patterns will ease user adoption
 - Technical architecture is modern and maintainable
 - Implementation plan is detailed and realistic
 
