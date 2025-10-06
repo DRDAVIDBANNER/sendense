@@ -7,9 +7,11 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { BackupJob } from '@/lib/types';
 import { BackupJobsList } from './BackupJobsList';
+import { StartBackupModal } from './StartBackupModal';
 
 export function BackupsManagement() {
   const [selectedBackup, setSelectedBackup] = useState<BackupJob | null>(null);
+  const [showStartBackupModal, setShowStartBackupModal] = useState(false);
 
   // Fetch all backups for statistics
   const { data: backupsData } = useQuery({
@@ -40,7 +42,7 @@ export function BackupsManagement() {
             Manage VM backups, monitor progress, and restore individual files
           </p>
         </div>
-        <Button color="blue">
+        <Button color="blue" onClick={() => setShowStartBackupModal(true)}>
           <HiPlus className="w-4 h-4 mr-2" />
           Start Backup
         </Button>
@@ -95,6 +97,12 @@ export function BackupsManagement() {
       <BackupJobsList
         onBackupSelect={setSelectedBackup}
         onBrowseFiles={handleBrowseFiles}
+      />
+
+      {/* Start Backup Modal */}
+      <StartBackupModal
+        isOpen={showStartBackupModal}
+        onClose={() => setShowStartBackupModal(false)}
       />
     </div>
   );
