@@ -93,17 +93,32 @@ func (h *RepositoryHandler) CreateRepository(w http.ResponseWriter, r *http.Requ
 	// Parse request
 	var req CreateRepositoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Invalid request body: %v", err),
+		})
 		return
 	}
 
 	// Validate request
 	if req.Name == "" {
-		http.Error(w, "Repository name is required", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Repository name is required",
+		})
 		return
 	}
 	if req.Type == "" {
-		http.Error(w, "Repository type is required", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Repository type is required",
+		})
 		return
 	}
 
@@ -149,7 +164,12 @@ func (h *RepositoryHandler) CreateRepository(w http.ResponseWriter, r *http.Requ
 	// Register repository (includes connection test)
 	if err := h.repoManager.RegisterRepository(ctx, repoConfig); err != nil {
 		log.WithError(err).WithField("name", req.Name).Error("Failed to register repository")
-		http.Error(w, fmt.Sprintf("Failed to register repository: %v", err), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to register repository: %v", err),
+		})
 		return
 	}
 
