@@ -555,7 +555,7 @@ export default function ProtectionGroupsPage() {
                                               method: 'POST',
                                               headers: { 'Content-Type': 'application/json' },
                                               body: JSON.stringify({
-                                                vm_context_ids: [vm.context_id],
+                                                vm_context_id: vm.context_id, // FIXED: singular, not array
                                                 priority: 50,
                                                 enabled: true,
                                               }),
@@ -565,10 +565,13 @@ export default function ProtectionGroupsPage() {
                                               fetchGroups();
                                               fetchUngroupedVMs();
                                             } else {
-                                              console.error('Failed to add VM to group');
+                                              const error = await response.json();
+                                              console.error('Failed to add VM to group:', error);
+                                              alert(`Failed to add VM: ${error.error || 'Unknown error'}`);
                                             }
                                           } catch (error) {
                                             console.error('Error adding VM to group:', error);
+                                            alert(`Error: ${error}`);
                                           }
                                         }}
                                       >
