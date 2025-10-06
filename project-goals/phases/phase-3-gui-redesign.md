@@ -14,8 +14,8 @@
 **Primary Goal:** Build a clean, professional interface that makes competitors look outdated
 
 **Success Criteria:**
-- ✅ **Clean modern design** inspired by Reavyr's best qualities
-- ✅ **Protection Flows page** matching Reavyr Catalogs layout (table + details + logs)
+- ✅ **Clean modern design** inspired by Enterprise's best qualities
+- ✅ **Protection Flows page** matching Enterprise Catalogs layout (table + details + logs)
 - ✅ **Intuitive navigation** with 7 clear menu sections
 - ✅ **Real-time updates** for all protection operations
 - ✅ **Professional appearance** that justifies premium pricing
@@ -78,7 +78,7 @@ Code/Monospace: IBM Plex Mono
 SENDENSE
 
 ├─ 📊 Dashboard        - System overview, health, realtime monitoring
-├─ 🛡️ Protection Flows  - Backup/Replication Jobs (Reavyr Catalogs layout)
+├─ 🛡️ Protection Flows  - Backup/Replication Jobs (Enterprise Catalogs layout)
 ├─ 📁 Protection Groups - Schedules, VM groupings, assignments
 ├─ 📈 Report Center     - KPI reports, custom dashboards, filters
 ├─ ⚙️ Settings          - Sources (vCenter), Destinations (CloudStack)
@@ -119,7 +119,7 @@ sendense-gui/
 │   │   ├── dashboard/
 │   │   │   └── page.tsx              # Dashboard page
 │   │   ├── protection-flows/
-│   │   │   ├── page.tsx              # Main flows page (Reavyr-style)
+│   │   │   ├── page.tsx              # Main flows page (Enterprise-style)
 │   │   │   └── [flowId]/
 │   │   │       └── page.tsx          # Flow details page
 │   │   ├── protection-groups/
@@ -150,7 +150,7 @@ sendense-gui/
 │   │   │   └── types/
 │   │   │       └── index.ts
 │   │   │
-│   │   ├── protection-flows/         # Main feature (Reavyr-style)
+│   │   ├── protection-flows/         # Main feature (Enterprise-style)
 │   │   │   ├── components/
 │   │   │   │   ├── FlowsTable/
 │   │   │   │   │   ├── index.tsx     # Main table component
@@ -242,9 +242,9 @@ sendense-gui/
 
 ---
 
-## 🛡️ Protection Flows Page (Reavyr Catalogs Layout)
+## 🛡️ Protection Flows Page (Enterprise Catalogs Layout)
 
-### **Layout Design** (Matching Reavyr's Best Pattern)
+### **Layout Design** (Matching Enterprise's Best Pattern)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -277,7 +277,7 @@ sendense-gui/
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### **Key Features** (Exactly Like Reavyr)
+### **Key Features** (Exactly Like Enterprise)
 
 1. **Flows Table** (Top Section)
    - Sortable columns (Name, Type, Status, Last Run, Next Run)
@@ -296,7 +296,7 @@ sendense-gui/
    - **Persists size** to localStorage
 
 3. **Job Log Panel** (Right Section - Collapsible & Draggable)
-   - **Pops out from right side** (like Reavyr)
+   - **Pops out from right side** (like Enterprise)
    - **Chevron button** to collapse/expand panel
    - **Vertical drag divider** on left edge (grab and drag left/right to resize)
    - Minimum width: 48px (collapsed with just chevron visible)
@@ -311,7 +311,7 @@ sendense-gui/
 ### **Component Breakdown**
 
 ```tsx
-// Main page structure (Reavyr-style with draggable panels)
+// Main page structure (Enterprise-style with draggable panels)
 <ProtectionFlowsPage>
   <PageHeader 
     title="Protection Flows"
@@ -691,7 +691,7 @@ useEffect(() => {
 
 ### **Phase 3: Protection Flows Page** (Week 2)
 
-**Goal:** Build main feature matching Reavyr Catalogs layout
+**Goal:** Build main feature matching Enterprise Catalogs layout
 
 **Tasks:**
 - [ ] Create `FlowsTable` component
@@ -712,7 +712,7 @@ useEffect(() => {
 
 **Deliverables:**
 - Complete Protection Flows page
-- Reavyr-style three-panel layout
+- Enterprise-style three-panel layout
 - All CRUD operations functional
 
 ---
@@ -881,8 +881,8 @@ NEXT_PUBLIC_WS_URL=ws://10.245.246.134:8080/ws
 - ✅ **Accent color** (#023E8A instead of mixed colors)
 - ✅ **Consistent patterns** (one modal system, one table system)
 
-**Key Similarities to Reavyr:**
-- ✅ **Protection Flows layout** (matches Reavyr Catalogs exactly)
+**Key Similarities to Enterprise:**
+- ✅ **Protection Flows layout** (matches Enterprise Catalogs exactly)
 - ✅ **Three-panel design** (table + details + logs)
 - ✅ **Dark theme** (professional, easy on eyes)
 - ✅ **Clean typography** (no decoration, function-first)

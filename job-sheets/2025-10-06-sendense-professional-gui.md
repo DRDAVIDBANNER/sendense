@@ -197,7 +197,7 @@ gui-v2/
 
 ### **Phase 3: Protection Flows Page** (Week 2)
 
-**Goal:** Build main feature matching Reavyr Catalogs layout
+**Goal:** Build main feature matching Enterprise Catalogs layout
 
 #### **3.1. FlowsTable Component**
 
@@ -774,7 +774,7 @@ gui-v2/
 
 - [ ] **Functional:** All 7 pages functional with real data
 - [ ] **Design:** Matches design specification (clean, professional, no gradients/emojis)
-- [ ] **Layout:** Protection Flows page matches Reavyr Catalogs layout exactly
+- [ ] **Layout:** Protection Flows page matches Enterprise Catalogs layout exactly
 - [ ] **Performance:** Lighthouse score >90 across all pages
 - [ ] **Code Quality:** TypeScript strict, no files >200 lines, modular architecture
 - [ ] **Responsive:** Works on desktop (1920x1080, 1366x768, 1280x800)
@@ -878,7 +878,7 @@ npm run dev
 1. **Read `start_here/PROJECT_RULES.md` FIRST** before starting any work
 2. **Follow modular architecture** - No files >200 lines
 3. **Use shadcn/ui** - Don't create custom components when shadcn has them
-4. **Match Reavyr layout** - Protection Flows must match Catalogs page exactly
+4. **Match Enterprise layout** - Protection Flows must match Catalogs page exactly
 5. **Accent color #023E8A** - Use consistently throughout
 6. **No gradients, no emojis** - Clean professional design only
 7. **TypeScript strict mode** - Zero `any` types allowed
