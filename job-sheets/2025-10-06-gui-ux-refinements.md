@@ -3,8 +3,8 @@
 **Date Created:** 2025-10-06  
 **Status:** 🔴 **READY TO START**  
 **Project Goal Link:** [Phase 3 GUI Redesign - Post-completion refinements]  
-**Duration:** 4-5 days (expanded scope with appliance management)  
-**Priority:** High (Enterprise credibility and appliance fleet management)
+**Duration:** 6-7 days (expanded scope with appliance management + flow control)  
+**Priority:** High (Enterprise credibility, fleet management, and operational control)
 
 ---
 
@@ -341,7 +341,122 @@ interface CreateProtectionGroupProps {
 // 5. Create protection group
 ```
 
-### **Task 7: Integration & Testing (Day 5)**
+### **Task 7: Flow Control & Operations (Day 5-6)**
+
+**NEW REQUIREMENT:** Expanded flow view with operational controls for backup/replication management
+
+**Issue:** No way to initiate restore/failover or control flows from GUI - major operational gap
+
+**Sub-Tasks:**
+
+- [ ] **Flow Expansion Modal (Detailed View)**
+  - **Trigger:** Click on any flow in Protection Flows table
+  - **Modal Size:** Large modal (80% viewport) with comprehensive flow details
+  - **Layout:** Multi-section view with tabs or panels
+  - **Evidence:** Clicking flow opens detailed operational view
+
+- [ ] **Machine Details Section**
+  - **Content:** Machines/VMs within the selected flow
+  - **Information:** VM specs, current status, last activity
+  - **Visual:** Card-based layout with machine health indicators
+  - **Evidence:** Clear view of all machines in protection flow
+
+- [ ] **Jobs & Progress Section**
+  - **Content:** Associated jobs (current and historical)
+  - **Real-Time:** Current active jobs with live progress bars
+  - **Performance:** Small charts showing throughput/latency per machine
+  - **Evidence:** Live job monitoring and performance visibility
+
+- [ ] **Replication Flow Controls (Conditional)**
+  ```typescript
+  interface ReplicationFlowActions {
+    replicateNow: boolean;     // Show when: flow idle or scheduled
+    failover: boolean;         // Show when: replication healthy, target ready
+    testFailover: boolean;     // Show when: replication healthy
+    rollback: boolean;         // Show when: failover completed, source available
+    cleanup: boolean;          // Show when: test failover completed
+  }
+  ```
+  - **Conditional Logic:** Actions shown based on current flow state
+  - **State Management:** Track flow states (idle, replicating, failed-over, testing)
+  - **Evidence:** Appropriate actions available based on replication status
+
+- [ ] **Backup Flow Controls**
+  - **Backup Now:** Immediate backup trigger
+  - **Restore:** Multi-step restore workflow modal
+  - **Conditional:** Actions based on backup availability and license features
+  - **Evidence:** Backup operations controllable from flow view
+
+- [ ] **Restore Workflow (Step-by-Step)**
+  ```typescript
+  interface RestoreWorkflowSteps {
+    step1: 'restore-type';     // Full VM restore, File-level restore, etc.
+    step2: 'destination';      // Where to restore (license feature checks)
+    step3: 'method';          // Direct to source, local download, new location
+    step4: 'configuration';    // Advanced options, network settings
+    step5: 'confirmation';     // Review and start restore
+  }
+  ```
+  - **Step 1:** Restore type selection (Full VM, File-level, Application-aware)
+  - **Step 2:** Destination selection with license feature validation
+  - **Step 3:** Restore method (direct to source vs local download vs new location)
+  - **Step 4:** Advanced configuration (network mapping, resource allocation)
+  - **Step 5:** Confirmation and restore initiation
+  - **Evidence:** Complete restore workflow with proper validation
+
+**Component Structure:**
+```typescript
+// Expanded flow modal
+interface FlowDetailsModalProps {
+  flow: Flow;
+  isOpen: boolean;
+  onClose: () => void;
+  onReplicationAction: (action: ReplicationAction) => void;
+  onBackupAction: (action: BackupAction) => void;
+}
+
+// Flow detail sections
+interface FlowDetailsContentProps {
+  flow: Flow;
+  machines: Machine[];
+  jobs: Job[];
+  activeJobs: ActiveJob[];
+}
+
+// Restore workflow modal
+interface RestoreWorkflowModalProps {
+  backup: BackupJob;
+  availableDestinations: RestoreDestination[];
+  licenseFeatures: LicenseFeatures;
+  onRestore: (config: RestoreConfiguration) => void;
+}
+```
+
+### **Task 8: License Feature Integration (Day 6)**
+
+**Requirement:** Restore options must respect license tier restrictions
+
+**Sub-Tasks:**
+
+- [ ] **License Feature Detection**
+  - **Integration:** Connect to license validation system
+  - **Features:** Backup Edition ($10), Enterprise Edition ($25), Replication Edition ($100)
+  - **Restrictions:** Cross-platform restore, replication features, etc.
+  - **Evidence:** UI adapts based on license tier
+
+- [ ] **Conditional Feature Display**
+  - **Backup Edition:** Same-platform restore only
+  - **Enterprise Edition:** Cross-platform restore enabled
+  - **Replication Edition:** All replication controls enabled
+  - **Evidence:** Features appropriately enabled/disabled based on license
+
+- [ ] **License Upgrade Prompts**
+  - **Scenario:** User attempts restricted feature
+  - **Response:** Professional upgrade prompt with feature comparison
+  - **Integration:** Link to license management or sales contact
+  - **Evidence:** Graceful handling of license limitations
+
+### **Task 9: Integration & Testing (Day 7)**
 
 - [ ] **Cross-Browser Testing**
   - **Browsers:** Chrome, Firefox, Safari, Edge
