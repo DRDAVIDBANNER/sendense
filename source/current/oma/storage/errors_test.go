@@ -166,3 +166,4 @@ func TestErrorsIsComparison(t *testing.T) {
 		t.Error("errors.Is should identify wrapped ErrCorruptChain")
 	}
 }
+

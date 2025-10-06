@@ -7,3 +7,4 @@ DROP INDEX idx_backup_vm_disk ON backup_jobs;
 
 -- Remove disk_id column
 ALTER TABLE backup_jobs DROP COLUMN disk_id;
+

@@ -849,3 +849,4 @@ gui-v2/app/restore/
 **Phase Owner:** Platform Engineering Team  
 **Last Updated:** October 4, 2025  
 **Status:** 🟡 Planned - High Business Value (Enterprise Tier Unlock)
+

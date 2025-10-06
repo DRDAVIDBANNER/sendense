@@ -9,3 +9,4 @@ DROP TABLE IF EXISTS backup_jobs;
 DROP TABLE IF EXISTS backup_copy_rules;
 DROP TABLE IF EXISTS backup_policies;
 DROP TABLE IF EXISTS backup_repositories;
+

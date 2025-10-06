@@ -58,3 +58,4 @@ export function VMStatusBadge({ status, className = "" }: VMStatusBadgeProps) {
     </Badge>
   );
 }
+

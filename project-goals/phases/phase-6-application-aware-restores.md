@@ -886,3 +886,4 @@ source/current/control-plane/application-restore/discovery/
 **Phase Owner:** Application Engineering Team  
 **Last Updated:** October 4, 2025  
 **Status:** 🟡 Planned - High Customer Value (Veeam Feature Parity)
+

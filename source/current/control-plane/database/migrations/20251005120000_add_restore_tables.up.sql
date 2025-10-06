@@ -50,3 +50,4 @@ CREATE UNIQUE INDEX idx_restore_mounts_nbd_device_unique
 CREATE UNIQUE INDEX idx_restore_mounts_mount_path_unique 
     ON restore_mounts(mount_path) 
     WHERE status IN ('mounting', 'mounted');
+

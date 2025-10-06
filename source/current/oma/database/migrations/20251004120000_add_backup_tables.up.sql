@@ -124,3 +124,4 @@ CREATE TABLE IF NOT EXISTS backup_chains (
     UNIQUE KEY unique_vm_disk (vm_context_id, disk_id),
     INDEX idx_vm_context (vm_context_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

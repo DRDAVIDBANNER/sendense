@@ -344,3 +344,4 @@ func (r *SQLConfigRepository) parseConfig(config *RepositoryConfig, configJSON [
 
 	return nil
 }
+

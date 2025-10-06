@@ -172,3 +172,4 @@ export function BackupJobRow({ backup, onSelect, onBrowseFiles, onDelete }: Back
     </Table.Row>
   );
 }
+

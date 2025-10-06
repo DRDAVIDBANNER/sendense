@@ -308,3 +308,4 @@ export function FileBrowserModal({ isOpen, onClose, backup }: FileBrowserModalPr
     </Modal>
   );
 }
+

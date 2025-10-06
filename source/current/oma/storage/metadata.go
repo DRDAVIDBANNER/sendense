@@ -186,3 +186,4 @@ func GetBackupFilePath(basePath, vmContextID string, diskID int, backupID string
 	backupDir := GetBackupPath(basePath, vmContextID, diskID)
 	return filepath.Join(backupDir, backupID+".qcow2")
 }
+

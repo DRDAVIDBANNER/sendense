@@ -13,20 +13,32 @@ import { Progress } from "@/components/ui/progress";
 import { Server, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 
 interface VMwareCredential {
-  id: string;
-  name: string;
+  id: number;                    // Backend returns number not string
+  credential_name: string;       // Match backend field name
   vcenter_host: string;
   username: string;
+  datacenter: string;            // Add datacenter field
+  is_active: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  last_used: string | null;
+  usage_count: number;
 }
 
 interface DiscoveredVM {
-  vmware_vm_id: string;
-  vm_name: string;
-  datacenter: string;
+  id: string;                    // ✅ Match backend field name
+  name: string;                  // ✅ Match backend field name
+  path: string;                  // ✅ Add path field
   power_state: 'poweredOn' | 'poweredOff' | 'suspended';
   guest_os: string;
-  cpu_count: number;
+  num_cpu: number;               // ✅ Match backend field name
   memory_mb: number;
+  vmx_version?: string;          // ✅ Add version field
+  disks?: any[];                 // ✅ Add disk info
+  networks?: any[];              // ✅ Add network info
+  existing?: boolean;            // ✅ Add existing flag
 }
 
 interface VMDiscoveryModalProps {
@@ -38,7 +50,7 @@ interface VMDiscoveryModalProps {
 export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDiscoveryModalProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [credentials, setCredentials] = useState<VMwareCredential[]>([]);
-  const [selectedCredentialId, setSelectedCredentialId] = useState<string>("");
+  const [selectedCredentialId, setSelectedCredentialId] = useState<number | null>(null);
   const [discoveredVMs, setDiscoveredVMs] = useState<DiscoveredVM[]>([]);
   const [selectedVMIds, setSelectedVMIds] = useState<string[]>([]);
 
@@ -54,7 +66,7 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
   // Reset modal state when opened
   const resetModal = () => {
     setCurrentStep(1);
-    setSelectedCredentialId("");
+    setSelectedCredentialId(null);
     setDiscoveredVMs([]);
     setSelectedVMIds([]);
     setConnectionTestResult(null);
@@ -125,13 +137,13 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          credential_id: parseInt(selectedCredentialId)
+          credential_id: selectedCredentialId
         }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        setDiscoveredVMs(result.vms || []);
+        setDiscoveredVMs(result.discovered_vms || []);
         setDiscoveryProgress(100);
       } else {
         const errorResult = await response.json();
@@ -153,24 +165,32 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
     setError(null);
 
     try {
-      const response = await fetch('/api/v1/discovery/bulk-add', {
+      // Get VM names from IDs
+      const selectedVMNames = selectedVMIds
+        .map(id => discoveredVMs.find(vm => vm.id === id)?.name)
+        .filter((name): name is string => !!name);
+
+      const response = await fetch('/api/v1/discovery/add-vms', {  // ✅ CORRECT ENDPOINT
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          vm_ids: selectedVMIds,
-          credential_id: parseInt(selectedCredentialId)
+          credential_id: selectedCredentialId, // ✅ Supported by this endpoint
+          vm_names: selectedVMNames,           // ✅ Correct field name
+          added_by: 'gui-user'                 // ✅ Track who added these VMs
         }),
       });
 
       if (response.ok) {
+        const result = await response.json();
+        console.log(`Successfully added ${result.vms_added || selectedVMNames.length} VMs to management`);
         onDiscoveryComplete();
         onClose();
         resetModal();
       } else {
         const errorResult = await response.json();
-        setError(errorResult.message || 'Failed to add VMs to management');
+        setError(errorResult.error || errorResult.message || 'Failed to add VMs to management');
       }
     } catch (err) {
       setError('Failed to add VMs to management');
@@ -291,8 +311,8 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
               <div className="space-y-2">
                 <Label htmlFor="vcenter-credential">vCenter Connection</Label>
                 <Select
-                  value={selectedCredentialId}
-                  onValueChange={setSelectedCredentialId}
+                  value={selectedCredentialId?.toString() || ""}
+                  onValueChange={(value) => setSelectedCredentialId(value ? parseInt(value) : null)}
                   disabled={isLoadingCredentials}
                 >
                   <SelectTrigger>
@@ -300,8 +320,8 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
                   </SelectTrigger>
                   <SelectContent>
                     {credentials.map((cred) => (
-                      <SelectItem key={cred.id} value={cred.id}>
-                        {cred.name} ({cred.vcenter_host})
+                      <SelectItem key={cred.id} value={cred.id.toString()}>
+                        {cred.credential_name} ({cred.vcenter_host})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -361,15 +381,24 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
                   <div className="space-y-3 max-h-60 overflow-y-auto">
                     <p className="text-sm font-medium">Found {discoveredVMs.length} VMs:</p>
                     {discoveredVMs.slice(0, 5).map((vm) => (
-                      <div key={vm.vmware_vm_id} className="flex items-center gap-3 p-2 rounded border">
+                      <div key={vm.id} className="flex items-center gap-3 p-2 rounded border">
                         <Server className="h-4 w-4 text-muted-foreground" />
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">{vm.vm_name}</span>
+                            <span className="font-medium text-sm">{vm.name}</span>
                             {getStatusBadge(vm.power_state)}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {vm.datacenter} • {vm.guest_os} • {vm.cpu_count} CPU • {vm.memory_mb} MB RAM
+                          <div className="text-xs text-muted-foreground space-y-0.5">
+                            <div>{vm.guest_os} • {vm.num_cpu} CPU • {vm.memory_mb} MB RAM</div>
+                            {vm.disks && vm.disks.length > 0 && (
+                              <div>
+                                💾 {vm.disks.length} disk{vm.disks.length !== 1 ? 's' : ''}
+                                ({vm.disks.reduce((total: number, disk: any) => total + (disk.size_gb || 0), 0)} GB total)
+                              </div>
+                            )}
+                            {vm.networks && vm.networks.length > 0 && (
+                              <div>🌐 {vm.networks.length} network{vm.networks.length !== 1 ? 's' : ''}</div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -403,21 +432,33 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
 
                 <div className="space-y-3 max-h-60 overflow-y-auto">
                   {discoveredVMs.map((vm) => (
-                    <div key={vm.vmware_vm_id} className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50">
+                    <div key={vm.id} className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50">
                       <Checkbox
-                        id={`vm-${vm.vmware_vm_id}`}
-                        checked={selectedVMIds.includes(vm.vmware_vm_id)}
-                        onCheckedChange={(checked) => handleVMSelection(vm.vmware_vm_id, checked as boolean)}
+                        id={`vm-${vm.id}`}
+                        checked={selectedVMIds.includes(vm.id)}
+                        onCheckedChange={(checked) => handleVMSelection(vm.id, checked as boolean)}
                       />
                       <div className="flex items-center gap-3 flex-1">
                         <Server className="h-4 w-4 text-muted-foreground" />
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{vm.vm_name}</span>
+                            <span className="font-medium">{vm.name}</span>
                             {getStatusBadge(vm.power_state)}
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            {vm.datacenter} • {vm.guest_os} • {vm.cpu_count} CPU • {vm.memory_mb} MB RAM
+                          <div className="text-sm text-muted-foreground space-y-0.5">
+                            <div>{vm.guest_os} • {vm.num_cpu} CPU • {vm.memory_mb} MB RAM</div>
+                            {vm.disks && vm.disks.length > 0 && (
+                              <div className="text-xs">
+                                💾 {vm.disks.length} disk{vm.disks.length !== 1 ? 's' : ''}
+                                ({vm.disks.reduce((total: number, disk: any) => total + (disk.size_gb || 0), 0)} GB total)
+                              </div>
+                            )}
+                            {vm.networks && vm.networks.length > 0 && (
+                              <div className="text-xs">
+                                🌐 {vm.networks.length} network{vm.networks.length !== 1 ? 's' : ''}
+                                {vm.networks.map((net: any, i: number) => ` ${net.network_name}`).join(',')}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -434,11 +475,11 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
                   <CardContent>
                     <div className="space-y-2">
                       {selectedVMIds.map((vmId) => {
-                        const vm = discoveredVMs.find(v => v.vmware_vm_id === vmId);
+                        const vm = discoveredVMs.find(v => v.id === vmId);
                         return vm ? (
                           <div key={vmId} className="flex items-center gap-2 text-sm">
                             <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span>{vm.vm_name}</span>
+                            <span>{vm.name}</span>
                           </div>
                         ) : null;
                       })}

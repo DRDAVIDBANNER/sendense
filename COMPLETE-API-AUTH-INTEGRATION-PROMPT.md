@@ -165,3 +165,4 @@ After this quick auth fix:
 **CURRENT STATUS:** 98% complete - just need authentication tokens in API calls
 **ESTIMATED TIME:** 15-30 minutes maximum  
 **RESULT:** Complete working VMware backup workflow from GUI to vCenter
+

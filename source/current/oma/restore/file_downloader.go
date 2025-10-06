@@ -388,3 +388,4 @@ func detectContentType(ext string) string {
 	// Default to octet-stream for unknown types
 	return "application/octet-stream"
 }
+

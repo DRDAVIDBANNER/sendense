@@ -23,6 +23,7 @@ const nextConfig: NextConfig = {
   // output: 'standalone', // Enable standalone output for deployment (commented out for now)
 
   // API Proxy to SHA backend
+  // NOTE: rewrites have limited timeout control, use custom API routes for long operations
   async rewrites() {
     return [
       {

@@ -36,3 +36,4 @@ ReadWritePaths=/var/log/sendense /var/lib/sendense /dev
 
 [Install]
 WantedBy=multi-user.target
+

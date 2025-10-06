@@ -116,3 +116,4 @@ func (e *InsufficientSpaceError) Error() string {
 	return fmt.Sprintf("insufficient space: required %d bytes, available %d bytes", 
 		e.Required, e.Available)
 }
+

@@ -327,3 +327,4 @@ func TestBackupMetadataFields(t *testing.T) {
 		t.Errorf("BackupType = %v, want %v", backup.BackupType, BackupTypeFull)
 	}
 }
+

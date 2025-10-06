@@ -382,3 +382,4 @@ func TestRepositoryConfigTypeAssertion(t *testing.T) {
 		})
 	}
 }
+

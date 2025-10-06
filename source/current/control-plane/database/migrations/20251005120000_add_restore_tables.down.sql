@@ -4,3 +4,4 @@
 
 -- Drop the restore_mounts table
 DROP TABLE IF EXISTS restore_mounts;
+

@@ -227,3 +227,4 @@ CREATE INDEX idx_backup_vm_disk ON backup_jobs(vm_context_id, disk_id, backup_ty
 **Binary Version:** sendense-hub-v2.8.1-sudo-fix  
 **Testing Status:** ✅ PASSED (preprod 10.245.246.136)  
 **Production Ready:** ✅ YES
+

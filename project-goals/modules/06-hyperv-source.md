@@ -101,3 +101,4 @@ func (rct *RCTManager) GetChangedBlocks(vmName, sinceRCTId string) ([]ChangedBlo
 
 **Module Owner:** Windows Engineering Team  
 **Last Updated:** October 4, 2025
+

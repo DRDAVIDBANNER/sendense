@@ -324,3 +324,4 @@ func TestChainManagerEdgeCases(t *testing.T) {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
+

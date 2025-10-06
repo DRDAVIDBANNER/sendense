@@ -21,10 +21,21 @@ Progress Proxy
 - GET /progress/{job_id} → proxies VMA; no direct DB writes; used with `replication_jobs` vma_* updates via poller elsewhere
 
 Discovery
-- POST /discovery/discover-vms → writes to `vm_replication_contexts` when create_context true; may set `auto_added=1`, scheduler flags
-- POST /discovery/add-vms|bulk-add → writes `vm_replication_contexts` rows without jobs (no `replication_jobs`)
-- GET /discovery/ungrouped-vms → reads `vm_replication_contexts` where not in `vm_group_memberships`
-- POST /discovery/preview → reads vCenter via VMA; read-only on DB
+- POST /discovery/discover-vms → Discovers VMs via VMA `/api/v1/discover`; conditionally writes `vm_replication_contexts` when create_context=true; sets `auto_added=1`, `scheduler_enabled=1`, auto-assigns `ossea_config_id` from active config; captures full VM metadata (cpu_count, memory_mb, os_type, power_state); does NOT create `replication_jobs` entries
+- POST /discovery/add-vms → **PREFERRED bulk add method**; writes `vm_replication_contexts` rows for specified VM names (vm_names field); sets `auto_added=1`, `scheduler_enabled=1`; supports credential_id lookup from `vmware_credentials` table OR manual credentials; no `replication_jobs` created; returns detailed per-VM success/failure in `processed_vms` array
+- POST /discovery/bulk-add → **LEGACY endpoint**; same DB impact as add-vms but DOES NOT support credential_id; requires explicit vcenter/username/password/datacenter; writes `vm_replication_contexts`; prefer add-vms for new code
+- GET /discovery/ungrouped-vms → reads `vm_replication_contexts` WHERE context_id NOT IN (SELECT vm_context_id FROM vm_group_memberships); returns VMs added to management but not assigned to protection groups
+- POST /discovery/preview → calls VMA `/api/v1/discover`; NO database writes; read-only vCenter query for GUI preview workflow
+
+**Database Impact Details:**
+- Table: `vm_replication_contexts`
+  - Writes: context_id, vm_name, vmware_vm_id, vm_path, vcenter_host, datacenter, current_status='discovered', ossea_config_id, cpu_count, memory_mb, os_type, power_state, vm_tools_version, auto_added=1, scheduler_enabled=1, created_at, updated_at, last_status_change
+  - FK: ossea_config_id references ossea_configs(id) - auto-assigned from active config
+  - Unique Constraint: vm_name + vcenter_host (prevents duplicate discovery)
+- Table: `vmware_credentials` (read-only for credential_id lookup)
+  - Fields read: vcenter_host, username, password (decrypted), datacenter
+  - Updates last_used timestamp and usage_count when credential_id used
+- No writes to: replication_jobs, vm_disks, nbd_exports, device_mappings
 
 VMware Credentials
 - CRUD /vmware-credentials → reads/writes `vmware_credentials`; may update `vm_replication_contexts.credential_id`

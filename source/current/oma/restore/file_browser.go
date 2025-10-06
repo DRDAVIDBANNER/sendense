@@ -420,3 +420,4 @@ func (fb *FileBrowser) CalculateDirectorySize(ctx context.Context, dirPath strin
 
 	return totalSize, fileCount, nil
 }
+

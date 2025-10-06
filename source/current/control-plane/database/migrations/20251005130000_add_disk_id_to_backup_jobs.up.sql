@@ -13,3 +13,4 @@ CREATE INDEX idx_backup_vm_disk ON backup_jobs(vm_context_id, disk_id, backup_ty
 -- Add comment for documentation
 ALTER TABLE backup_jobs 
 MODIFY COLUMN disk_id INT NOT NULL DEFAULT 0 COMMENT 'Disk identifier for multi-disk VMs (0 for first disk, 1 for second, etc.)';
+

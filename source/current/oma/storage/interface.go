@@ -152,3 +152,4 @@ type AWSMetadata struct {
 	SnapshotID      string `json:"snapshot_id,omitempty"`
 	EBSChangeToken  string `json:"ebs_change_token,omitempty"` // EBS direct APIs
 }
+

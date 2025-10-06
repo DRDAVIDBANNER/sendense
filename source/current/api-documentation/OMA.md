@@ -50,15 +50,80 @@ VM-Centric Architecture
 - GET /vm-contexts/{context_id}/recent-jobs → `handlers.VMContext.GetRecentJobs`
   - Classification: Key (GUI relies on these)
 
-Discovery (Enhanced)
+Discovery (Enhanced) - VM Discovery Without Immediate Replication
 - POST /discovery/discover-vms → `handlers.EnhancedDiscovery.DiscoverVMs`
+  - Description: Discover VMs from vCenter via VMA with optional immediate context creation
+  - Request: { credential_id?: number, vcenter?: string, username?: string, password?: string, datacenter?: string, filter?: string, selected_vms?: string[], create_context: boolean }
+  - Response: { discovered_vms: [DiscoveredVMInfo], addition_result?: BulkAddResult, discovery_count, processing_time, status, message }
+  - DiscoveredVMInfo includes: id, name, path, power_state, guest_os, memory_mb, num_cpu, vmx_version, **disks: [VMADiskInfo]**, **networks: [VMANetworkInfo]**, existing, context_id
+  - VMADiskInfo: { id, label, path, size_gb, capacity_bytes, datastore }
+  - VMANetworkInfo: { label, network_name, mac_address }
+  - Authentication: Required
+  - Callsites: GUI VMDiscoveryModal, scheduler service
+  - Classification: **Key** (primary discovery endpoint)
+  - Notes: Supports both saved credentials (credential_id) and manual entry; returns full disk/network metadata for GUI display
+
 - POST /discovery/add-vms → `handlers.EnhancedDiscovery.AddVMs`
+  - Description: Add specific VMs to management by name (creates vm_replication_contexts without jobs)
+  - Request: { credential_id?: number, vcenter?: string, username?: string, password?: string, datacenter?: string, vm_names: string[] (required), added_by?: string }
+  - Response: { success, message, vms_added, vms_failed, total_vms, added_at, processed_vms: [ProcessedVMInfo] }
+  - ProcessedVMInfo: { vm_name, success, context_id?, error? }
+  - Authentication: Required
+  - Callsites: GUI "Add to Management" workflow
+  - Classification: **Key** (preferred bulk add method)
+  - ⚠️ **IMPORTANT:** This is the CORRECT endpoint for GUI bulk add operations
+  - ✅ **Supports credential_id** - works with saved VMware credentials
+  - ✅ Accepts VM names array (vm_names field)
+  - ✅ Returns detailed per-VM success/failure
+  - ✅ Creates vm_replication_contexts with auto_added=true flag
+  - Database Impact: Writes vm_replication_contexts table with full VM metadata (cpu_count, memory_mb, os_type, power_state)
+
 - POST /discovery/bulk-add → `handlers.EnhancedDiscovery.BulkAddVMs`
+  - Description: **LEGACY** bulk add requiring manual vCenter credentials
+  - Request: { vcenter: string (required), username: string (required), password: string (required), datacenter: string (required), filter?: string, selected_vms: string[] (required) }
+  - Response: BulkAddResult { total_requested, successfully_added, skipped, failed, added_vms, skipped_vms, failed_vms, discovery_duration, processing_duration }
+  - Authentication: Required
+  - Classification: **Auxiliary/Legacy** (prefer /discovery/add-vms instead)
+  - ⚠️ **DO NOT USE FROM GUI** - This endpoint does NOT support credential_id
+  - ❌ Requires explicit vcenter/username/password in every request
+  - ❌ No saved credential support
+  - Notes: Kept for backward compatibility; new code should use /discovery/add-vms
+
 - GET /discovery/ungrouped-vms → `handlers.EnhancedDiscovery.GetUngroupedVMs`
-- POST /discovery/preview → `handlers.EnhancedDiscovery.GetDiscoveryPreview`
-- GET /vm-contexts/ungrouped → alias to ungrouped-vms
-  - Callsites: services use VMA `/api/v1/discover` and add entries without jobs
+  - Description: List VMs added to management but not assigned to any protection group
+  - Response: { vms: [UngroupedVMInfo], count, retrieved_at }
+  - UngroupedVMInfo: { context_id, vm_name, vm_path, vcenter_host, datacenter, current_status, auto_added, scheduler_enabled, cpu_count, memory_mb, os_type, power_state, created_at, last_job_at }
+  - Authentication: Required
   - Classification: Key
+  - Database Query: Reads vm_replication_contexts WHERE context_id NOT IN (SELECT vm_context_id FROM vm_group_memberships)
+
+- POST /discovery/preview → `handlers.EnhancedDiscovery.GetDiscoveryPreview`
+  - Description: Preview VMs that would be discovered without creating contexts
+  - Request: { vcenter, username, password, datacenter, filter? }
+  - Response: { vms: [DiscoveredVMInfo], total_discovered, new_vms, existing_vms, processing_time, vcenter, datacenter, filter? }
+  - Authentication: Required
+  - Classification: Key
+  - Notes: Read-only operation, no database writes
+
+- GET /vm-contexts/ungrouped → alias to ungrouped-vms
+  - Classification: Auxiliary (redirect endpoint)
+  
+  **Architecture Notes:**
+  - All discovery operations use VMA `/api/v1/discover` endpoint via SSH tunnel (localhost:9081)
+  - VM contexts created without replication jobs (no entries in replication_jobs table)
+  - Supports incremental discovery: detects existing VMs and skips them
+  - All added VMs have auto_added=true and scheduler_enabled=true flags
+  - Full VM metadata captured: CPU, memory, OS type, power state, disk info, network info
+  
+  **Callsites:**
+  - GUI: VMDiscoveryModal uses discover-vms (discovery) → add-vms (bulk add)
+  - Scheduler Service: Uses discover-vms with create_context=true for automated discovery
+  - Machine Group Management: Uses ungrouped-vms to show available VMs for grouping
+  
+  **Database Impact:**
+  - Writes: vm_replication_contexts (with auto_added=1, scheduler_enabled=1, ossea_config_id auto-assigned)
+  - Reads: Checks existing contexts by vm_name to prevent duplicates
+  - Foreign Keys: ossea_config_id references ossea_configs table
 
 VMware Credentials Management
 - GET /vmware-credentials → list

@@ -328,3 +328,4 @@ func TestQCOW2InfoParsing(t *testing.T) {
 		})
 	}
 }
+

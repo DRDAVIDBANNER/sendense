@@ -306,3 +306,4 @@ POST /api/v1/vmware-credentials/{id}/test
 **FILES TO MODIFY:** Only `app/settings/sources/page.tsx` (replace mock data with API calls)
 **MAINTAIN:** All existing visual design and UX patterns
 **SUCCESS:** Complete vCenter credentials workflow enabling real VM discovery
+

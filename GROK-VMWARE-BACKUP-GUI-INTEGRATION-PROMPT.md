@@ -434,3 +434,4 @@ Integrate **real VMware backup APIs** with the Protection Groups interface while
 - **Professional Styling:** Maintain exact visual consistency with existing pages
 
 **API Endpoints Base URL:** Assume relative URLs (`/api/v1/...`) - the SHA API is accessible at standard endpoints
+

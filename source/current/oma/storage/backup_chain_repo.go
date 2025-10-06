@@ -291,3 +291,4 @@ func (r *SQLBackupChainRepository) CountBackupDependencies(ctx context.Context, 
 
 	return count, nil
 }
+
