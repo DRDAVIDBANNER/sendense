@@ -187,17 +187,20 @@ func (h *RepositoryHandler) CreateRepository(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Build response
-	response := RepositoryResponse{
-		ID:               repoConfig.ID,
-		Name:             repoConfig.Name,
-		Type:             repoConfig.Type,
-		Enabled:          repoConfig.Enabled,
-		Config:           repoConfig.Config,
-		IsImmutable:      repoConfig.IsImmutable,
-		MinRetentionDays: repoConfig.MinRetentionDays,
-		StorageInfo:      storageInfo,
-		CreatedAt:        repoConfig.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:        repoConfig.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	response := map[string]interface{}{
+		"success": true,
+		"repository": RepositoryResponse{
+			ID:               repoConfig.ID,
+			Name:             repoConfig.Name,
+			Type:             repoConfig.Type,
+			Enabled:          repoConfig.Enabled,
+			Config:           repoConfig.Config,
+			IsImmutable:      repoConfig.IsImmutable,
+			MinRetentionDays: repoConfig.MinRetentionDays,
+			StorageInfo:      storageInfo,
+			CreatedAt:        repoConfig.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:        repoConfig.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
