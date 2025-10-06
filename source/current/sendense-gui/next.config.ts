@@ -22,6 +22,16 @@ const nextConfig: NextConfig = {
   // Build optimizations
   // output: 'standalone', // Enable standalone output for deployment (commented out for now)
 
+  // API Proxy to SHA backend
+  async rewrites() {
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: 'http://localhost:8082/api/v1/:path*',
+      },
+    ];
+  },
+
   // Security headers
   async headers() {
     return [
