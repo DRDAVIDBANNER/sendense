@@ -125,7 +125,7 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          credential_id: selectedCredentialId
+          credential_id: parseInt(selectedCredentialId)
         }),
       });
 
@@ -160,7 +160,7 @@ export function VMDiscoveryModal({ isOpen, onClose, onDiscoveryComplete }: VMDis
         },
         body: JSON.stringify({
           vm_ids: selectedVMIds,
-          credential_id: selectedCredentialId
+          credential_id: parseInt(selectedCredentialId)
         }),
       });
 
