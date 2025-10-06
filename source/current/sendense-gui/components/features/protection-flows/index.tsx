@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Flow, FlowsTableProps, FlowRowProps } from "./types";
 import { FlowRow } from "./FlowRow";
+import { FlowDetailsModal } from "./FlowDetailsModal";
 import { FlowDetailsPanel } from "./FlowDetailsPanel";
 import { JobLogPanel } from "./JobLogPanel";
 import { CreateFlowModal } from "./CreateFlowModal";
@@ -26,6 +27,7 @@ export function FlowsTable({
 }) {
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [selectedFlowForModal, setSelectedFlowForModal] = useState<Flow | null>(null);
 
   const sortedFlows = useMemo(() => {
     return [...flows].sort((a, b) => {
@@ -70,6 +72,20 @@ export function FlowsTable({
   const handleRunNow = (flow: Flow) => {
     // TODO: Start flow execution
     console.log('Run flow now:', flow.id);
+  };
+
+  const handleViewFlowDetails = (flow: Flow) => {
+    setSelectedFlowForModal(flow);
+  };
+
+  const handleReplicationAction = (action: 'start' | 'pause' | 'resume' | 'failover' | 'rollback' | 'cleanup') => {
+    console.log('Replication action:', action, 'for flow:', selectedFlowForModal?.id);
+    // TODO: Implement actual replication actions
+  };
+
+  const handleBackupAction = (action: 'start' | 'restore') => {
+    console.log('Backup action:', action, 'for flow:', selectedFlowForModal?.id);
+    // TODO: Implement actual backup actions
   };
 
   return (
@@ -139,6 +155,7 @@ export function FlowsTable({
                 flow={flow}
                 isSelected={selectedFlowId === flow.id}
                 onSelect={onSelectFlow}
+                onViewDetails={handleViewFlowDetails}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onRunNow={onRunNow}
@@ -147,8 +164,17 @@ export function FlowsTable({
           )}
         </TableBody>
       </Table>
+
+      {/* Flow Details Modal */}
+      <FlowDetailsModal
+        flow={selectedFlowForModal}
+        isOpen={!!selectedFlowForModal}
+        onClose={() => setSelectedFlowForModal(null)}
+        onReplicationAction={handleReplicationAction}
+        onBackupAction={handleBackupAction}
+      />
     </div>
   );
 }
 
-export { FlowDetailsPanel, JobLogPanel, CreateFlowModal, EditFlowModal, DeleteConfirmModal };
+export { FlowDetailsModal, FlowDetailsPanel, JobLogPanel, CreateFlowModal, EditFlowModal, DeleteConfirmModal };

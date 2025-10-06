@@ -26,6 +26,7 @@ export interface FlowRowProps {
   flow: Flow;
   isSelected: boolean;
   onSelect: (flow: Flow) => void;
+  onViewDetails?: (flow: Flow) => void;
   onEdit?: (flow: Flow) => void;
   onDelete?: (flow: Flow) => void;
   onRunNow?: (flow: Flow) => void;
