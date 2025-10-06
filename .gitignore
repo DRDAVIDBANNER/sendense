@@ -62,3 +62,4 @@ vma-deployment-package/binaries/vma-api-server*
 
 # VirtIO tools (Windows executables)
 oma-deployment-package/virt-tools/*.exe
+source/archive/binaries-cleanup-20251006/*.tar.gz

@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Repository Creation Success Field Missing** (October 6, 2025):
+  - Frontend was checking `data.success` but backend returned bare repository object
+  - Backend now returns `{ success: true, repository: {...} }` format for POST /api/v1/repositories
+  - Modal now closes properly after successful repository creation
+  - Success alert displays correctly: "Repository 'xxx' created successfully!"
+  - Binary: sendense-hub-v2.10.4-repo-create-success-field deployed to dev and preprod
+  
+### Fixed
 - **Repository GUI Storage Display and Modal UX** (October 6, 2025):
   - Fixed storage_info field name mismatch in frontend (was checking `storage`, should be `storage_info`)
   - Repository capacities now display correctly (491GB instead of 0GB)
