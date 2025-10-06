@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Repository API Response Format** (October 6, 2025):
+  - Fixed ListRepositories handler to return `{ success: true, repositories: [] }` format
+  - Backend was returning bare array `[]`, frontend expected wrapped object
+  - Matches documented API response format in BACKUP_REPOSITORY_GUI_INTEGRATION.md
+  - Resolves "Failed to load repositories" error on Repositories page
+  - Binary: sendense-hub-v2.10.1-repo-api-fix deployed
+  
 ### Added
 - **Repository Management GUI Integration Job Sheet** (October 6, 2025):
   - Comprehensive Grok prompt for wiring up Repositories page to backend API
