@@ -16,12 +16,21 @@
 - ✅ **Documentation Complete:** Deployment guide, troubleshooting, and completion summary
 - 📊 **Status:** 100% complete and production-ready
 
-**Enhancement Requirement Identified (October 6, 2025):**
-- 🔄 **Appliance Fleet Management:** GUI extension for distributed enterprise deployments
-- 🖥️ **Scope:** Manage Sendense Node Appliances (SNA) and Hub Appliances (SHA)
-- 🌍 **Site Organization:** Group appliances by physical/logical sites with health monitoring
-- 🔗 **Integration:** Dashboard appliance status + Protection Groups appliance-scoped VM discovery
-- 🎯 **Business Value:** Enterprise/MSP deployment management capability
+**Enhancement Requirements Identified (October 6, 2025):**
+
+**🖥️ Appliance Fleet Management:**
+- **Purpose:** Manage distributed Sendense Node Appliances (SNA) and Hub Appliances (SHA)
+- **Features:** Site organization, health monitoring, approval workflow, appliance-scoped VM discovery
+- **Integration:** Dashboard fleet status + Protection Groups appliance selection
+- **Value:** Enterprise/MSP multi-site deployment management
+
+**🔄 Flow Control & Operations:**
+- **Purpose:** Transform GUI from view-only to full operational control platform
+- **Features:** Expanded flow modals, backup/restore operations, failover controls, license-aware workflows
+- **Controls:** Replication (replicate now, failover, test failover, rollback, cleanup), Backup (backup now, multi-step restore)
+- **Value:** Complete customer operational autonomy, professional disaster recovery capabilities
+
+**⚠️ Backend Requirements:** Both enhancements require backend API development (TBD)
 
 ---
 
