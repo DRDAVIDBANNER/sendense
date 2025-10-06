@@ -8,10 +8,12 @@ import { api } from '@/lib/api';
 import { BackupJob } from '@/lib/types';
 import { BackupJobsList } from './BackupJobsList';
 import { StartBackupModal } from './StartBackupModal';
+import { FileBrowserModal } from './FileBrowserModal';
 
 export function BackupsManagement() {
   const [selectedBackup, setSelectedBackup] = useState<BackupJob | null>(null);
   const [showStartBackupModal, setShowStartBackupModal] = useState(false);
+  const [browseFilesBackup, setBrowseFilesBackup] = useState<BackupJob | null>(null);
 
   // Fetch all backups for statistics
   const { data: backupsData } = useQuery({
@@ -25,8 +27,7 @@ export function BackupsManagement() {
   const runningBackups = allBackups.filter(b => b.status === 'running').length;
 
   const handleBrowseFiles = (backup: BackupJob) => {
-    // TODO: Open file browser modal (Phase 4)
-    console.log('Browse files for backup:', backup.backup_id);
+    setBrowseFilesBackup(backup);
   };
 
   return (
@@ -103,6 +104,13 @@ export function BackupsManagement() {
       <StartBackupModal
         isOpen={showStartBackupModal}
         onClose={() => setShowStartBackupModal(false)}
+      />
+
+      {/* File Browser Modal */}
+      <FileBrowserModal
+        isOpen={!!browseFilesBackup}
+        onClose={() => setBrowseFilesBackup(null)}
+        backup={browseFilesBackup}
       />
     </div>
   );
