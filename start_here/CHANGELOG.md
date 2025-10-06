@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Repository API JSON Error Handling** (October 6, 2025):
+  - Fixed all repository API endpoints to return proper JSON error responses
+  - Changed `http.Error()` plain text responses to `{ success: false, error: "message" }` format
+  - Fixed frontend "Unexpected token" errors caused by trying to parse plain text as JSON
+  - Applied to `CreateRepository`, `DeleteRepository`, and validation errors
+  - Binary: sendense-hub-v2.10.3-repo-refresh-delete-fix deployed
+  
 - **Repository API Response Format** (October 6, 2025):
   - Fixed ListRepositories handler to return `{ success: true, repositories: [] }` format
   - Backend was returning bare array `[]`, frontend expected wrapped object
@@ -18,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Binary: sendense-hub-v2.10.1-repo-api-fix deployed
   
 ### Added
+- **Repository Refresh Storage Endpoint** (October 6, 2025):
+  - Added `POST /api/v1/repositories/refresh-storage` endpoint
+  - Manually refreshes storage info for all repositories
+  - Returns `{ success: true, refreshed_count: N, failed_count: M }` with detailed results
+  - Loops through all repositories and updates storage information in database
+  - Registered in server router and fully integrated
+  
 - **Repository Management GUI Integration Job Sheet** (October 6, 2025):
   - Comprehensive Grok prompt for wiring up Repositories page to backend API
   - Complete data transformation guide (bytes→GB, enabled→status mappings)
