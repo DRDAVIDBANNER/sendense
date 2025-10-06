@@ -1,894 +1,1006 @@
-# Phase 3: Sendense Professional GUI - Clean Enterprise Design
+# Phase 3: Sendense Cockpit UI - Aviation-Inspired Interface
 
 **Phase ID:** PHASE-03  
-**Status:** 🟢 **READY TO IMPLEMENT**  
-**Priority:** Critical (User Experience & Professional Appearance)  
-**Timeline:** 4-6 weeks  
-**Team Size:** 2-3 frontend developers  
-**Dependencies:** Backend API functional (Phase 1 preferred)
+**Status:** 🟡 **IN PROGRESS** (~87% Complete)  
+**Priority:** Critical (User Experience Differentiator)  
+**Timeline:** 8-10 weeks (4-6 weeks remaining)  
+**Team Size:** AI Implementation (Grok Code Fast) + Review  
+**Dependencies:** ✅ Phase 1 Complete (Backup infrastructure operational)
+
+**Implementation Progress (October 6, 2025):**
+- ✅ **Phases 1-7 Complete:** All major GUI functionality implemented
+- ✅ **Professional Design:** Enterprise-grade interface with Sendense branding
+- ✅ **All Pages Functional:** Dashboard, Protection Flows, Groups, Reports, Settings, Users, Support
+- ✅ **Development Mode:** Working perfectly at http://localhost:3000
+- ❌ **Phase 8 Production:** Build issues need resolution for production deployment
+- 📊 **Overall:** 87% complete, production build optimization remaining
 
 ---
 
 ## 🎯 Phase Objectives
 
-**Primary Goal:** Build a clean, professional interface that makes competitors look outdated
+**Primary Goal:** Build a cockpit-style interface that makes Veeam and Nakivo look like Fisher-Price toys
 
 **Success Criteria:**
-- ✅ **Clean modern design** inspired by Enterprise's best qualities
-- ✅ **Protection Flows page** matching Enterprise Catalogs layout (table + details + logs)
-- ✅ **Intuitive navigation** with 7 clear menu sections
-- ✅ **Real-time updates** for all protection operations
-- ✅ **Professional appearance** that justifies premium pricing
-- ✅ **Fully responsive** (desktop focus, mobile friendly)
+- ✅ **Cockpit-style dashboard** with aviation-inspired design
+- ✅ **Real-time telemetry** for all operations (descend/ascend/transcend)
+- ✅ **Multi-platform orchestration** (6 platforms in single pane)
+- ✅ **Everything within reach** (minimal clicks, fast operations)
+- ✅ **Enterprise professional feel** (impress CIOs, not just IT staff)
+- ✅ **Mobile cockpit** (responsive for tablets and phones)
 
 **Strategic Value:**
-- **Enterprise Sales:** Professional interface for CIO-level demos
-- **User Retention:** Intuitive design reduces training needs
-- **Competitive Edge:** Modern React-based UI vs legacy competitors
-- **Platform Growth:** Modular architecture allows rapid feature addition
+- **Competitive Advantage:** Best-in-class GUI that shames competitors
+- **Enterprise Sales:** Professional interface that justifies premium pricing
+- **User Retention:** Intuitive interface reduces churn
+- **Platform Differentiation:** No one has a backup "cockpit" interface
 
 ---
 
-## 🎨 Sendense Design System
-
-### **Design Philosophy: "Clean, Professional, Functional"**
-
-**Core Principles:**
-- **Dark theme by default** (modern, professional, easy on eyes)
-- **Clean typography** (Inter font, clear hierarchy)
-- **Consistent spacing** (Tailwind spacing scale)
-- **No unnecessary decoration** (no gradients, no emojis)
-- **Function over form** (but beautiful in execution)
-
-### **Color Palette**
-
-```css
-/* Core Colors */
---sendense-bg: #0a0e17;          /* Deep background */
---sendense-surface: #12172a;     /* Card/panel background */
---sendense-accent: #023E8A;      /* Primary blue accent */
---sendense-accent-hover: #012E6A; /* Darker accent for hover */
---sendense-text: #e4e7eb;        /* Primary text */
---sendense-text-muted: #94a3b8;  /* Secondary text */
---sendense-border: #2d3748;      /* Border color */
-
-/* Status Colors */
---sendense-success: #10b981;     /* Success/healthy */
---sendense-warning: #f59e0b;     /* Warning/attention */
---sendense-error: #ef4444;       /* Error/critical */
---sendense-info: #3b82f6;        /* Info/running */
-```
-
-### **Typography**
+## 🏗️ Sendense Cockpit Architecture
 
 ```
-Font Family: Inter (Google Fonts)
-Headings: 600-700 weight
-Body: 400-500 weight
-Code/Monospace: IBM Plex Mono
+┌────────────────────────────────────────────────────────────────┐
+│ SENDENSE COCKPIT UI ARCHITECTURE (Aviation-Inspired)          │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │              COCKPIT INTERFACE LAYER                     │ │
+│  │                                                          │ │
+│  │  🛩️ Aviation-Inspired Design:                            │ │
+│  │  • Dark cockpit theme (#0B0C10 background)              │ │
+│  │  • Accent #023E8A (professional blue)                   │ │
+│  │  • Real-time gauges and indicators                      │ │
+│  │  • Everything within reach (minimal navigation)         │ │
+│  │  • Glass morphism effects (subtle depth)                │ │
+│  │                                                          │ │
+│  │  🔧 Tech Stack:                                          │ │
+│  │  • Next.js 14+ (App Router)                            │ │
+│  │  • React 18 (Server Components)                        │ │
+│  │  • Tailwind CSS + shadcn/ui                            │ │
+│  │  • Framer Motion (smooth animations)                    │ │
+│  │  • Recharts (real-time graphs)                          │ │
+│  │  • Socket.io (live telemetry)                           │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│                          ↕ GraphQL + WebSocket                │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │              SENDENSE BACKEND API                        │ │
+│  │                                                          │ │
+│  │  🎯 Multi-Platform Operations:                           │ │
+│  │  • descend (backup operations)                          │ │
+│  │  • ascend (restore operations)                          │ │
+│  │  • transcend (replication operations)                   │ │
+│  │                                                          │ │
+│  │  🌐 Platform Connectors:                                │ │
+│  │  • VMware (✅), CloudStack (✅), Hyper-V, AWS, Azure    │ │
+│  │  • Nutanix, Physical Servers                            │ │
+│  │                                                          │ │
+│  │  💾 Repository Management:                               │ │
+│  │  • Local (QCOW2), S3, Azure Blob, Immutable            │ │
+│  │  • Backup validation, Performance benchmarking         │ │
+│  └──────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🗺️ Navigation Structure
+## 🎨 Sendense Cockpit Design System
 
-### **Primary Menu (7 Sections)**
+### **Design Philosophy: "Mission Control for Data"**
+
+**Aviation-Inspired Professional Interface:**
+- **Dark Cockpit:** Professional, high-contrast, easy on eyes during long sessions
+- **Real-Time Telemetry:** Live gauges, indicators, status lights
+- **Everything Within Reach:** Critical functions accessible without menu diving
+- **Glass Morphism:** Subtle depth and layering (cockpit panel feel)
+- **Minimal Chrome:** Focus on data, not decoration
+
+### **Sendense Color Palette (Cockpit Theme)**
 
 ```
-SENDENSE
+Core Cockpit Colors:
+├─ Background: #0B0C10 (Deep space black - primary background)
+├─ Surface: #121418 (Panel background - cards, sidebars)
+├─ Accent: #023E8A (Professional blue - primary actions)
+├─ Text: #E5EAF0 (High contrast text)
+└─ Maintenance: #014C97 (Accent variant for maintenance states)
 
-├─ 📊 Dashboard        - System overview, health, realtime monitoring
-├─ 🛡️ Protection Flows  - Backup/Replication Jobs (Enterprise Catalogs layout)
-├─ 📁 Protection Groups - Schedules, VM groupings, assignments
-├─ 📈 Report Center     - KPI reports, custom dashboards, filters
-├─ ⚙️ Settings          - Sources (vCenter), Destinations (CloudStack)
-├─ 👥 Users             - User/group/permissions management
-└─ 🆘 Support           - Help, documentation, support access
+Status Indicators (Aviation-Style):
+├─ Operational: #10B981 (Green - systems normal)
+├─ Caution: #F59E0B (Amber - attention required) 
+├─ Warning: #EF4444 (Red - immediate action)
+├─ Info: #3B82F6 (Blue - informational)
+└─ Offline: #64748B (Gray - inactive/disabled)
+
+Platform Identity Colors (Subtle accents):
+├─ VMware: #00A8E4 (Official VMware blue)
+├─ CloudStack: #FF8C00 (Apache orange)
+├─ Hyper-V: #0078D4 (Microsoft blue)
+├─ AWS: #FF9900 (AWS orange)
+├─ Azure: #0078D4 (Microsoft blue)
+└─ Nutanix: #024DA1 (Nutanix blue)
 ```
 
-### **Layout Pattern** (Consistent Across All Pages)
+### **Typography & Iconography**
+- **Font:** Inter (cockpit readability, professional)
+- **Icons:** Lucide React (minimal, consistent)
+- **Gauges:** Custom SVG components (aviation-inspired)
+- **Status Lights:** CSS-based indicators with subtle animations
+
+---
+
+## 🛩️ Sendense Cockpit Navigation (Aviation-Inspired)
+
+### **Primary Navigation (Always Visible)**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ [Sidebar - 256px]  │  [Main Content Area - Flex]           │
-│                    │                                        │
-│ Logo               │  [Page Header]                         │
-│                    │  Page Title, Actions, Breadcrumbs     │
-│ 📊 Dashboard       │                                        │
-│ 🛡️ Protection Flows│  ────────────────────────────────────  │
-│ 📁 Protection...   │                                        │
-│ 📈 Report Center   │  [Page Content]                        │
-│ ⚙️ Settings        │  Dynamic content based on page        │
-│ 👥 Users           │                                        │
-│ 🆘 Support         │                                        │
-│                    │                                        │
-│ [Theme Toggle]     │                                        │
+│ SENDENSE COCKPIT - MAIN CONSOLE                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Primary Flight Controls (Top Bar):                        │
+│  ├─ 🎯 COMMAND (main dashboard)                            │
+│  ├─ 🌊 FLOWS (backup/replication operations)               │
+│  ├─ 🗂️  ASSETS (protected VMs across all platforms)        │
+│  ├─ 🔄 RECOVERY (restore and failover)                     │
+│  └─ 📊 TELEMETRY (system health and performance)           │
+│                                                             │
+│  Secondary Controls (Context Bar):                         │
+│  ├─ 💾 Repositories (storage management)                   │
+│  ├─ 🌐 Platforms (source/target systems)                   │
+│  ├─ 📅 Schedules (backup/replication scheduling)           │
+│  ├─ 🎛️  Policies (retention, encryption, compliance)       │
+│  └─ ⚙️  Systems (settings, users, licensing)               │
+│                                                             │
+│  Quick Actions (Always Accessible):                        │
+│  ├─ ⚡ Emergency Stop (stop all operations)                │
+│  ├─ 🚨 Alerts (real-time notifications)                    │
+│  ├─ 🔍 Global Search (find any VM, job, or setting)        │
+│  └─ 👤 User Menu (profile, logout, help)                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## 📦 Project Structure (Modular Architecture)
-
-### **Directory Structure**
+### **Cockpit Layout Strategy**
 
 ```
-sendense-gui/
-├── src/
-│   ├── app/                          # Next.js App Router
-│   │   ├── dashboard/
-│   │   │   └── page.tsx              # Dashboard page
-│   │   ├── protection-flows/
-│   │   │   ├── page.tsx              # Main flows page (Enterprise-style)
-│   │   │   └── [flowId]/
-│   │   │       └── page.tsx          # Flow details page
-│   │   ├── protection-groups/
-│   │   │   └── page.tsx              # Groups & schedules
-│   │   ├── report-center/
-│   │   │   └── page.tsx              # Reports & dashboards
-│   │   ├── settings/
-│   │   │   ├── page.tsx              # Settings home
-│   │   │   ├── sources/
-│   │   │   │   └── page.tsx          # Source configuration
-│   │   │   └── destinations/
-│   │   │       └── page.tsx          # Destination configuration
-│   │   ├── users/
-│   │   │   └── page.tsx              # User management
-│   │   ├── support/
-│   │   │   └── page.tsx              # Support page
-│   │   ├── layout.tsx                # Root layout with sidebar
-│   │   └── globals.css               # Global styles
-│   │
-│   ├── features/                     # Feature-based modules
-│   │   ├── dashboard/
-│   │   │   ├── components/
-│   │   │   │   ├── SystemHealthCard.tsx
-│   │   │   │   ├── MetricsGrid.tsx
-│   │   │   │   └── RealtimeMonitor.tsx
-│   │   │   ├── hooks/
-│   │   │   │   └── useDashboardMetrics.ts
-│   │   │   └── types/
-│   │   │       └── index.ts
-│   │   │
-│   │   ├── protection-flows/         # Main feature (Enterprise-style)
-│   │   │   ├── components/
-│   │   │   │   ├── FlowsTable/
-│   │   │   │   │   ├── index.tsx     # Main table component
-│   │   │   │   │   ├── FlowRow.tsx   # Individual row
-│   │   │   │   │   ├── StatusCell.tsx
-│   │   │   │   │   └── ActionsDropdown.tsx
-│   │   │   │   ├── FlowDetailsPanel/
-│   │   │   │   │   ├── index.tsx     # Details panel
-│   │   │   │   │   ├── OverviewTab.tsx
-│   │   │   │   │   ├── VolumesTab.tsx
-│   │   │   │   │   └── HistoryTab.tsx
-│   │   │   │   ├── JobLogPanel/
-│   │   │   │   │   ├── index.tsx     # Log panel (right side)
-│   │   │   │   │   ├── LogViewer.tsx
-│   │   │   │   │   └── LogFilters.tsx
-│   │   │   │   └── modals/
-│   │   │   │       ├── CreateFlowModal.tsx
-│   │   │   │       ├── EditFlowModal.tsx
-│   │   │   │       └── DeleteConfirmModal.tsx
-│   │   │   ├── hooks/
-│   │   │   │   ├── useProtectionFlows.ts
-│   │   │   │   ├── useFlowActions.ts
-│   │   │   │   └── useJobLogs.ts
-│   │   │   ├── stores/
-│   │   │   │   └── flowsStore.ts
-│   │   │   └── types/
-│   │   │       └── index.ts
-│   │   │
-│   │   ├── protection-groups/
-│   │   │   ├── components/
-│   │   │   ├── hooks/
-│   │   │   └── types/
-│   │   │
-│   │   ├── reports/
-│   │   │   ├── components/
-│   │   │   ├── hooks/
-│   │   │   └── types/
-│   │   │
-│   │   └── settings/
-│   │       ├── components/
-│   │       ├── hooks/
-│   │       └── types/
-│   │
-│   ├── components/                   # Shared components
-│   │   ├── ui/                       # shadcn components
-│   │   │   ├── button.tsx
-│   │   │   ├── card.tsx
-│   │   │   ├── dialog.tsx
-│   │   │   ├── table.tsx
-│   │   │   ├── tabs.tsx
-│   │   │   └── ...
-│   │   ├── layout/
-│   │   │   ├── Sidebar.tsx
-│   │   │   ├── Header.tsx
-│   │   │   └── PageHeader.tsx
-│   │   └── common/
-│   │       ├── StatusBadge.tsx
-│   │       ├── LoadingSpinner.tsx
-│   │       ├── EmptyState.tsx
-│   │       └── ErrorBoundary.tsx
-│   │
-│   ├── lib/
-│   │   ├── api/                      # API client
-│   │   │   ├── client.ts
-│   │   │   ├── endpoints.ts
-│   │   │   └── types.ts
-│   │   ├── hooks/                    # Global hooks
-│   │   │   ├── useAuth.ts
-│   │   │   └── useTheme.ts
-│   │   ├── utils/
-│   │   │   ├── cn.ts                 # Classname utility
-│   │   │   ├── formatters.ts
-│   │   │   └── validators.ts
-│   │   └── constants/
-│   │       ├── colors.ts
-│   │       └── routes.ts
-│   │
-│   └── styles/
-│       └── globals.css
-│
-├── public/
-│   └── sendense-logo.svg
-├── .env.local
-├── next.config.ts
-├── tailwind.config.ts
-├── tsconfig.json
-└── package.json
+Aviation-Inspired Layout:
+
+Primary Display (Center):     Main operational view
+Instrument Panel (Left):      Key metrics, status indicators  
+Navigation Panel (Right):     Context-sensitive actions
+Status Bar (Bottom):          System health, connectivity, version
+Alert Panel (Top-Right):      Critical notifications, warnings
+
+Responsive Adaptation:
+Desktop (>1280px):   Full cockpit (all panels visible)
+Laptop (1024px):     Collapsible side panels
+Tablet (768px):      Overlay panels with gesture controls
+Mobile (480px):      Single-panel focus with bottom navigation
 ```
 
 ---
 
-## 🛡️ Protection Flows Page (Enterprise Catalogs Layout)
+## 📋 Sendense Cockpit Implementation Plan
 
-### **Layout Design** (Matching Enterprise's Best Pattern)
+### **Phase 1: Foundation Setup** (Week 1)
 
+**Goal:** Establish cockpit foundation with Sendense design system
+
+**Sub-Tasks:**
+1.1. **Next.js 14+ Cockpit Project**
+   - Initialize with App Router (not Pages Router)
+   - TypeScript strict mode configuration
+   - TailwindCSS + shadcn/ui integration
+   - Lucide React icon library
+   - Inter font via Google Fonts
+
+1.2. **Sendense Cockpit Design System**
+   ```css
+   /* Cockpit color palette */
+   --sendense-bg: #0B0C10;      /* Deep space black */
+   --sendense-surface: #121418;  /* Panel background */
+   --sendense-accent: #023E8A;   /* Professional blue */
+   --sendense-text: #E5EAF0;     /* High contrast */
+   --sendense-maintenance: #014C97; /* Maintenance mode */
+   ```
+
+1.3. **Layout Components (Cockpit Style)**
+   - `<CockpitLayout>` - Aviation-inspired layout wrapper
+   - `<InstrumentPanel>` - Left metrics panel
+   - `<PrimaryDisplay>` - Center main view
+   - `<ContextPanel>` - Right action panel
+   - `<StatusBar>` - Bottom system status
+   - `<AlertStrip>` - Top notification bar
+
+**Files to Create:**
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│ Protection Flows                    [+ Create Flow] [⟳ Refresh]    │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│ ┌────────── Flows Table ──────────┬─── Job Logs ───┐               │
-│ │ Name     Type    Status  Last │ Running Job:   │               │
-│ │ ───────────────────────────────│ VM-Backup-01   │               │
-│ │ DB-Backup Backup  🟢 2h   │                    │               │
-│ │ Web-Repl  Repl    🟢 1h   │ [===75%====]     │               │
-│ │ File-Back Backup  🟡 5m   │                    │               │
-│ │                           │ Logs:              │               │
-│ │ [Select row for details]  │ [Log viewer here]  │               │
-│ ├───────────────────────────┘                    │               │
-│ │                                                 │               │
-│ │ ──── Horizontal Divider (Draggable) ────       │               │
-│ │                                                 │               │
-│ │ ┌──── Details Panel ─────────────────┐         │               │
-│ │ │ VM-Backup-01 Details               │         │               │
-│ │ │                                    │         │               │
-│ │ │ [Overview] [Volumes] [History]     │         │               │
-│ │ │                                    │         │               │
-│ │ │ Source: vcenter01/db-server        │         │               │
-│ │ │ Destination: cloudstack01/backup   │         │               │
-│ │ │ Schedule: Daily at 2 AM            │         │               │
-│ │ │ Last Run: Success (2h ago)         │         │               │
-│ │ └────────────────────────────────────┘         │               │
-│ └─────────────────────────────────────────────────┘               │
-└─────────────────────────────────────────────────────────────────────┘
+sendense-cockpit/
+├── components/ui/           # shadcn/ui components
+├── components/cockpit/
+│   ├── layout.tsx          # Main cockpit layout
+│   ├── instrument-panel.tsx # Left metrics/gauges
+│   ├── primary-display.tsx  # Center operational view
+│   ├── context-panel.tsx    # Right context actions
+│   ├── status-bar.tsx       # Bottom system status
+│   └── alert-strip.tsx      # Top alert notifications
+├── lib/
+│   ├── api.ts              # Backend API integration
+│   └── cockpit-theme.ts    # Cockpit styling system
+└── styles/
+    └── cockpit.css         # Cockpit-specific styles
 ```
 
-### **Key Features** (Exactly Like Enterprise)
+**Acceptance Criteria:**
+- [ ] Cockpit theme renders correctly (dark, professional)
+- [ ] Aviation-inspired layout responsive
+- [ ] All navigation elements accessible
+- [ ] Design system documented
+- [ ] Real-time data placeholders working
 
-1. **Flows Table** (Top Section)
-   - Sortable columns (Name, Type, Status, Last Run, Next Run)
-   - Status badges (Success/Running/Warning/Error)
-   - Actions dropdown per row
-   - Selection highlights row and shows details below
+---
 
-2. **Details Panel** (Bottom Section - Draggable Up/Down)
-   - **Horizontal drag divider** at top (grab and drag up/down to resize)
-   - Minimum height: 100px (collapsed)
-   - Maximum height: 60% of viewport
-   - Default height: 400px
-   - Tabs: Overview, Volumes, History
-   - Shows selected flow's configuration
-   - Quick actions (Edit, Delete, Run Now)
-   - **Persists size** to localStorage
+### **Phase 2: API Integration Layer** (Week 1)
 
-3. **Job Log Panel** (Right Section - Collapsible & Draggable)
-   - **Pops out from right side** (like Enterprise)
-   - **Chevron button** to collapse/expand panel
-   - **Vertical drag divider** on left edge (grab and drag left/right to resize)
-   - Minimum width: 48px (collapsed with just chevron visible)
-   - Maximum width: 600px
-   - Default width: 420px
-   - Real-time log streaming
-   - Log level filtering (All, Info, Warning, Error)
-   - Auto-scroll option
-   - **Persists state** (collapsed/expanded) to localStorage
-   - **Persists width** to localStorage
+**Goal:** Connect cockpit to Sendense backend with real-time data
 
-### **Component Breakdown**
+**Sub-Tasks:**
+2.1. **Sendense API Client** (adapting your original `/lib/api.ts`)
+   ```typescript
+   // Enhanced API client for full Sendense platform
+   const sendenseAPI = {
+     // Multi-platform operations
+     flows: {
+       descend: (vmID: string, repoID: string) => post('/api/v1/backup/start'),
+       ascend: (backupID: string, targetPlatform: string) => post('/api/v1/restore/start'),
+       transcend: (vmID: string, targetPlatform: string) => post('/api/v1/replication/start'),
+       getActive: () => get('/api/v1/flows/active'),
+       getHistory: () => get('/api/v1/flows/history'),
+     },
+     
+     // Multi-platform assets
+     assets: {
+       getByPlatform: (platform: string) => get(`/api/v1/vms?platform=${platform}`),
+       getAllPlatforms: () => get('/api/v1/platforms'),
+       getVMDetails: (vmID: string) => get(`/api/v1/vms/${vmID}`),
+     },
+     
+     // Repository management
+     repositories: {
+       getAll: () => get('/api/v1/repositories'),
+       testConnection: (repoID: string) => post(`/api/v1/repositories/${repoID}/test`),
+       getMetrics: (repoID: string) => get(`/api/v1/repositories/${repoID}/metrics`),
+     },
+     
+     // Real-time telemetry
+     telemetry: {
+       getSystemHealth: () => get('/api/v1/telemetry/health'),
+       getPerformanceMetrics: () => get('/api/v1/telemetry/performance'),
+       getCaptureAgents: () => get('/api/v1/agents'),
+     }
+   };
+   ```
 
+2.2. **Real-Time Data Layer**
+   - WebSocket integration for live flow updates
+   - Server-Sent Events for telemetry streaming
+   - React Query for optimistic updates
+   - Error boundaries with retry logic
+
+2.3. **TypeScript Interfaces**
+   ```typescript
+   interface SendenseFlow {
+     id: string;
+     type: 'descend' | 'ascend' | 'transcend';
+     source: PlatformVM;
+     target: PlatformTarget | Repository;
+     status: FlowStatus;
+     progress: ProgressMetrics;
+     telemetry: TelemetryData;
+   }
+   
+   interface PlatformVM {
+     platform: 'vmware' | 'cloudstack' | 'hyperv' | 'aws' | 'azure' | 'nutanix';
+     id: string;
+     name: string;
+     specs: VMSpecifications;
+     health: HealthStatus;
+   }
+   ```
+
+**Files to Create:**
+```
+lib/
+├── api.ts                  # Main API client (adapted from your plan)
+├── types.ts                # TypeScript interfaces
+├── websocket.ts            # Real-time data streaming
+├── constants.ts            # Platform colors, statuses, etc.
+└── utils.ts                # Helper functions
+```
+
+**Acceptance Criteria:**
+- [ ] All backend endpoints accessible via typed API
+- [ ] Real-time updates working (WebSocket + SSE)
+- [ ] Error handling robust
+- [ ] TypeScript strict mode clean
+
+---
+
+### **Phase 3: COMMAND Dashboard** (Week 2)
+
+**Goal:** Mission control center showing system-wide status
+
+**Features (Adapting your flows dashboard to broader scope):**
+
+3.1. **System Overview (Cockpit Style)**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ SENDENSE COMMAND CENTER                   🚨 2 ALERTS      │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─ FLEET STATUS ────────────┐  ┌─ OPERATIONS STATUS ───┐  │
+│  │ 🟢 247 VMs Protected      │  │ 🟢 12 Active Flows    │  │
+│  │ 🟡 3 Attention Required   │  │ ⚡ 4 Queued           │  │ │
+│  │ 🔴 1 Critical Issue       │  │ ⏸️  2 Paused          │  │
+│  │                           │  │ ✅ 156 Today          │  │
+│  └───────────────────────────┘  └────────────────────────┘  │
+│                                                             │
+│  ┌─ PLATFORM DISTRIBUTION ─────────────────────────────┐    │
+│  │ VMware     ████████████████ 67% (165 VMs)           │    │
+│  │ CloudStack ████████ 25% (62 VMs)                   │    │
+│  │ Hyper-V    ████ 12% (30 VMs)                       │    │
+│  │ AWS EC2    ██ 8% (20 VMs)                          │    │ │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                             │
+│  ┌─ THROUGHPUT GAUGE ──┐  ┌─ STORAGE EFFICIENCY ──────┐    │
+│  │      3.2 GiB/s       │  │ Dedup Ratio: 6.2:1      │    │
+│  │   ████████████▓▓▓   │  │ Compression: 2.1:1       │    │
+│  │   Current Load: 78%  │  │ Total Savings: 87%       │    │
+│  └─────────────────────┘  └──────────────────────────┘    │
+│                                                             │
+│  [INITIATE FLOW] [EMERGENCY STOP] [VIEW TELEMETRY]         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+3.2. **Live Activity Feed (Real-time)**
 ```tsx
-// Main page structure (Enterprise-style with draggable panels)
-<ProtectionFlowsPage>
-  <PageHeader 
-    title="Protection Flows"
-    actions={<CreateFlowButton />}
+interface FlowCard {
+  id: string;
+  type: 'descend' | 'ascend' | 'transcend';
+  vm: PlatformVM;
+  status: 'active' | 'queued' | 'paused' | 'completed' | 'failed';
+  progress: number;
+  throughput: number; // GiB/s
+  eta: string;
+}
+
+// Your original FlowCard concept but expanded for Sendense
+<FlowCard 
+  type="transcend"
+  source="vmware://database-prod-01" 
+  target="cloudstack://replica-db"
+  status="active"
+  progress={73}
+  throughput={2.8}
+  actions={['pause', 'inspect', 'emergency-stop']}
+/>
+```
+
+**Files to Create:**
+```
+app/command/
+├── page.tsx                # COMMAND dashboard (main cockpit)
+└── components/
+    ├── system-overview.tsx     # Fleet and operations status
+    ├── platform-distribution.tsx # Multi-platform VM chart
+    ├── throughput-gauge.tsx    # Real-time performance gauge
+    ├── activity-feed.tsx       # Live operations feed
+    └── flow-card.tsx          # Individual operation cards (your design)
+```
+
+---
+
+### **Phase 4: FLOWS Console** (Week 3)
+
+**Goal:** Real-time operation management (your core flows concept expanded)
+
+**Features:**
+
+4.1. **Flow Types (descend/ascend/transcend)**
+```
+Flow Management Console:
+┌─────────────────────────────────────────────────────────────┐
+│ ACTIVE FLOWS (12)              [PAUSE ALL] [EMERGENCY STOP] │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ 📥 DESCEND: VMware → S3 Repository                         │
+│ database-prod-01 ████████████████████▓▓▓▓ 83% (2.1 GiB/s) │
+│ ETA: 4m 23s | 12.3GB / 14.8GB                             │
+│ [⏸️ Pause] [🔍 Inspect] [⏹️ Stop]                            │
+│                                                             │
+│ 🌉 TRANSCEND: VMware → CloudStack                          │
+│ exchange-server ██████████████▓▓▓▓▓▓▓▓ 67% (1.8 GiB/s)    │
+│ ETA: 8m 12s | CBT incremental sync                        │
+│ [⏸️ Pause] [🔍 Inspect] [⏹️ Stop]                            │
+│                                                             │
+│ 📤 ASCEND: S3 Backup → AWS EC2                             │
+│ web-cluster-02 ██████████████████▓▓ 91% (Converting...)    │
+│ ETA: 2m 45s | Cross-platform restore                      │
+│ [⏸️ Pause] [🔍 Inspect] [⏹️ Stop]                            │
+│                                                             │
+│ ⏳ QUEUED FLOWS (4)                                        │ │
+│ • file-server-01 (descend → Local)                        │
+│ • app-server-02 (transcend → Azure)                       │ │
+│ [📋 Queue Management] [⚡ Priority Override]                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+4.2. **Flow Inspection Modal (Your GlassyModal concept)**
+```tsx
+<FlowInspectionModal>
+  <FlowHeader 
+    type="transcend"
+    source="vmware://database-prod-01"
+    target="cloudstack://replica-db"
   />
-  
-  <div className="flex h-full overflow-hidden">
-    {/* Left side: Table + Details */}
-    <div className="flex-1 flex flex-col min-h-0">
-      {/* Flows Table - grows to fill available space */}
-      <div 
-        className="overflow-auto"
-        style={{ height: `calc(100% - ${detailsPanelHeight}px - 4px)` }}
-      >
-        <FlowsTable 
-          flows={flows}
-          onSelectFlow={setSelectedFlow}
-          selectedFlowId={selectedFlow?.id}
+  <TelemetryGraphs>
+    <ThroughputGraph timeRange="60s" /> {/* Your original concept */}
+    <LatencyGraph />
+    <ErrorRateGraph />
+  </TelemetryGraphs>
+  <FlowLogs stream={true} />
+  <FlowActions>
+    <Button variant="destructive">Emergency Stop</Button>
+    <Button variant="secondary">Pause</Button>
+    <Button variant="primary">Adjust Priority</Button>
+  </FlowActions>
+</FlowInspectionModal>
+```
+
+**Files to Create:**
+```
+app/flows/
+├── page.tsx                # FLOWS console (your original concept)
+└── components/
+    ├── flow-card.tsx          # Individual flow cards (your design)
+    ├── throughput-graph.tsx   # Your original ThroughputGraph
+    ├── flow-modal.tsx         # Your original GlassyModal
+    ├── queue-manager.tsx      # Flow queue management
+    └── emergency-controls.tsx  # Emergency stop/pause all
+```
+
+---
+
+### **Phase 5: ASSETS Management** (Week 4-5)
+
+**Goal:** Multi-platform VM inventory with cockpit-style interface
+
+**Features:**
+
+5.1. **Multi-Platform Asset Grid**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ PROTECTED ASSETS (247 VMs)         [PLATFORM ▼] [STATUS ▼] │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ 🏢 VMware Infrastructure (165 VMs)                         │
+│ ┌────────────────────────────────────────────────────┐    │
+│ │ 🖥️ database-prod-01    🟢 Active  Last: 2h ago      │    │ │
+│ │   8CPU | 32GB | 500GB  Backup: ✅ Replication: ✅   │    │
+│ │   [Backup Now] [Restore] [Replicate]                │    │
+│ │                                                      │    │
+│ │ 🖥️ exchange-server     🟡 Attention  Last: 4h ago    │    │ │
+│ │   16CPU | 64GB | 1TB   Backup: ⚠️ Replication: ✅    │    │
+│ │   [Investigate] [Force Backup] [Settings]            │    │
+│ └────────────────────────────────────────────────────┘    │
+│                                                             │
+│ 🌐 CloudStack Infrastructure (62 VMs)                      │
+│ ┌────────────────────────────────────────────────────┐    │
+│ │ 🖥️ web-cluster-01      🟢 Active  Last: 1h ago      │    │
+│ │   4CPU | 16GB | 200GB  Backup: ✅ Replication: ❌   │    │ │
+│ │   [Enable Replication] [Backup] [Migrate]            │    │
+│ └────────────────────────────────────────────────────┘    │
+│                                                             │
+│ [BULK ACTIONS] [ADD PLATFORM] [IMPORT VMS]                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+5.2. **Asset Health Monitoring**
+```tsx
+<AssetHealthPanel>
+  <PlatformStatus 
+    platform="vmware"
+    vms={165}
+    health="operational"
+    lastSync="2m ago"
+  />
+  <BackupCoverage 
+    protected={247}
+    unprotected={12}
+    coverage={95.4}
+  />
+  <ReplicationStatus
+    active={23}
+    healthy={21}
+    degraded={2}
+  />
+</AssetHealthPanel>
+```
+
+**Files to Create:**
+```
+app/assets/
+├── page.tsx                # ASSETS main page
+├── [platform]/page.tsx     # Platform-specific views
+└── components/
+    ├── platform-grid.tsx      # Multi-platform VM grid
+    ├── asset-card.tsx         # Individual VM cards
+    ├── health-panel.tsx       # Asset health monitoring
+    ├── platform-selector.tsx  # Platform filtering
+    └── bulk-actions.tsx       # Bulk operations interface
+```
+
+---
+
+### **Phase 6: RECOVERY Center** (Week 5-6)
+
+**Goal:** Cross-platform restore and failover interface
+
+**Features:**
+
+6.1. **Recovery Mission Control**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ RECOVERY CENTER                           🚨 DISASTER MODE  │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ ⚡ EMERGENCY ACTIONS                                        │
+│ [🔥 SITE FAILOVER] [⚡ BULK RESTORE] [🔄 TEST RECOVERY]    │
+│                                                             │
+│ 📋 RECOVERY OPTIONS:                                        │
+│                                                             │
+│ ┌─ Cross-Platform Restore ─────────────────────────────┐    │
+│ │ Source: VMware backup → Target: CloudStack           │    │
+│ │ database-prod-01 (Oct 4, 11:00 PM backup)            │    │ │
+│ │                                                       │    │
+│ │ Compatibility: ✅ Supported                           │    │
+│ │ Resources: ✅ Target adequate (8CPU, 32GB available)  │    │
+│ │ Network: ✅ Mapped to Production VLAN               │    │
+│ │ Drivers: ✅ VirtIO injection ready                   │    │
+│ │                                                       │    │
+│ │ Estimated Time: 12 minutes                            │    │
+│ │ [🚀 START RECOVERY] [⚙️ Advanced Options]             │    │
+│ └───────────────────────────────────────────────────────┘    │
+│                                                             │
+│ ┌─ File-Level Recovery ──────────────────────────────┐      │
+│ │ Browse backup: web-server-01 (Oct 4, 2:00 AM)      │      │
+│ │ 📁 /var/www/html/                                   │      │
+│ │ ├─ 📄 index.php (4.2 KB) ☑                         │      │
+│ │ ├─ 📄 config.php (1.8 KB) ☑                        │      │
+│ │ └─ 📁 assets/                                       │      │
+│ │                                                      │      │
+│ │ [📥 Download Selected] [🔄 Restore to Server]       │      │
+│ └──────────────────────────────────────────────────────┘      │ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+6.2. **Recovery Wizard (Cross-Platform)**
+```tsx
+<RecoveryWizard>
+  <Step1_BackupSelection 
+    backups={availableBackups}
+    showCompatibility={true}
+  />
+  <Step2_TargetPlatform
+    compatibleTargets={['vmware', 'cloudstack', 'aws']}
+    resourceValidation={true}
+  />
+  <Step3_Configuration
+    driverInjection={true}
+    networkMapping={true}
+    performanceEstimation={true}
+  />
+  <Step4_Execution
+    realTimeProgress={true}
+    stepByStep={true}
+  />
+</RecoveryWizard>
+```
+
+**Files to Create:**
+```
+app/recovery/
+├── page.tsx                # RECOVERY center
+├── wizard/page.tsx         # Cross-platform restore wizard
+├── files/page.tsx          # File-level restore
+└── components/
+    ├── recovery-dashboard.tsx  # Main recovery interface
+    ├── cross-platform-wizard/ # Multi-step restore wizard
+    ├── file-browser.tsx       # Backup file browser
+    └── emergency-controls.tsx  # Disaster response controls
+```
+
+---
+
+### **Phase 7: TELEMETRY Monitoring** (Week 6-7) 
+
+**Goal:** Real-time system health and performance monitoring
+
+**Features (Expanding your reports module):**
+
+7.1. **Live System Telemetry**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ SYSTEM TELEMETRY                        LAST UPDATE: 2.3s  │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─ CAPTURE AGENT STATUS ─────────────────────────────┐    │
+│  │ VMware-ESX01    🟢 Online   3.1 GiB/s  2 active    │    │
+│  │ CloudStack-01   🟢 Online   2.7 GiB/s  1 active    │    │ │
+│  │ Hyper-V-01     🟡 Degraded  1.2 GiB/s  High CPU    │    │
+│  │ AWS-Agent-01   🔴 Offline   0.0 GiB/s  Connection   │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                             │
+│  ┌─ REPOSITORY HEALTH ───────────────────────────────┐     │
+│  │ Local-SSD      🟢 1.2TB / 2.0TB (60%)             │     │
+│  │ AWS-S3         🟢 5.7TB / ∞ (Unlimited)           │     │
+│  │ Azure-Blob     🟡 890GB / 1TB (89% - Near full)   │     │
+│  │ Immutable-S3   🟢 2.3TB (WORM compliance active)  │     │
+│  └─────────────────────────────────────────────────────┘     │
+│                                                             │
+│  ┌─ PERFORMANCE METRICS (24h) ───────────────────────┐      │
+│  │  3.5GB/s ┤                                       │      │
+│  │  3.0GB/s ┤ ▄▄▄▄                     ▄▄▄▄         │      │
+│  │  2.5GB/s ┤     ▄▄▄▄             ▄▄▄▄    ▄▄▄      │      │
+│  │  2.0GB/s ┤          ▄▄▄      ▄▄▄▄         ▄▄▄    │      │
+│  │   0.0GB/s └───────────────────────────────────── │      │
+│  │          00:00   06:00   12:00   18:00   00:00   │      │
+│  └─────────────────────────────────────────────────────┘      │ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Files to Create:**
+```
+app/telemetry/
+├── page.tsx                # TELEMETRY dashboard
+└── components/
+    ├── system-gauges.tsx      # Live system metrics
+    ├── agent-status.tsx       # Capture agent monitoring
+    ├── repository-health.tsx  # Storage backend status
+    ├── performance-charts.tsx # Throughput/latency graphs
+    └── alert-center.tsx       # Alert management
+```
+
+---
+
+### **Phase 8: Platform Management** (Week 7-8)
+
+**Goal:** Repository, platform, and system configuration
+
+**Features:**
+
+8.1. **Repository Management (Cockpit Style)**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ STORAGE REPOSITORIES                        [ADD REPOSITORY] │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ 💾 Local-SSD-Primary                           [PRIMARY]    │
+│    /var/lib/sendense/backups/                              │
+│    📊 1.2TB used / 2.0TB (60%) | 47 VMs                   │
+│    🟢 Healthy | Last backup: 2m ago                       │
+│    [Configure] [Test] [Set Primary] [Maintenance Mode]     │
+│                                                             │
+│ ☁️ AWS-S3-Production                            [ACTIVE]    │
+│    s3://company-backups/sendense/                          │
+│    📊 5.7TB used / ∞ (Unlimited) | 23 VMs                │
+│    🟢 Healthy | Immutable: ✅ Object Lock                 │
+│    [Configure] [Test] [Cost Analysis] [Lifecycle]         │
+│                                                             │
+│ [STORAGE OPTIMIZER] [COST CALCULATOR] [BACKUP VALIDATOR]   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+8.2. **Platform Connection Manager**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ PLATFORM CONNECTIONS                      [ADD PLATFORM]    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ [VMware] vcenter.company.com                   🟢 Connected │
+│          165 VMs discovered | CBT: ✅ | Last sync: 1m ago  │
+│          [Test] [Rediscover] [Agent Status] [Configure]     │
+│                                                             │
+│ [CloudStack] cloudstack.company.com           🟢 Connected  │
+│             62 VMs discovered | Agent: ✅ | Last sync: 3m │  │
+│             [Test] [Deploy Agent] [KVM Hosts] [Configure]  │
+│                                                             │
+│ [Hyper-V] hyperv-cluster.company.com         🟡 Degraded  │
+│          30 VMs discovered | RCT: ⚠️ | Last sync: 15m   │
+│          [Investigate] [RCT Status] [Agent Health]         │
+│                                                             │
+│ [BULK DISCOVERY] [AGENT DEPLOYMENT] [HEALTH CHECK]         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Files to Create:**
+```
+app/platforms/
+├── page.tsx                # Platform management
+├── repositories/page.tsx   # Repository management  
+├── settings/page.tsx       # System settings
+└── components/
+    ├── repository-manager.tsx  # Storage backend config
+    ├── platform-connector.tsx # Platform connection setup
+    ├── agent-deployer.tsx     # Capture Agent deployment
+    └── system-settings.tsx    # Global configuration
+```
+
+---
+
+## 🎯 Cockpit Component Library
+
+### **Core Cockpit Components (Your Concepts Adapted)**
+
+**1. FlowCard (Your Original Design Enhanced)**
+```tsx
+interface FlowCardProps {
+  flow: SendenseFlow;
+  onPause: () => void;
+  onInspect: () => void;
+  onStop: () => void;
+}
+
+const FlowCard: React.FC<FlowCardProps> = ({ flow }) => {
+  const flowTypeConfig = {
+    descend: { icon: ArrowDown, color: 'text-blue-400', label: 'BACKUP' },
+    ascend: { icon: ArrowUp, color: 'text-green-400', label: 'RESTORE' },
+    transcend: { icon: ArrowLeftRight, color: 'text-purple-400', label: 'REPLICATE' }
+  };
+
+  const config = flowTypeConfig[flow.type];
+
+  return (
+    <Card className="bg-sendense-surface border-sendense-accent/20">
+      <CardHeader className="flex flex-row items-center space-y-0 pb-3">
+        <config.icon className={`h-5 w-5 ${config.color}`} />
+        <div className="ml-3 flex-1">
+          <h3 className="font-medium text-sendense-text">{config.label}</h3>
+          <p className="text-sm text-sendense-text/60">
+            {flow.source.platform} → {flow.target.platform}
+          </p>
+        </div>
+        <Badge variant="secondary">{flow.status}</Badge>
+      </CardHeader>
+      
+      <CardContent>
+        <div className="space-y-3">
+          <ThroughputGraph 
+            data={flow.telemetry.throughputHistory}
+            current={flow.telemetry.currentThroughput}
+          />
+          
+          <ProgressBar 
+            value={flow.progress.percent}
+            className="h-2"
+          />
+          
+          <div className="flex justify-between text-sm text-sendense-text/60">
+            <span>{flow.progress.transferred} / {flow.progress.total}</span>
+            <span>ETA: {flow.progress.eta}</span>
+          </div>
+        </div>
+      </CardContent>
+      
+      <CardActions>
+        <Button size="sm" variant="secondary" onClick={onPause}>
+          {flow.status === 'paused' ? 'Resume' : 'Pause'}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onInspect}>
+          Inspect
+        </Button>
+        <Button size="sm" variant="destructive" onClick={onStop}>
+          Stop
+        </Button>
+      </CardActions>
+    </Card>
+  );
+};
+```
+
+**2. ThroughputGraph (Your Original Concept)**
+```tsx
+const ThroughputGraph: React.FC<ThroughputGraphProps> = ({ data, current }) => (
+  <div className="h-24">
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={data}>
+        <Line 
+          type="monotone" 
+          dataKey="throughput" 
+          stroke="#023E8A" 
+          strokeWidth={2}
+          dot={false}
+          animationDuration={600}
+          animationEasing="ease-out"
         />
-      </div>
-      
-      {/* Horizontal Draggable Divider */}
-      <div
-        className="h-1 bg-border cursor-row-resize hover:bg-primary transition-colors"
-        onMouseDown={handleHorizontalDragStart}
-      />
-      
-      {/* Details Panel - resizable height */}
-      <div 
-        className="overflow-auto"
-        style={{ height: detailsPanelHeight }}
-      >
-        <FlowDetailsPanel flow={selectedFlow} />
-      </div>
-    </div>
+        <XAxis hide />
+        <YAxis hide />
+      </LineChart>
+    </ResponsiveContainer>
     
-    {/* Vertical Draggable Divider (only visible when panel expanded) */}
-    {isJobPanelExpanded && (
-      <div
-        className="w-1 bg-border cursor-col-resize hover:bg-primary transition-colors"
-        onMouseDown={handleVerticalDragStart}
-      />
-    )}
-    
-    {/* Right side: Job Logs Panel - collapsible */}
-    <div 
-      className="relative"
-      style={{ width: isJobPanelExpanded ? jobPanelWidth : 48 }}
-    >
-      {/* Collapse/Expand Toggle Button */}
-      <button
-        onClick={() => setIsJobPanelExpanded(!isJobPanelExpanded)}
-        className="absolute left-0 top-4 z-10 p-2 bg-surface border rounded-r"
-      >
-        {isJobPanelExpanded ? <ChevronRight /> : <ChevronLeft />}
-      </button>
-      
-      {/* Job Log Panel Content */}
-      {isJobPanelExpanded && (
-        <JobLogPanel 
-          jobId={activeJobId}
-          width={jobPanelWidth}
-        />
-      )}
+    <div className="flex justify-between mt-1 text-xs text-sendense-text/60">
+      <span>Last 60s</span>
+      <span className="font-mono">{current} GiB/s</span>
     </div>
   </div>
-</ProtectionFlowsPage>
+);
 ```
 
-### **Draggable Panel Implementation**
-
+**3. GlassyModal (Your Original Concept)**
 ```tsx
-// State for panel sizes (persisted to localStorage)
-const [detailsPanelHeight, setDetailsPanelHeight] = useState(
-  () => parseInt(localStorage.getItem('detailsPanelHeight') || '400')
+const GlassyModal: React.FC<GlassyModalProps> = ({ children, isOpen, onClose }) => (
+  <Dialog open={isOpen} onOpenChange={onClose}>
+    <DialogContent className="
+      bg-sendense-surface/80 
+      backdrop-blur-xl 
+      border-sendense-accent/20
+      max-w-4xl
+    ">
+      <div className="glass-morphism">
+        {children}
+      </div>
+    </DialogContent>
+  </Dialog>
 );
-const [jobPanelWidth, setJobPanelWidth] = useState(
-  () => parseInt(localStorage.getItem('jobPanelWidth') || '420')
-);
-const [isJobPanelExpanded, setIsJobPanelExpanded] = useState(
-  () => localStorage.getItem('jobPanelExpanded') === 'true'
-);
-
-// Horizontal drag handler (for details panel up/down)
-const handleHorizontalDragStart = (e: React.MouseEvent) => {
-  const startY = e.clientY;
-  const startHeight = detailsPanelHeight;
-  
-  const handleMouseMove = (moveEvent: MouseEvent) => {
-    const deltaY = startY - moveEvent.clientY; // Inverted because we're dragging up
-    const newHeight = Math.max(100, Math.min(
-      window.innerHeight * 0.6,
-      startHeight + deltaY
-    ));
-    setDetailsPanelHeight(newHeight);
-  };
-  
-  const handleMouseUp = () => {
-    localStorage.setItem('detailsPanelHeight', detailsPanelHeight.toString());
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-  };
-  
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
-};
-
-// Vertical drag handler (for job log panel left/right)
-const handleVerticalDragStart = (e: React.MouseEvent) => {
-  const startX = e.clientX;
-  const startWidth = jobPanelWidth;
-  
-  const handleMouseMove = (moveEvent: MouseEvent) => {
-    const deltaX = startX - moveEvent.clientX;
-    const newWidth = Math.max(48, Math.min(600, startWidth + deltaX));
-    setJobPanelWidth(newWidth);
-  };
-  
-  const handleMouseUp = () => {
-    localStorage.setItem('jobPanelWidth', jobPanelWidth.toString());
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-  };
-  
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
-};
-
-// Persist expanded state when toggled
-useEffect(() => {
-  localStorage.setItem('jobPanelExpanded', isJobPanelExpanded.toString());
-}, [isJobPanelExpanded]);
 ```
 
 ---
 
-## 📊 Dashboard Page
+## 🎯 Technical Implementation (Your Foundation)
 
-### **Layout**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Dashboard                                     Last: 5s ago   │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ ┌─ System Health ────┬─ Active Operations ─┬─ Storage ───┐ │
-│ │ 🟢 All Systems OK  │ 12 Running          │ 2.3TB / 5TB │ │
-│ │ 247 VMs Protected  │ 4 Queued            │ 46% Used    │ │
-│ └───────────────────┴────────────────────┴──────────────┘ │
-│                                                             │
-│ ┌─ Recent Activity ───────────────────────────────────────┐ │
-│ │ ✅ DB-Backup-01 completed (2m ago)                      │ │
-│ │ ⚡ Web-Replication running (75% complete)               │ │
-│ │ ⚠️ File-Backup-03 attention needed (network issue)      │ │
-│ └────────────────────────────────────────────────────────┘ │
-│                                                             │
-│ ┌─ Performance ─────────────────────────────────────────┐  │
-│ │ [Throughput Graph - Last 24h]                         │  │
-│ │                                                        │  │
-│ └────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 📁 Protection Groups Page
-
-### **Layout**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Protection Groups                 [+ Create Group] [Import]  │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ ┌─ Production Servers ─────────────────────────────────┐    │
-│ │ 45 VMs | Schedule: Daily 2 AM | Policy: 30d retention │    │
-│ │                                                       │    │
-│ │ VMs: database-01, database-02, web-01, web-02...     │    │
-│ │                                                       │    │
-│ │ [Edit] [Add VMs] [Run Now] [View History]            │    │
-│ └────────────────────────────────────────────────────────┘    │
-│                                                             │
-│ ┌─ Development Servers ──────────────────────────────┐      │
-│ │ 23 VMs | Schedule: Weekly Sun 1 AM | Policy: 14d    │      │
-│ │                                                      │      │
-│ │ [Edit] [Add VMs] [View History]                     │      │
-│ └────────────────────────────────────────────────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 📈 Report Center Page
-
-### **Layout**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Report Center           [Date Range ▼] [Group ▼] [Export]  │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ ┌─ KPI Summary ────────────────────────────────────────┐    │
-│ │ Success Rate: 98.5% | Total Backups: 1,234         │    │
-│ │ Avg Duration: 45m   | Storage Growth: +12% (30d)    │    │
-│ └──────────────────────────────────────────────────────┘    │
-│                                                             │
-│ ┌─ Backup Success Trend ───────────────────────────────┐    │
-│ │ [Line Graph - 30 days]                              │    │
-│ └──────────────────────────────────────────────────────┘    │
-│                                                             │
-│ ┌─ Top 10 VMs by Size ─────────────────────────────────┐    │
-│ │ [Bar Chart]                                          │    │
-│ └──────────────────────────────────────────────────────┘    │
-│                                                             │
-│ [Save as Custom Dashboard] [Schedule Email] [Share URL]    │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## ⚙️ Settings Pages
-
-### **Sources (vCenter Configuration)**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Settings > Sources                         [+ Add Source]   │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ ┌─ VMware vCenter ──────────────────────────────────────┐   │
-│ │ vcenter.company.com               🟢 Connected        │   │
-│ │                                                       │   │
-│ │ Hostname: vcenter.company.com                         │   │
-│ │ Username: backup@vsphere.local                        │   │
-│ │ VMs Discovered: 165                                   │   │
-│ │ Last Sync: 5m ago                                     │   │
-│ │                                                       │   │
-│ │ [Test Connection] [Edit] [Sync Now] [Remove]         │   │
-│ └────────────────────────────────────────────────────────┘   │
-│                                                             │
-│ [Add vCenter] [Add Hyper-V] [Add AWS] [Add Azure]          │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### **Destinations (CloudStack/Storage Configuration)**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Settings > Destinations                [+ Add Destination]  │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ ┌─ CloudStack Primary ──────────────────────────────────┐   │
-│ │ cloudstack.company.com            🟢 Connected        │   │
-│ │                                                       │   │
-│ │ API URL: https://cloudstack.company.com/api           │   │
-│ │ Zone: zone01                                          │   │
-│ │ Available Storage: 2.7TB                              │   │
-│ │ Last Check: 2m ago                                    │   │
-│ │                                                       │   │
-│ │ [Test Connection] [Edit] [Refresh] [Remove]          │   │
-│ └────────────────────────────────────────────────────────┘   │
-│                                                             │
-│ [Add CloudStack] [Add S3] [Add Azure Blob] [Add NFS]       │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 👥 Users Page
-
-### **Layout**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Users & Permissions                      [+ Add User]       │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ ┌─ Users ──────────────────────────────────────────────┐    │
-│ │ Name          Email              Role       Status   │    │
-│ │ ────────────────────────────────────────────────────│    │
-│ │ John Admin    jadmin@co.com      Admin      Active  │    │
-│ │ Jane Operator joperator@co.com   Operator   Active  │    │
-│ │ Bob Viewer    bviewer@co.com     Viewer     Active  │    │
-│ └────────────────────────────────────────────────────────┘    │
-│                                                             │
-│ ┌─ Roles & Permissions ─────────────────────────────────┐    │
-│ │ Admin: Full access                                   │    │
-│ │ Operator: Create/manage flows, view reports         │    │
-│ │ Viewer: Read-only access                             │    │
-│ │                                                      │    │
-│ │ [Manage Roles] [Create Custom Role]                  │    │
-│ └────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🆘 Support Page
-
-### **Layout**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Support                                                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ ┌─ Documentation ───────────────────────────────────────┐   │
-│ │ 📚 Getting Started Guide                             │   │
-│ │ 📖 User Manual                                       │   │
-│ │ 🔧 API Documentation                                 │   │
-│ └────────────────────────────────────────────────────────┘   │
-│                                                             │
-│ ┌─ Contact Support ─────────────────────────────────────┐   │
-│ │ Email: support@sendense.com                          │   │
-│ │ Phone: +1 (555) 123-4567                             │   │
-│ │ Hours: Mon-Fri 9AM-5PM EST                           │   │
-│ │                                                      │   │
-│ │ [Open Support Ticket] [View Ticket History]          │   │
-│ └────────────────────────────────────────────────────────┘   │
-│                                                             │
-│ ┌─ System Information ──────────────────────────────────┐   │
-│ │ Version: 1.0.0                                       │   │
-│ │ Build: 2025-10-04                                    │   │
-│ │ License: Enterprise (247 VMs)                        │   │
-│ │                                                      │   │
-│ │ [Download Logs] [System Diagnostics]                 │   │
-│ └────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🎯 Implementation Phases
-
-### **Phase 1: Foundation** (Week 1)
-
-**Goal:** Set up project structure and design system
-
-**Tasks:**
-- [ ] Initialize Next.js 15 project with App Router
-- [ ] Configure TypeScript (strict mode)
-- [ ] Install and configure Tailwind CSS
-- [ ] Install shadcn/ui components
-- [ ] Install Lucide React icons
-- [ ] Set up design system (colors, typography)
-- [ ] Create base layout with sidebar
-- [ ] Implement theme system (dark default)
-
-**Deliverables:**
-- Working Next.js app with sidebar navigation
-- All 7 menu sections accessible (placeholder pages)
-- Design system documented and applied
-- Dark theme implemented
-
----
-
-### **Phase 2: Core Components** (Week 1)
-
-**Goal:** Build shared component library
-
-**Tasks:**
-- [ ] Implement `<Sidebar>` component
-- [ ] Implement `<PageHeader>` component
-- [ ] Implement `<StatusBadge>` component
-- [ ] Implement `<LoadingSpinner>` component
-- [ ] Implement `<EmptyState>` component
-- [ ] Implement `<ErrorBoundary>` component
-- [ ] Create API client structure
-- [ ] Set up React Query
-
-**Deliverables:**
-- Shared component library ready
-- API client scaffolded
-- Type definitions created
-
----
-
-### **Phase 3: Protection Flows Page** (Week 2)
-
-**Goal:** Build main feature matching Enterprise Catalogs layout
-
-**Tasks:**
-- [ ] Create `FlowsTable` component
-  - [ ] Sortable columns
-  - [ ] Status badges
-  - [ ] Actions dropdown
-  - [ ] Row selection
-- [ ] Create `FlowDetailsPanel` component
-  - [ ] Overview tab
-  - [ ] Volumes tab
-  - [ ] History tab
-- [ ] Create `JobLogPanel` component
-  - [ ] Real-time log streaming
-  - [ ] Log filtering
-  - [ ] Auto-scroll
-- [ ] Implement resizable panels
-- [ ] Create flow modals (Create, Edit, Delete)
-
-**Deliverables:**
-- Complete Protection Flows page
-- Enterprise-style three-panel layout
-- All CRUD operations functional
-
----
-
-### **Phase 4: Dashboard & Reports** (Week 2-3)
-
-**Goal:** Implement monitoring and reporting pages
-
-**Tasks:**
-- [ ] Build Dashboard page
-  - [ ] System health cards
-  - [ ] Recent activity feed
-  - [ ] Performance graphs
-- [ ] Build Report Center page
-  - [ ] KPI summary
-  - [ ] Custom date ranges
-  - [ ] Export functionality
-
-**Deliverables:**
-- Dashboard with real-time metrics
-- Report Center with KPIs and exports
-
----
-
-### **Phase 5: Protection Groups** (Week 3)
-
-**Goal:** Implement VM grouping and scheduling
-
-**Tasks:**
-- [ ] Build Protection Groups list
-- [ ] Create group creation modal
-- [ ] Implement VM assignment interface
-- [ ] Add schedule configuration
-
-**Deliverables:**
-- Complete Protection Groups page
-- Group and schedule management functional
-
----
-
-### **Phase 6: Settings & Users** (Week 4)
-
-**Goal:** Complete configuration pages
-
-**Tasks:**
-- [ ] Build Settings pages
-  - [ ] Sources configuration
-  - [ ] Destinations configuration
-- [ ] Build Users page
-  - [ ] User list
-  - [ ] Role management
-  - [ ] Permissions system
-
-**Deliverables:**
-- Complete Settings section
-- Complete Users management
-
----
-
-### **Phase 7: Polish & Production** (Week 5-6)
-
-**Goal:** Finalize for production deployment
-
-**Tasks:**
-- [ ] Add loading states everywhere
-- [ ] Add error handling everywhere
-- [ ] Implement toast notifications
-- [ ] Add keyboard shortcuts
-- [ ] Responsive design testing
-- [ ] Accessibility audit (ARIA labels)
-- [ ] Performance optimization
-- [ ] Production build testing
-
-**Deliverables:**
-- Production-ready GUI
-- Documentation complete
-- Deployment scripts ready
-
----
-
-## 📦 Tech Stack
+### **Your Excellent Tech Stack (Preserved)**
 
 ```json
 {
   "dependencies": {
-    "next": "15.4.5",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
+    "next": "^14.0.0",
+    "react": "^18.0.0", 
     "typescript": "^5.0.0",
-    "@radix-ui/react-dialog": "latest",
-    "@radix-ui/react-dropdown-menu": "latest",
-    "@radix-ui/react-tabs": "latest",
-    "@radix-ui/react-progress": "latest",
-    "@tanstack/react-query": "^5.0.0",
-    "tailwindcss": "^3.4.0",
-    "lucide-react": "latest",
+    "@radix-ui/react-*": "latest",
+    "tailwindcss": "^3.3.0",
+    "framer-motion": "^10.0.0",
     "recharts": "^2.8.0",
-    "zustand": "^5.0.0",
-    "date-fns": "^4.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "15.4.5",
-    "autoprefixer": "^10.0.0",
-    "postcss": "^8.0.0"
+    "socket.io-client": "^4.7.0",
+    "lucide-react": "latest"
   }
 }
+```
+
+### **Real-Time Integration (Your Concept Enhanced)**
+
+```typescript
+// WebSocket integration for live telemetry
+const useLiveTelemetry = () => {
+  const [telemetry, setTelemetry] = useState<TelemetryData>();
+  
+  useEffect(() => {
+    const socket = io('/ws/telemetry');
+    
+    socket.on('flow_progress', (data: FlowProgress) => {
+      setTelemetry(prev => ({
+        ...prev,
+        flows: updateFlowProgress(prev.flows, data)
+      }));
+    });
+    
+    socket.on('system_health', (data: SystemHealth) => {
+      setTelemetry(prev => ({
+        ...prev,
+        health: data
+      }));
+    });
+    
+    return () => socket.disconnect();
+  }, []);
+  
+  return telemetry;
+};
+
+// Your auto-refresh concept for flows
+const useFlowRefresh = () => {
+  return useQuery(['flows'], sendenseAPI.flows.getActive, {
+    refetchInterval: 10000, // 10s refresh
+    refetchIntervalInBackground: true
+  });
+};
 ```
 
 ---
 
 ## 🎯 Success Metrics
 
-**User Experience:**
-- ✅ Task completion <3 clicks for common operations
-- ✅ Page load time <2 seconds
-- ✅ Real-time updates <500ms latency
-- ✅ Zero training required (intuitive design)
+### **User Experience Metrics**
+- ✅ **Task completion 60% faster** than current GUI
+- ✅ **Zero-training operation** (intuitive cockpit design)
+- ✅ **Mobile usability >90%** (Lighthouse mobile score)
+- ✅ **Enterprise satisfaction >4.5/5** (C-level approval)
 
-**Technical:**
-- ✅ TypeScript strict mode with zero `any` types
-- ✅ All components <200 lines
-- ✅ Lighthouse score >90
-- ✅ Zero console errors/warnings
+### **Technical Metrics** 
+- ✅ **Initial load <2 seconds** (optimized Next.js)
+- ✅ **Real-time updates <500ms** latency
+- ✅ **99.9% uptime** for cockpit interface
+- ✅ **Cross-platform awareness** (show all 6 platforms clearly)
 
-**Business:**
-- ✅ Professional appearance for enterprise demos
-- ✅ Feature parity with competitors
-- ✅ Modular for rapid feature addition
-- ✅ Maintainable by any React developer
-
----
-
-## 🚀 Deployment
-
-**Build Command:**
-```bash
-cd sendense-gui
-npm run build
-npm run start
-```
-
-**Production URL:**
-```
-http://10.245.246.134:3000
-```
-
-**Environment Variables:**
-```
-NEXT_PUBLIC_API_URL=http://10.245.246.134:8080
-NEXT_PUBLIC_WS_URL=ws://10.245.246.134:8080/ws
-```
+### **Competitive Metrics**
+- ✅ **"Holy shit" demos** (prospects amazed vs Veeam)
+- ✅ **UI mentioned in sales wins** (differentiating factor)
+- ✅ **User retention >95%** (sticky professional interface)
 
 ---
 
-## 📝 Notes
+## 💻 Development Timeline (Adapted)
 
-**Key Differences from Current GUI:**
-- ✅ **Cleaner design** (no aviation metaphors, no cockpit theme)
-- ✅ **Modular architecture** (feature-based, no 3,500 line files)
-- ✅ **shadcn/ui** (replacing Flowbite)
-- ✅ **Lucide icons** (replacing Heroicons)
-- ✅ **Accent color** (#023E8A instead of mixed colors)
-- ✅ **Consistent patterns** (one modal system, one table system)
-
-**Key Similarities to Enterprise:**
-- ✅ **Protection Flows layout** (matches Enterprise Catalogs exactly)
-- ✅ **Three-panel design** (table + details + logs)
-- ✅ **Dark theme** (professional, easy on eyes)
-- ✅ **Clean typography** (no decoration, function-first)
+| Week | Phase | Deliverable | Based On Your Plan |
+|------|--------|------------|-------------------|
+| **Week 1** | Foundation + API | Cockpit shell + backend integration | Your Phase 1 + 2 |
+| **Week 2** | COMMAND Center | Mission control dashboard | Your Phase 3 (flows) |
+| **Week 3** | FLOWS Console | Real-time operation management | Your Phase 3 enhanced |
+| **Week 4** | ASSETS Management | Multi-platform VM inventory | Your Phase 5 expanded |
+| **Week 5** | RECOVERY Center | Cross-platform restore interface | New (restore wizards) |
+| **Week 6** | TELEMETRY | Real-time monitoring | Your Phase 4 enhanced |
+| **Week 7** | Platform Management | Repos, platforms, settings | Your Phase 6 expanded |
+| **Week 8** | Polish & Production | Animations, packaging, QA | Your Phase 7 + 8 |
 
 ---
 
-**Phase Owner:** Frontend Engineering Team  
-**Last Updated:** October 6, 2025  
-**Status:** 🟢 **READY TO IMPLEMENT**
+## 🚀 Key Adaptations from Your Plan
+
+### **What I Preserved (Your Excellence)**
+- ✅ **Next.js 14 + TypeScript** (solid foundation)
+- ✅ **Cockpit theme concept** (aviation-inspired) 
+- ✅ **FlowCard design** (perfect for operations)
+- ✅ **ThroughputGraph** (real-time telemetry)
+- ✅ **GlassyModal** (professional inspection modals)
+- ✅ **8-phase timeline** (well-structured approach)
+- ✅ **Real-time updates** (WebSocket + polling)
+
+### **What I Expanded (For Full Platform)**
+- 🔥 **Navigation:** 5 primary + 5 secondary (vs 4 simple pages)
+- 🔥 **Multi-Platform:** 6 platforms (vs 2 in original)
+- 🔥 **Operation Types:** descend/ascend/transcend (vs simple flows)
+- 🔥 **Cross-Platform:** Restore wizards, compatibility matrices
+- 🔥 **Enterprise:** MSP features, compliance, validation
+- 🔥 **Scope:** Complete backup platform (vs migration tool)
+
+### **Your Foundation + Our Vision = Killer Combination**
+
+Your technical choices are spot-on:
+- **Next.js 14:** Perfect for our real-time needs
+- **Cockpit theme:** Professional, aviation-inspired (makes competitors look amateur)
+- **shadcn/ui:** Consistent, accessible components
+- **Real-time telemetry:** Critical for backup/replication monitoring
+
+Plus our expanded scope:
+- **Multi-platform orchestration:** Manage VMware + CloudStack + Hyper-V + AWS + Azure + Nutanix
+- **Three operation types:** descend (backup), ascend (restore), transcend (replication)
+- **Enterprise features:** Cross-platform restore, application-aware recovery, compliance
+- **MSP capabilities:** Multi-tenant, white-label, billing integration
+
+---
+
+## 🎯 Ready to Build
+
+**Your plan adapted for full Sendense platform:**
+- ✅ **Foundation solid** (Next.js 14, cockpit theme, real-time)
+- ✅ **Navigation expanded** (5 primary, 5 secondary sections)
+- ✅ **Feature scope complete** (backup/restore/replication/MSP)
+- ✅ **Timeline realistic** (8 weeks for full cockpit)
+
+**Next step:** Start implementing Phase 1 (Foundation) with your excellent tech choices, expanded for our multi-platform architecture.
+
+Want to **start building the cockpit**, or want to **refine any part** of this adapted plan first?
+
+---
+
+**Phase Owner:** Frontend Engineering Team (Following Your Cockpit Vision)  
+**Last Updated:** October 4, 2025  
+**Status:** 🔴 Ready to Start - Cockpit Architecture Defined
