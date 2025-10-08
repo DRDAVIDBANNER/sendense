@@ -28,10 +28,13 @@ Primary job tracking table for migration operations.
 ### **vm_disks**
 Individual disk tracking with **ChangeID storage**.
 
+**🆕 Architecture Change (October 6, 2025):** Disk records now populated immediately during VM discovery, not just during replication. This enables backup operations without requiring a replication job.
+
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | BIGINT | Auto-increment primary key |
-| `job_id` | LONGTEXT | FK to replication_jobs.id |
+| `job_id` | VARCHAR(191) **NULLABLE** | 🆕 FK to replication_jobs.id - **NULL when populated from discovery**, set when replication starts |
+| `vm_context_id` | VARCHAR(191) | 🆕 FK to vm_replication_contexts.context_id - VM-centric architecture |
 | `disk_id` | LONGTEXT | Disk identifier (e.g., `disk-2000`) |
 | `vm_dk_path` | LONGTEXT | **VMware disk file path** - actual .vmdk location |
 | `size_gb` | BIGINT | Disk size in GB |
@@ -47,6 +50,11 @@ Individual disk tracking with **ChangeID storage**.
 | `bytes_synced` | BIGINT | Bytes transferred |
 | `created_at` | DATETIME(3) | Record creation |
 | `updated_at` | DATETIME(3) | Last ChangeID update |
+
+**Discovery vs Replication Flow:**
+- **Discovery**: VM added to management → vm_disks created with `job_id = NULL`
+- **Replication**: Job created → existing vm_disks updated with `job_id` value
+- **Backup**: Can query vm_disks by `vm_context_id` regardless of replication status
 
 ### **cbt_history**
 Complete CBT tracking and audit trail.

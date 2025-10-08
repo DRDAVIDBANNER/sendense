@@ -95,7 +95,7 @@ func (em *ExportManager) CreateExport(ctx context.Context, req *ExportRequest) (
 
 	// Generate export name using volume ID for uniqueness (not VM ID)
 	// Using volume ID ensures each export is unique, even when multiple volumes
-	// from different VMs are attached to the same target VM (OMA)
+	// from different VMs are attached to the same target VM (SHA)
 	exportName := fmt.Sprintf("migration-vol-%s", req.VolumeID)
 
 	// Check if export already exists

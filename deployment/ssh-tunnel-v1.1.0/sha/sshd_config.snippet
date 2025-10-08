@@ -1,0 +1,58 @@
+# Sendense SSH Tunnel Configuration for SHA (Hub)
+# Version: 1.1.0
+# Date: 2025-10-07
+# 
+# This file contains the SSH server configuration snippet for the SHA appliance
+# to allow secure tunnel connections from SNA appliances.
+#
+# INSTALLATION:
+# Append this configuration to /etc/ssh/sshd_config on the SHA appliance,
+# then reload SSH: sudo systemctl reload sshd
+
+# ============================================================================
+# Sendense Tunnel User Configuration
+# ============================================================================
+
+Match User vma_tunnel
+    # Enable GatewayPorts for reverse tunnels (OPTIONAL - currently disabled)
+    # GatewayPorts yes
+    
+    # Authentication
+    AuthenticationMethods publickey
+    PubkeyAuthentication yes
+    PasswordAuthentication no
+    
+    # Security restrictions
+    PermitTTY no
+    X11Forwarding no
+    
+    # Allow TCP forwarding (required for tunnels)
+    AllowTcpForwarding yes
+    
+    # Port forwarding permissions
+    # Forward ports: NBD data ports (10100-10200) + SHA API (8082)
+    PermitOpen 127.0.0.1:9081 127.0.0.1:10809 127.0.0.1:8082
+    
+    # Reverse tunnel port (SNA API access from SHA)
+    # Currently disabled due to configuration issues - to be resolved
+    PermitListen 127.0.0.1:9081
+
+# ============================================================================
+# Port Forwarding Details
+# ============================================================================
+#
+# Forward Tunnels (SNA → SHA):
+#   - Ports 10100-10200: NBD data ports for qemu-nbd exports
+#   - Port 8082: SHA API endpoint
+#
+# Reverse Tunnel (SHA → SNA):
+#   - Port 9081: SNA API endpoint (currently disabled)
+#
+# Architecture:
+#   SNA (10.0.100.231) → SSH Tunnel (port 443) → SHA (10.245.246.134)
+#
+# Security:
+#   - Ed25519 key authentication only
+#   - No PTY, no X11, no password auth
+#   - Restricted port forwarding
+#   - Dedicated vma_tunnel user (UID 997)

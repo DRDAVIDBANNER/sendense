@@ -32,10 +32,10 @@ func (s *NbdkitServer) ParallelFullCopyToTarget(ctx context.Context, t target.Ta
 
 	logger.Info("🚀 Starting parallel full copy")
 
-	// Send initial job type to VMA
-	if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-		if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
-			vpc.SendUpdate(progress.VMAProgressUpdate{
+	// Send initial job type to SNA
+	if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+		if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
+			vpc.SendUpdate(progress.SNAProgressUpdate{
 				Stage:    "Transfer",
 				Status:   "in_progress",
 				SyncType: "initial",
@@ -76,14 +76,14 @@ func (s *NbdkitServer) ParallelFullCopyToTarget(ctx context.Context, t target.Ta
 	workerRanges := divideRangesAcrossWorkers(diskSize, numWorkers)
 
 	// Setup progress aggregator
-	var vmaClient *progress.VMAProgressClient
-	if vpc := ctx.Value("vmaProgressClient"); vpc != nil {
-		if client, ok := vpc.(*progress.VMAProgressClient); ok {
-			vmaClient = client
+	var snaClient *progress.SNAProgressClient
+	if vpc := ctx.Value("snaProgressClient"); vpc != nil {
+		if client, ok := vpc.(*progress.SNAProgressClient); ok {
+			snaClient = client
 		}
 	}
 
-	progressAggregator := NewProgressAggregator(totalBytes, vmaClient)
+	progressAggregator := NewProgressAggregator(totalBytes, snaClient)
 	progressChan := make(chan int64, 1000)
 	errorChan := make(chan error, numWorkers)
 
@@ -136,9 +136,9 @@ func (s *NbdkitServer) ParallelFullCopyToTarget(ctx context.Context, t target.Ta
 	}
 
 	// Send final 100% progress update
-	if vmaClient != nil && vmaClient.IsEnabled() {
+	if snaClient != nil && snaClient.IsEnabled() {
 		progressAggregator.SendFinalUpdate()
-		logger.Info("📊 Final progress update sent to VMA")
+		logger.Info("📊 Final progress update sent to SNA")
 	}
 
 	logger.WithFields(log.Fields{

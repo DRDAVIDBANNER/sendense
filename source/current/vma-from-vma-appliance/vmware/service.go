@@ -1,4 +1,4 @@
-// Package vmware provides reusable VMware operations for both VMA client and API server
+// Package vmware provides reusable VMware operations for both SNA client and API server
 package vmware
 
 import (
@@ -13,10 +13,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/vexxhost/migratekit/internal/oma/models"
-	"github.com/vexxhost/migratekit/source/current/vma/api"
-	"github.com/vexxhost/migratekit/source/current/vma/cbt"
-	"github.com/vexxhost/migratekit/source/current/vma/client"
+	"github.com/vexxhost/migratekit/internal/sha/models"
+	"github.com/vexxhost/migratekit/source/current/sna/api"
+	"github.com/vexxhost/migratekit/source/current/sna/cbt"
+	"github.com/vexxhost/migratekit/source/current/sna/client"
 )
 
 // ServiceConfig holds configuration for the VMware service
@@ -26,16 +26,16 @@ type ServiceConfig struct {
 
 // Service provides high-level VMware operations
 type Service struct {
-	// OMA client for API communication
-	omaClient *client.Client
+	// SHA client for API communication
+	shaClient *client.Client
 	// Configuration options
 	config ServiceConfig
 }
 
 // NewService creates a new VMware service
-func NewService(omaClient *client.Client) *Service {
+func NewService(shaClient *client.Client) *Service {
 	return &Service{
-		omaClient: omaClient,
+		shaClient: shaClient,
 		config: ServiceConfig{
 			AutoCBTEnabled: true, // Default to enabled
 		},
@@ -43,9 +43,9 @@ func NewService(omaClient *client.Client) *Service {
 }
 
 // NewServiceWithConfig creates a new VMware service with custom configuration
-func NewServiceWithConfig(omaClient *client.Client, config ServiceConfig) *Service {
+func NewServiceWithConfig(shaClient *client.Client, config ServiceConfig) *Service {
 	return &Service{
-		omaClient: omaClient,
+		shaClient: shaClient,
 		config:    config,
 	}
 }
@@ -169,8 +169,8 @@ func (s *Service) startDirectReplication(jobID, vmPath, targetDevice, vcenter, u
 		"vcenter":       vcenter,
 	}).Info("Starting migratekit with automatic NBD discovery")
 
-	// NOTE: Using single stunnel architecture - OMA port 443 forwards to 10809
-	// migratekit connects to localhost:10808, which goes through existing VMA->OMA tunnel
+	// NOTE: Using single stunnel architecture - SHA port 443 forwards to 10809
+	// migratekit connects to localhost:10808, which goes through existing SNA->SHA tunnel
 	// Extract export name from NBD URL for job-specific export targeting
 
 	// 3. Extract export name from NBD target URL
@@ -204,9 +204,9 @@ func (s *Service) startDirectReplication(jobID, vmPath, targetDevice, vcenter, u
 		log.WithField("vm_path", vmPath).Warn("⚠️ CBT auto-enablement disabled - proceeding without CBT check")
 	}
 
-	// 4. Previous change ID will be retrieved by migratekit directly from OMA API
+	// 4. Previous change ID will be retrieved by migratekit directly from SHA API
 	// No need to create temp files - migratekit now uses database integration via API calls
-	log.WithField("vm_path", vmPath).Info("🔄 migratekit will retrieve previous ChangeID from OMA database via API")
+	log.WithField("vm_path", vmPath).Info("🔄 migratekit will retrieve previous ChangeID from SHA database via API")
 
 	// 5. Build migratekit command with job-specific export name
 	// migratekit connects to localhost:10808 (via stunnel) and uses the specific export name
@@ -223,7 +223,7 @@ func (s *Service) startDirectReplication(jobID, vmPath, targetDevice, vcenter, u
 
 	// Set required environment variables (do not rely on NBD_LOCAL_PORT)
 	cmd.Env = append(os.Environ(),
-		"CLOUDSTACK_API_URL=http://localhost:8082", // OMA API via tunnel
+		"CLOUDSTACK_API_URL=http://localhost:8082", // SHA API via tunnel
 		"CLOUDSTACK_API_KEY=test-api-key",          // Placeholder for now
 		"CLOUDSTACK_SECRET_KEY=test-secret-key",    // Placeholder for now
 		fmt.Sprintf("MIGRATEKIT_JOB_ID=%s", jobID), // Pass job ID for ChangeID storage
@@ -298,11 +298,11 @@ func (s *Service) monitorDirectMigration(jobID string, cmd *exec.Cmd) {
 		finalStatus = "failed"
 	}
 
-	// ChangeID is now stored directly by migratekit via OMA API - no extraction needed
+	// ChangeID is now stored directly by migratekit via SHA API - no extraction needed
 	// The migration completion notification will use the actual ChangeID from the database
-	log.WithField("job_id", jobID).Info("📊 Migration completed - ChangeID stored by migratekit via OMA API")
+	log.WithField("job_id", jobID).Info("📊 Migration completed - ChangeID stored by migratekit via SHA API")
 
-	// Notify OMA of migration completion (ChangeID is stored separately by migratekit)
+	// Notify SHA of migration completion (ChangeID is stored separately by migratekit)
 	s.notifyMigrationCompletion(jobID, finalStatus, migrationOutput)
 }
 
@@ -440,7 +440,7 @@ func (s *Service) parseNBDPort(nbdURL string) (int, error) {
 }
 
 // NOTE: allocateLocalPort removed - using single stunnel architecture
-// migratekit connects to localhost:10808 via existing tunnel to OMA:10809
+// migratekit connects to localhost:10808 via existing tunnel to SHA:10809
 
 // NOTE: generateJobStunnelConfigWithPort removed - using single stunnel architecture
 
@@ -458,15 +458,15 @@ func (s *Service) isLocalPortAvailable(port int) bool {
 
 // NOTE: startJobStunnel removed - using single stunnel architecture
 
-// notifyMigrationCompletion notifies OMA that migration has completed
+// notifyMigrationCompletion notifies SHA that migration has completed
 func (s *Service) notifyMigrationCompletion(jobID, status, output string) {
 	log.WithFields(log.Fields{
 		"job_id": jobID,
 		"status": status,
-	}).Info("Notifying OMA of migration completion")
+	}).Info("Notifying SHA of migration completion")
 
-	// Call OMA API to update migration status
-	if s.omaClient != nil {
+	// Call SHA API to update migration status
+	if s.shaClient != nil {
 		// Create job update with completion status (ChangeID is handled separately by migratekit)
 		jobUpdate := &models.ReplicationJob{
 			ID:        jobID,
@@ -475,25 +475,25 @@ func (s *Service) notifyMigrationCompletion(jobID, status, output string) {
 			UpdatedAt: time.Now(),
 		}
 
-		// Use OMA client to update job
-		if err := s.omaClient.UpdateReplicationJob(jobUpdate); err != nil {
-			log.WithError(err).WithField("job_id", jobID).Error("Failed to notify OMA of migration completion via client")
+		// Use SHA client to update job
+		if err := s.shaClient.UpdateReplicationJob(jobUpdate); err != nil {
+			log.WithError(err).WithField("job_id", jobID).Error("Failed to notify SHA of migration completion via client")
 		} else {
-			log.WithField("job_id", jobID).Info("✅ Successfully notified OMA of migration completion")
+			log.WithField("job_id", jobID).Info("✅ Successfully notified SHA of migration completion")
 		}
 	} else {
-		log.WithField("job_id", jobID).Warn("No OMA client available, migration completion not reported")
+		log.WithField("job_id", jobID).Warn("No SHA client available, migration completion not reported")
 	}
 }
 
 // REMOVED: getPreviousChangeIDFromOMA method - no longer needed
-// migratekit now retrieves previous ChangeIDs directly from OMA API
+// migratekit now retrieves previous ChangeIDs directly from SHA API
 
 // REMOVED: createChangeIDFile method - no longer needed
-// ChangeIDs are now handled via OMA API calls from migratekit directly
+// ChangeIDs are now handled via SHA API calls from migratekit directly
 
 // REMOVED: extractChangeIDFromOutput method - no longer needed
-// ChangeIDs are now stored directly by migratekit via OMA API calls
+// ChangeIDs are now stored directly by migratekit via SHA API calls
 
 // verifyNBDExport verifies that the specified NBD export is available and accessible
 // Since listing is disabled (allowlist=false), we test direct connection to the export

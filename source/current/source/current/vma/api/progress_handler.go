@@ -6,7 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/vexxhost/migratekit/source/current/vma/services"
+	"github.com/vexxhost/migratekit/source/current/sna/services"
 )
 
 // ProgressHandler handles HTTP requests for replication progress tracking

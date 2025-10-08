@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vexxhost/migratekit/source/current/vma/progress"
+	"github.com/vexxhost/migratekit/source/current/sna/progress"
 )
 
 // ProgressService provides replication progress tracking functionality

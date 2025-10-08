@@ -40,10 +40,10 @@ func (s *NbdkitServer) ParallelIncrementalCopyToTarget(ctx context.Context, t ta
 
 	logger.Info("🚀 Starting parallel incremental copy")
 
-	// Send initial job type to VMA
-	if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-		if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
-			vpc.SendUpdate(progress.VMAProgressUpdate{
+	// Send initial job type to SNA
+	if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+		if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
+			vpc.SendUpdate(progress.SNAProgressUpdate{
 				Stage:    "Transfer",
 				Status:   "in_progress",
 				SyncType: "incremental",
@@ -67,11 +67,11 @@ func (s *NbdkitServer) ParallelIncrementalCopyToTarget(ctx context.Context, t ta
 	if len(extents) == 0 {
 		logger.Info("No changed disk areas, skipping copy")
 		
-		// 🎯 CRITICAL: Send completion update to VMA even when nothing to copy
+		// 🎯 CRITICAL: Send completion update to SNA even when nothing to copy
 		// Without this, frontend shows job stuck at "Transfer" stage and times out
-		if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-			if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
-				vpc.SendUpdate(progress.VMAProgressUpdate{
+		if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+			if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
+				vpc.SendUpdate(progress.SNAProgressUpdate{
 					Stage:            "Transfer",
 					Status:           "completed",
 					BytesTransferred: 0,
@@ -79,7 +79,7 @@ func (s *NbdkitServer) ParallelIncrementalCopyToTarget(ctx context.Context, t ta
 					Percent:          100,
 					ThroughputBPS:    0,
 				})
-				logger.Info("📊 Sent completion update to VMA (zero changed blocks)")
+				logger.Info("📊 Sent completion update to SNA (zero changed blocks)")
 			}
 		}
 		
@@ -117,14 +117,14 @@ func (s *NbdkitServer) ParallelIncrementalCopyToTarget(ctx context.Context, t ta
 	workerExtents := splitExtentsAcrossWorkers(coalescedExtents, numWorkers)
 
 	// Step 7: Setup progress aggregator
-	var vmaClient *progress.VMAProgressClient
-	if vpc := ctx.Value("vmaProgressClient"); vpc != nil {
-		if client, ok := vpc.(*progress.VMAProgressClient); ok {
-			vmaClient = client
+	var snaClient *progress.SNAProgressClient
+	if vpc := ctx.Value("snaProgressClient"); vpc != nil {
+		if client, ok := vpc.(*progress.SNAProgressClient); ok {
+			snaClient = client
 		}
 	}
 
-	progressAggregator := NewProgressAggregator(totalBytes, vmaClient)
+	progressAggregator := NewProgressAggregator(totalBytes, snaClient)
 	progressChan := make(chan int64, 1000)    // Buffered channel for progress updates
 	errorChan := make(chan error, numWorkers) // Buffered channel for errors
 
@@ -177,9 +177,9 @@ func (s *NbdkitServer) ParallelIncrementalCopyToTarget(ctx context.Context, t ta
 	}
 
 	// Send final 100% progress update
-	if vmaClient != nil && vmaClient.IsEnabled() {
+	if snaClient != nil && snaClient.IsEnabled() {
 		progressAggregator.SendFinalUpdate()
-		logger.Info("📊 Final progress update sent to VMA")
+		logger.Info("📊 Final progress update sent to SNA")
 	}
 
 	logger.WithFields(log.Fields{

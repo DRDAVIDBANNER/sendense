@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vmware/govmomi"
 
-	"github.com/vexxhost/migratekit/internal/oma/models"
+	"github.com/vexxhost/migratekit/internal/sha/models"
 )
 
 // VMSpecificationService handles VM specification collection and comparison

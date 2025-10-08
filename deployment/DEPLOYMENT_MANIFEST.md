@@ -52,9 +52,9 @@
 
 **Location:** `deployment/sha-appliance/`
 
-**Current Version:** v3.0.1 (based on MigrateKit OSSEA v2.19.0)
+**Current Version:** v2.11.1-vm-disks-null-fix (October 6, 2025)
 **Binaries:**
-- `sendense-hub-v3.0.1-linux-amd64-20251004-abc123ef` (45.2 MB)
+- `sendense-hub-v2.11.1-vm-disks-null-fix` (34 MB) - Latest
 - `volume-daemon-v1.2.1-linux-amd64-20251004-def456ab` (15.3 MB)
 - `sendense-cockpit-v1.2.0-gui.tar.gz` (12.1 MB)
 
@@ -62,8 +62,23 @@
 - Hub Appliance (central orchestration - renamed from OMA)
 - Volume Management Daemon (storage operations)
 - Sendense Cockpit GUI (aviation-inspired interface)
-- Database schema and migrations
+- Database schema and migrations (6 migrations)
 - Configuration templates
+
+**Database Migrations:**
+- `20251003160000` - Add operation_summary column
+- `20251004120000` - Add backup_jobs and backup_chains tables
+- `20251004120001` - Fix backup_jobs table structure
+- `20251005120000` - Add restore_mounts table
+- `20251005130000` - Add disk_id to backup_jobs
+- `20251006200000` - **NEW:** Make vm_disks.job_id nullable (VM discovery fix)
+
+**Latest Update (October 6, 2025):**
+- ✅ vm_disks table now populated during VM discovery
+- ✅ Backup operations work without replication jobs
+- ✅ Migration: 20251006200000_make_vm_disks_job_id_nullable
+- ✅ Binary: sendense-hub-v2.11.1-vm-disks-null-fix deployed
+- 📄 Details: `deployment/sha-appliance/VM-DISKS-DISCOVERY-DEPLOYMENT-UPDATE.md`
 
 **Deployment Script:** `deployment/sha-appliance/scripts/deploy-sha.sh`
 

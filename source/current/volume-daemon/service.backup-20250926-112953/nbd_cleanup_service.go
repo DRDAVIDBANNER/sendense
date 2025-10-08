@@ -192,7 +192,7 @@ func (ncs *NBDCleanupService) analyzeExportOrphanStatus(ctx context.Context, exp
 		return result
 	}
 
-	// Check 4: Is the export for an OMA volume but device is not in OMA mode?
+	// Check 4: Is the export for an SHA volume but device is not in SHA mode?
 	if export.DeviceMappingUUID != nil {
 		operationMode, err := ncs.getDeviceMappingOperationMode(ctx, *export.DeviceMappingUUID)
 		if err != nil {
@@ -200,7 +200,7 @@ func (ncs *NBDCleanupService) analyzeExportOrphanStatus(ctx context.Context, exp
 			return result
 		}
 
-		// NBD exports should only exist for OMA mode volumes
+		// NBD exports should only exist for SHA mode volumes
 		if operationMode != "oma" {
 			result.OrphanReason = fmt.Sprintf("Export exists for %s mode volume (should only be oma mode)", operationMode)
 			return result

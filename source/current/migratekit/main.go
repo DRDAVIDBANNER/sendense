@@ -191,8 +191,8 @@ var rootCmd = &cobra.Command{
 			log.Info("Snapshot already exists - auto-deleting for CBT testing")
 
 			// Send progress update for snapshot stage
-			if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-				if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
+			if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+				if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
 					vpc.SendStageUpdate("Creating Snapshot", 10)
 				}
 			}
@@ -207,8 +207,8 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Send progress update after snapshot handling
-		if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-			if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
+		if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+			if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
 				vpc.SendStageUpdate("Creating Snapshot", 15)
 			}
 		}
@@ -242,8 +242,8 @@ var rootCmd = &cobra.Command{
 		ctx = context.WithValue(ctx, "jobID", jobID)
 
 		// Send progress update for NBD setup stage
-		if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-			if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
+		if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+			if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
 				vpc.SendStageUpdate("Setting up NBD", 20)
 				vpc.SendStageUpdate("Preparing Migration", 30)
 			}
@@ -256,22 +256,22 @@ var rootCmd = &cobra.Command{
 			os.Setenv("MIGRATEKIT_PROGRESS_JOB_ID", jobID)
 			log.WithField("job_id", jobID).Info("Set progress tracking job ID from command line flag")
 
-			// 🎯 CRITICAL: Initialize VMA progress client for real-time tracking
-			vmaProgressClient := progress.NewVMAProgressClient()
-			if vmaProgressClient.IsEnabled() {
+			// 🎯 CRITICAL: Initialize SNA progress client for real-time tracking
+			snaProgressClient := progress.NewVMAProgressClient()
+			if snaProgressClient.IsEnabled() {
 				log.WithFields(log.Fields{
-					"job_id":  vmaProgressClient.GetJobID(),
+					"job_id":  snaProgressClient.GetJobID(),
 					"vma_url": "http://localhost:8081",
-				}).Info("🎯 VMA progress tracking enabled")
+				}).Info("🎯 SNA progress tracking enabled")
 				log.WithField("job_id", jobID).Info("🎯 Early progress tracking enabled - monitoring all migration phases")
 
 				// Add to context for use throughout migration
-				ctx = context.WithValue(ctx, "vmaProgressClient", vmaProgressClient)
+				ctx = context.WithValue(ctx, "snaProgressClient", snaProgressClient)
 
 				// Send initial progress update
-				vmaProgressClient.SendStageUpdate("Initializing", 5)
+				snaProgressClient.SendStageUpdate("Initializing", 5)
 			} else {
-				log.Warn("❌ VMA progress tracking failed to initialize - check MIGRATEKIT_PROGRESS_JOB_ID")
+				log.Warn("❌ SNA progress tracking failed to initialize - check MIGRATEKIT_PROGRESS_JOB_ID")
 			}
 		}
 

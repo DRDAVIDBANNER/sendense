@@ -169,12 +169,12 @@ func (t *CloudStack) Disconnect(ctx context.Context) error {
 }
 
 func (t *CloudStack) Exists(ctx context.Context) (bool, error) {
-	// Check if we have a stored ChangeID in OMA database via API
+	// Check if we have a stored ChangeID in SHA database via API
 	vmPath := t.VirtualMachine.InventoryPath
 
 	changeID, err := t.getChangeIDFromOMA(vmPath)
 	if err != nil {
-		log.Printf("⚠️ Failed to check ChangeID from OMA API: %v", err)
+		log.Printf("⚠️ Failed to check ChangeID from SHA API: %v", err)
 		return false, nil // Assume target doesn't exist on API error
 	}
 
@@ -188,12 +188,12 @@ func (t *CloudStack) Exists(ctx context.Context) (bool, error) {
 }
 
 func (t *CloudStack) GetCurrentChangeID(ctx context.Context) (*vmware.ChangeID, error) {
-	// Get ChangeID from OMA database via API
+	// Get ChangeID from SHA database via API
 	vmPath := t.VirtualMachine.InventoryPath
 
 	changeIDStr, err := t.getChangeIDFromOMA(vmPath)
 	if err != nil {
-		log.Printf("⚠️ Failed to read ChangeID from OMA API: %v", err)
+		log.Printf("⚠️ Failed to read ChangeID from SHA API: %v", err)
 		return &vmware.ChangeID{}, nil // Return empty for first sync
 	}
 
@@ -212,17 +212,17 @@ func (t *CloudStack) WriteChangeID(ctx context.Context, changeId *vmware.ChangeI
 		return nil
 	}
 
-	// Get job ID from environment variable (set by VMA service)
+	// Get job ID from environment variable (set by SNA service)
 	jobID := os.Getenv("MIGRATEKIT_JOB_ID")
 	if jobID == "" {
 		log.Println("⚠️ No MIGRATEKIT_JOB_ID environment variable set, cannot store ChangeID")
 		return nil // Don't fail the migration for this
 	}
 
-	// Store ChangeID in OMA database via API
+	// Store ChangeID in SHA database via API
 	err := t.storeChangeIDInOMA(jobID, changeId.Value)
 	if err != nil {
-		return fmt.Errorf("failed to write ChangeID to OMA database: %w", err)
+		return fmt.Errorf("failed to write ChangeID to SHA database: %w", err)
 	}
 
 	log.Printf("📋 Stored ChangeID in database: %s", changeId.Value)
@@ -230,7 +230,7 @@ func (t *CloudStack) WriteChangeID(ctx context.Context, changeId *vmware.ChangeI
 }
 
 // getChangeIDFilePath returns the path where ChangeID is stored on the CloudStack appliance
-// DEPRECATED: This method is no longer used - ChangeIDs are now stored in OMA database
+// DEPRECATED: This method is no longer used - ChangeIDs are now stored in SHA database
 func (t *CloudStack) getChangeIDFilePath() string {
 	// Create a unique file path based on VM name and disk key
 	vmName := t.VirtualMachine.Name()
@@ -332,12 +332,12 @@ func (t *CloudStack) parseMultiDiskNBDTargets(ctx context.Context, nbdTargetsStr
 	return "", fmt.Errorf("no matching NBD target found for disk %s in targets: %s", currentDiskID, nbdTargetsStr)
 }
 
-// getChangeIDFromOMA retrieves ChangeID from OMA database via API
+// getChangeIDFromOMA retrieves ChangeID from SHA database via API
 func (t *CloudStack) getChangeIDFromOMA(vmPath string) (string, error) {
-	// Call OMA API to get previous ChangeID
-	omaURL := os.Getenv("CLOUDSTACK_API_URL")
-	if omaURL == "" {
-		omaURL = "http://localhost:8082" // Default for VMA tunnel
+	// Call SHA API to get previous ChangeID
+	shaURL := os.Getenv("CLOUDSTACK_API_URL")
+	if shaURL == "" {
+		shaURL = "http://localhost:8082" // Default for SNA tunnel
 	}
 
 	// NEW: Calculate disk ID for this specific disk
@@ -349,24 +349,24 @@ func (t *CloudStack) getChangeIDFromOMA(vmPath string) (string, error) {
 
 	// NEW: Include disk_id parameter for multi-disk support
 	apiURL := fmt.Sprintf("%s/api/v1/replications/changeid?vm_path=%s&disk_id=%s",
-		omaURL, encodedVMPath, encodedDiskID)
+		shaURL, encodedVMPath, encodedDiskID)
 
-	log.Printf("📡 Getting ChangeID from OMA API for disk %s: %s", diskID, apiURL)
+	log.Printf("📡 Getting ChangeID from SHA API for disk %s: %s", diskID, apiURL)
 
 	resp, err := http.Get(apiURL)
 	if err != nil {
-		return "", fmt.Errorf("failed to call OMA API: %w", err)
+		return "", fmt.Errorf("failed to call SHA API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("OMA API returned status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("SHA API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var response map[string]string
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return "", fmt.Errorf("failed to decode OMA API response: %w", err)
+		return "", fmt.Errorf("failed to decode SHA API response: %w", err)
 	}
 
 	changeID := response["change_id"]
@@ -379,15 +379,15 @@ func (t *CloudStack) getChangeIDFromOMA(vmPath string) (string, error) {
 	return changeID, nil
 }
 
-// storeChangeIDInOMA stores ChangeID in OMA database via API
+// storeChangeIDInOMA stores ChangeID in SHA database via API
 func (t *CloudStack) storeChangeIDInOMA(jobID, changeID string) error {
-	// Call OMA API to store ChangeID
-	omaURL := os.Getenv("CLOUDSTACK_API_URL")
-	if omaURL == "" {
-		omaURL = "http://localhost:8082" // Default for VMA tunnel
+	// Call SHA API to store ChangeID
+	shaURL := os.Getenv("CLOUDSTACK_API_URL")
+	if shaURL == "" {
+		shaURL = "http://localhost:8082" // Default for SNA tunnel
 	}
 
-	apiURL := fmt.Sprintf("%s/api/v1/replications/%s/changeid", omaURL, jobID)
+	apiURL := fmt.Sprintf("%s/api/v1/replications/%s/changeid", shaURL, jobID)
 
 	// CRITICAL FIX: Calculate correct disk ID from VMware disk.Key
 	diskID := t.getCurrentDiskID()
@@ -403,18 +403,18 @@ func (t *CloudStack) storeChangeIDInOMA(jobID, changeID string) error {
 		return fmt.Errorf("failed to marshal request data: %w", err)
 	}
 
-	log.Printf("📡 Storing ChangeID in OMA API for disk %s: %s", diskID, apiURL)
+	log.Printf("📡 Storing ChangeID in SHA API for disk %s: %s", diskID, apiURL)
 	log.Printf("🔄 Change ID storage details - Job: %s, Disk: %s, ChangeID: %s", jobID, diskID, changeID)
 
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to call OMA API: %w", err)
+		return fmt.Errorf("failed to call SHA API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("OMA API returned status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("SHA API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	log.Printf("✅ Successfully stored ChangeID %s in database for job %s", changeID, jobID)

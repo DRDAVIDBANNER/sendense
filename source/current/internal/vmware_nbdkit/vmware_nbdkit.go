@@ -268,7 +268,7 @@ func (s *NbdkitServer) IncrementalCopyToTarget(ctx context.Context, t target.Tar
 	tracker := progress.NewDataTracker(jobID, plannedBytes, progressEndpoint)
 	tracker.SetStage(progress.StageQueryCBT)
 	
-	// Start periodic VMA updates every 2 seconds
+	// Start periodic SNA updates every 2 seconds
 	notifier := progress.NewVMAProgressNotifier(tracker)
 	notifier.StartPeriodicUpdates()
 	
@@ -414,7 +414,7 @@ func (s *NbdkitServer) IncrementalCopyToTarget(ctx context.Context, t target.Tar
 	tracker.SetStage(progress.StageFinalize)
 	logger.Info("🎯 Incremental copy completed via selective block copying with progress tracking")
 	
-	// Send final progress update to VMA
+	// Send final progress update to SNA
 	err = tracker.UpdateVMAEndpoint()
 	if err != nil {
 		logger.Warn("Failed to send final progress update:", err)

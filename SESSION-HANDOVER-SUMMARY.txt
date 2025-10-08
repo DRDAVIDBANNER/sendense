@@ -1,0 +1,135 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    SESSION HANDOVER - OCTOBER 7, 2025                      ║
+║                         MIGRATEKIT NBD HANG INVESTIGATION                  ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+🎯 PRIMARY HANDOVER DOCUMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILE: /home/oma_admin/sendense/MIGRATEKIT-HANG-INVESTIGATION-HANDOVER.md
+SIZE: 372 lines
+COMPLETENESS: 100% - Everything new session needs to continue
+
+📋 WHAT'S IN THE HANDOVER DOCUMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Problem statement with exact symptoms
+✅ Observable behavior (what works, what hangs)
+✅ Complete test history (7 fixes attempted, all failed)
+✅ Current system state (SNA + SHA configuration)
+✅ Code analysis with exact hang location (lines 65-73)
+✅ libnbd debug output analysis
+✅ Next steps (Option 1: debug logging, Option 3: research)
+✅ Detailed instructions for adding debug logs
+✅ Quick recovery commands (kill job, restart services)
+✅ Success criteria
+✅ Critical notes and warnings
+
+🎬 NEXT SESSION ACTION PLAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: Add Debug Logging (RECOMMENDED FIRST)
+   → Locate migratekit source on SNA (10.0.100.231)
+   → Add 5 debug log statements to parallel_full_copy.go (lines 65-73)
+   → Rebuild as /opt/vma/bin/migratekit-debug
+   → Run test and analyze which debug log appears last
+   → This tells us WHERE the hang occurs
+
+STEP 2: Research Compatibility (IF NEEDED)
+   → Search for qemu-nbd + libnbd metadata context issues
+   → Check versions: qemu-nbd --version, pkg-config --modversion libnbd
+   → Look for known bugs or incompatibilities
+
+STEP 3: Apply Fix Based on Findings
+   → If hang is in ConnectTcp: libnbd/qemu-nbd compatibility issue
+   → If hang is after return: defer/context/goroutine issue
+   → If hang is in determineWorkerCount: logic bug (unlikely)
+
+🔥 CRITICAL CONTEXT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THE PROBLEM:
+   migratekit successfully connects to qemu-nbd, gets correct size (109GB),
+   logs "✅ NBD metadata context enabled for sparse optimization",
+   then HANGS FOREVER with no errors, no timeouts, just sleeping.
+
+THE MYSTERY:
+   Between line 480 (metadata context log) and line 73 (worker log) there are
+   only ~10 lines of simple code (return, defer, function call). The hang is
+   SOMEWHERE in those 10 lines but we can't tell where without debug logging.
+
+WHAT WE KNOW WORKS:
+   ✅ SSH tunnel VMA→SHA operational
+   ✅ qemu-nbd serving QCOW2 on 127.0.0.1:10809
+   ✅ libnbd connects and negotiates successfully
+   ✅ Export size correctly reported as 109GB
+   ✅ VMware CBT analysis completes (36GB usage)
+   ✅ All NBD configs correct (size, allowlist, readonly, PermitOpen)
+
+WHAT DOESN'T WORK:
+   ❌ Worker startup never happens
+   ❌ No data transfer ever begins
+   ❌ Process just sleeps (state S, 10 threads)
+
+📊 SESSION ACHIEVEMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ RESTful backup API endpoints working (/backups)
+✅ vm_disks architecture fixed (populated at discovery time)
+✅ Backend FK constraint bug fixed (backup_job before backup_chain)
+✅ 500GB repository configured (/mnt/sendense-backups)
+✅ NBD server fully operational (nbd-server + qemu-nbd)
+✅ qemu-nbd exporting QCOW2 correctly
+✅ SNA successfully connects to SHA via tunnel
+✅ All connectivity issues resolved (7 different fixes tested)
+
+🚨 WHAT'S BLOCKING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+migratekit NBD hang blocks:
+   ❌ End-to-end backup testing
+   ❌ Backup details endpoint testing  
+   ❌ Backup chain endpoint testing
+   ❌ Backup delete endpoint testing
+   ❌ File-level restore testing
+   ❌ GUI integration
+
+🔧 QUICK ACCESS CREDENTIALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SNA (Source): ssh vma@10.0.100.231 (Password: Password1)
+SHA (Target): Currently logged in as oma_admin@10.245.246.134
+
+📁 KEY FILES TO READ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. MIGRATEKIT-HANG-INVESTIGATION-HANDOVER.md (372 lines) ← START HERE
+2. job-sheets/2025-10-06-backup-api-integration.md (updated with status)
+3. VM_DISKS_ARCHITECTURE_ASSESSMENT.md (completed work context)
+4. BACKUP-API-SESSION-PROGRESS.md (session history)
+
+🎯 SUCCESS CRITERIA FOR NEXT SESSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+IMMEDIATE: Determine WHERE migratekit hangs (exact line/function)
+RESOLUTION: Get migratekit to progress past "metadata context enabled"
+VICTORY: See "Using N parallel workers" log and actual data transfer begin
+
+💡 IMPORTANT NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  DO NOT skip metadata context testing - defeats sparse optimization
+⚠️  DO NOT modify production binaries - use -debug suffix
+⚠️  DO verify SSH tunnel health before testing
+⚠️  DO check qemu-nbd logs for hidden errors
+⚠️  CONSIDER strace as last resort for syscall debugging
+
+🚀 READY FOR NEW SESSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+New session should read MIGRATEKIT-HANG-INVESTIGATION-HANDOVER.md first,
+then proceed with Option 1 (debug logging) to pinpoint hang location.
+
+Good luck! 🎯
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

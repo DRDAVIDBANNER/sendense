@@ -44,6 +44,7 @@ start_here/MASTER_AI_PROMPT.md
 ```
 start_here/LEGACY-SYSTEM-CLARIFICATION.md  # Current vs deprecated code (CRITICAL)
 start_here/GOVERNANCE-IMPROVEMENTS.md      # Framework improvements and AI feedback
+start_here/PHASE_1_CONTEXT_HELPER.md       # Phase 1 quick reference (backups)
 job-sheets/CURRENT-ACTIVE-WORK.md          # Active work tracking
 ```
 

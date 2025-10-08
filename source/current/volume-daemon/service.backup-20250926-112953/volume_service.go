@@ -245,7 +245,7 @@ func (vs *VolumeService) CleanupTestFailover(ctx context.Context, req models.Cle
 		Request: map[string]interface{}{
 			"test_vm_id":  req.TestVMID,
 			"volume_id":   req.VolumeID,
-			"oma_vm_id":   req.OMAVMID,
+			"oma_vm_id":   req.SHAVMID,
 			"delete_vm":   req.DeleteVM,
 			"force_clean": req.ForceClean,
 		},
@@ -457,11 +457,11 @@ func (vs *VolumeService) executeAttachVolume(ctx context.Context, operation *mod
 	var cloudStackDeviceID *int
 	var requiresCorrelation bool
 
-	// Check if this is an OMA attachment (where device correlation is possible)
+	// Check if this is an SHA attachment (where device correlation is possible)
 	isOMAAttachment := vs.isOMAVM(ctx, vmID)
 
 	if isOMAAttachment {
-		// OMA Mode: Full device correlation required
+		// SHA Mode: Full device correlation required
 		operationMode = string(models.OperationModeOMA)
 		requiresCorrelation = true
 
@@ -469,12 +469,12 @@ func (vs *VolumeService) executeAttachVolume(ctx context.Context, operation *mod
 			"volume_id": volumeID,
 			"vm_id":     vmID,
 			"mode":      operationMode,
-		}).Info("🔗 OMA attachment - performing device correlation")
+		}).Info("🔗 SHA attachment - performing device correlation")
 
 		if vs.deviceMonitor != nil {
 			devicePath, deviceSize = vs.correlateVolumeToDevice(ctx, volumeID, vmID)
 		} else {
-			log.Warn("Device monitor not available for OMA correlation")
+			log.Warn("Device monitor not available for SHA correlation")
 		}
 	} else {
 		// Failover Mode: CloudStack state tracking only
@@ -559,7 +559,7 @@ func (vs *VolumeService) executeAttachVolume(ctx context.Context, operation *mod
 			}
 		}
 
-		// Create NBD export for OMA volumes only (volumes with real device paths)
+		// Create NBD export for SHA volumes only (volumes with real device paths)
 		if isOMAAttachment && devicePath != "" && !strings.HasPrefix(devicePath, "remote-vm-") {
 			vs.createNBDExportForVolume(ctx, volumeID, vmID, devicePath)
 		}
@@ -614,11 +614,11 @@ func (vs *VolumeService) executeAttachVolumeAsRoot(ctx context.Context, operatio
 	var cloudStackDeviceID *int
 	var requiresCorrelation bool
 
-	// Check if this is an OMA attachment (where device correlation is possible)
+	// Check if this is an SHA attachment (where device correlation is possible)
 	isOMAAttachment := vs.isOMAVM(ctx, vmID)
 
 	if isOMAAttachment {
-		// OMA Mode: Full device correlation required
+		// SHA Mode: Full device correlation required
 		operationMode = string(models.OperationModeOMA)
 		requiresCorrelation = true
 		// Root device is always device ID 0
@@ -630,12 +630,12 @@ func (vs *VolumeService) executeAttachVolumeAsRoot(ctx context.Context, operatio
 			"vm_id":     vmID,
 			"mode":      operationMode,
 			"device_id": 0,
-		}).Info("🔗 OMA root attachment - performing device correlation")
+		}).Info("🔗 SHA root attachment - performing device correlation")
 
 		if vs.deviceMonitor != nil {
 			devicePath, deviceSize = vs.correlateVolumeToDevice(ctx, volumeID, vmID)
 		} else {
-			log.Warn("Device monitor not available for OMA correlation")
+			log.Warn("Device monitor not available for SHA correlation")
 		}
 	} else {
 		// Failover Mode: CloudStack state tracking only
@@ -712,7 +712,7 @@ func (vs *VolumeService) executeAttachVolumeAsRoot(ctx context.Context, operatio
 			}
 		}
 
-		// Create NBD export for OMA root volumes only (volumes with real device paths)
+		// Create NBD export for SHA root volumes only (volumes with real device paths)
 		if isOMAAttachment && devicePath != "" && !strings.HasPrefix(devicePath, "remote-vm-") {
 			vs.createNBDExportForVolume(ctx, volumeID, vmID, devicePath)
 		}
@@ -769,7 +769,7 @@ func (vs *VolumeService) executeDetachVolume(ctx context.Context, operation *mod
 		return
 	}
 
-	// Remove NBD export ONLY when detaching from OMA VM (prevents double SIGHUP during failover cleanup)
+	// Remove NBD export ONLY when detaching from SHA VM (prevents double SIGHUP during failover cleanup)
 	if devicePath != "" && !strings.HasPrefix(devicePath, "remote-vm-") && vs.isOMAVM(ctx, vmID) {
 		vs.deleteNBDExportForVolume(ctx, volumeID)
 	}
@@ -1054,11 +1054,11 @@ func (vs *VolumeService) clearDeviceEventsAfterSuccess(ctx context.Context) {
 	}
 }
 
-// isOMAVM checks if the given VM ID is the OMA VM (where device correlation is possible)
+// isOMAVM checks if the given VM ID is the SHA VM (where device correlation is possible)
 func (vs *VolumeService) isOMAVM(ctx context.Context, vmID string) bool {
-	// The OMA VM ID - could be made configurable or retrieved from database
-	const omaVMID = "8a4400e5-c92a-4bc4-8bff-4b6b0b6a018c"
-	return vmID == omaVMID
+	// The SHA VM ID - could be made configurable or retrieved from database
+	const shaVMID = "8a4400e5-c92a-4bc4-8bff-4b6b0b6a018c"
+	return vmID == shaVMID
 }
 
 // getCloudStackDeviceID retrieves the CloudStack device ID for a volume attachment
@@ -1083,7 +1083,7 @@ func (vs *VolumeService) executeCleanupTestFailover(ctx context.Context, operati
 		"operation_id": operation.ID,
 		"test_vm_id":   req.TestVMID,
 		"volume_id":    req.VolumeID,
-		"oma_vm_id":    req.OMAVMID,
+		"oma_vm_id":    req.SHAVMID,
 		"delete_vm":    req.DeleteVM,
 	}).Info("🧹 Starting test failover cleanup workflow")
 
@@ -1141,15 +1141,15 @@ func (vs *VolumeService) executeCleanupTestFailover(ctx context.Context, operati
 
 	log.WithField("volume_id", req.VolumeID).Info("✅ Volume detached from test VM")
 
-	// Phase 3: Volume Reattachment to OMA
+	// Phase 3: Volume Reattachment to SHA
 	log.WithFields(log.Fields{
 		"volume_id": req.VolumeID,
-		"oma_vm_id": req.OMAVMID,
-	}).Info("🔗 Reattaching volume to OMA")
+		"oma_vm_id": req.SHAVMID,
+	}).Info("🔗 Reattaching volume to SHA")
 
-	err = vs.cloudStackClient.AttachVolume(ctx, req.VolumeID, req.OMAVMID)
+	err = vs.cloudStackClient.AttachVolume(ctx, req.VolumeID, req.SHAVMID)
 	if err != nil {
-		vs.completeOperationWithError(ctx, operation, fmt.Errorf("failed to reattach volume to OMA: %w", err))
+		vs.completeOperationWithError(ctx, operation, fmt.Errorf("failed to reattach volume to SHA: %w", err))
 		return
 	}
 
@@ -1157,13 +1157,13 @@ func (vs *VolumeService) executeCleanupTestFailover(ctx context.Context, operati
 	var devicePath string
 	var deviceSize int64
 	if vs.deviceMonitor != nil {
-		devicePath, deviceSize = vs.correlateVolumeToDevice(ctx, req.VolumeID, req.OMAVMID)
+		devicePath, deviceSize = vs.correlateVolumeToDevice(ctx, req.VolumeID, req.SHAVMID)
 	}
 
 	log.WithFields(log.Fields{
 		"volume_id":   req.VolumeID,
 		"device_path": devicePath,
-	}).Info("✅ Volume reattached to OMA")
+	}).Info("✅ Volume reattached to SHA")
 
 	// Phase 4: Test VM Deletion (if requested)
 	if req.DeleteVM {
@@ -1189,7 +1189,7 @@ func (vs *VolumeService) executeCleanupTestFailover(ctx context.Context, operati
 	operation.Response = map[string]interface{}{
 		"test_vm_id":  req.TestVMID,
 		"volume_id":   req.VolumeID,
-		"oma_vm_id":   req.OMAVMID,
+		"oma_vm_id":   req.SHAVMID,
 		"device_path": devicePath,
 		"vm_deleted":  req.DeleteVM,
 		"message":     "Test failover cleanup completed successfully",
@@ -1203,13 +1203,13 @@ func (vs *VolumeService) executeCleanupTestFailover(ctx context.Context, operati
 		}).Error("Failed to update operation after successful cleanup")
 	}
 
-	// Create/update device mapping record for OMA attachment
+	// Create/update device mapping record for SHA attachment
 	if devicePath != "" {
 		mapping := &models.DeviceMapping{
 			VolumeUUID:                req.VolumeID,
 			VolumeIDNumeric:           nil, // Will be populated from CloudStack if available
-			VMID:                      req.OMAVMID,
-			OperationMode:             string(models.OperationModeOMA), // Cleanup always for OMA
+			VMID:                      req.SHAVMID,
+			OperationMode:             string(models.OperationModeOMA), // Cleanup always for SHA
 			CloudStackDeviceID:        nil,
 			RequiresDeviceCorrelation: true,
 			DevicePath:                devicePath,
@@ -1420,7 +1420,7 @@ func (vs *VolumeService) createNBDExportForVolume(ctx context.Context, volumeID,
 		VolumeID:   volumeID,
 		VMName:     vmName,
 		VMID:       vmID,
-		VMDiskID:   vmDiskID, // Include vm_disk_id correlation from OMA
+		VMDiskID:   vmDiskID, // Include vm_disk_id correlation from SHA
 		DiskNumber: diskNumber,
 		DevicePath: devicePath,
 		ReadOnly:   false, // Default to read-write for migrations
@@ -1472,12 +1472,12 @@ func (vs *VolumeService) deleteNBDExportForVolume(ctx context.Context, volumeID 
 	log.WithField("volume_id", volumeID).Info("✅ NBD export deleted automatically during volume detachment")
 }
 
-// getVMDiskIDFromOMA queries the OMA database to get vm_disk_id correlation for NBD export
+// getVMDiskIDFromOMA queries the SHA database to get vm_disk_id correlation for NBD export
 // NOTE: This would require database access that VolumeService doesn't currently have
-// For now, return nil to skip vm_disk_id correlation (handled by OMA-level auto-repair)
+// For now, return nil to skip vm_disk_id correlation (handled by SHA-level auto-repair)
 func (vs *VolumeService) getVMDiskIDFromOMA(ctx context.Context, volumeID string) *int {
 	log.WithField("volume_id", volumeID).Debug("⚠️ VolumeService doesn't have database access - skipping vm_disk_id correlation")
-	return nil // OMA auto-repair will fix this later
+	return nil // SHA auto-repair will fix this later
 }
 
 // ensureNBDExportDevicePathCorrect validates and recreates NBD export if device path changed

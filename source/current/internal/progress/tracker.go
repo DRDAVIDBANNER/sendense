@@ -33,7 +33,7 @@ type DataTracker struct {
 	startTime         time.Time
 	lastUpdateTime    time.Time
 	transferRate      float64 // bytes per second
-	progressEndpoint  string  // VMA progress endpoint URL
+	progressEndpoint  string  // SNA progress endpoint URL
 	
 	mu              sync.RWMutex
 	recentTransfers []transferSample
@@ -138,7 +138,7 @@ func (dt *DataTracker) GetProgress() ProgressSnapshot {
 	}
 }
 
-// UpdateVMAEndpoint sends progress update to VMA progress service
+// UpdateVMAEndpoint sends progress update to SNA progress service
 func (dt *DataTracker) UpdateVMAEndpoint() error {
 	if dt.progressEndpoint == "" {
 		return nil // No endpoint configured
@@ -163,12 +163,12 @@ func (dt *DataTracker) UpdateVMAEndpoint() error {
 	
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to update VMA progress: %v", err)
+		return fmt.Errorf("failed to update SNA progress: %v", err)
 	}
 	defer resp.Body.Close()
 	
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("VMA progress update failed with status: %d", resp.StatusCode)
+		return fmt.Errorf("SNA progress update failed with status: %d", resp.StatusCode)
 	}
 	
 	return nil

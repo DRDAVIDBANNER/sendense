@@ -72,15 +72,15 @@ func (w *LibNBDProgressWrapper) IsReadOnly() (bool, error) {
 	return w.handle.IsReadOnly()
 }
 
-// VMAProgressNotifier handles communication with VMA progress endpoint
-type VMAProgressNotifier struct {
+// SNAProgressNotifier handles communication with SNA progress endpoint
+type SNAProgressNotifier struct {
 	tracker    *DataTracker
 	notifyFunc func() error
 }
 
-// NewVMAProgressNotifier creates a notifier that updates VMA every few seconds
-func NewVMAProgressNotifier(tracker *DataTracker) *VMAProgressNotifier {
-	return &VMAProgressNotifier{
+// NewVMAProgressNotifier creates a notifier that updates SNA every few seconds
+func NewVMAProgressNotifier(tracker *DataTracker) *SNAProgressNotifier {
+	return &SNAProgressNotifier{
 		tracker: tracker,
 		notifyFunc: func() error {
 			return tracker.UpdateVMAEndpoint()
@@ -88,16 +88,16 @@ func NewVMAProgressNotifier(tracker *DataTracker) *VMAProgressNotifier {
 	}
 }
 
-// StartPeriodicUpdates sends progress updates to VMA every 2 seconds
-func (vpn *VMAProgressNotifier) StartPeriodicUpdates() {
+// StartPeriodicUpdates sends progress updates to SNA every 2 seconds
+func (vpn *SNAProgressNotifier) StartPeriodicUpdates() {
 	go func() {
 		for {
 			err := vpn.notifyFunc()
 			if err != nil {
 				// Log error but don't stop - progress tracking shouldn't break migration
-				log.Printf("Warning: Failed to update VMA progress: %v", err)
+				log.Printf("Warning: Failed to update SNA progress: %v", err)
 			}
-			// Update every 2 seconds per OMA polling design
+			// Update every 2 seconds per SHA polling design
 			time.Sleep(2 * time.Second)
 		}
 	}()
@@ -138,10 +138,10 @@ func GetJobIDFromContext() string {
 	return fmt.Sprintf("job-%d", time.Now().Unix())
 }
 
-// GetVMAProgressEndpoint returns the VMA progress endpoint URL
+// GetVMAProgressEndpoint returns the SNA progress endpoint URL
 func GetVMAProgressEndpoint() string {
-	// Default to localhost since migratekit runs on VMA
-	endpoint := os.Getenv("VMA_PROGRESS_ENDPOINT")
+	// Default to localhost since migratekit runs on SNA
+	endpoint := os.Getenv("SNA_PROGRESS_ENDPOINT")
 	if endpoint == "" {
 		endpoint = "http://localhost:8081/api/v1/progress"
 	}

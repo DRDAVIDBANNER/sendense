@@ -511,19 +511,19 @@ func (r *Repository) Ping(ctx context.Context) error {
 	return r.db.PingContext(ctx)
 }
 
-// GetOMAVMID retrieves the OMA VM ID from the active ossea_configs record
+// GetOMAVMID retrieves the SHA VM ID from the active ossea_configs record
 func (r *Repository) GetOMAVMID(ctx context.Context) (string, error) {
-	var omaVMID string
+	var shaVMID string
 	query := "SELECT oma_vm_id FROM ossea_configs WHERE is_active = 1 LIMIT 1"
 
-	err := r.db.QueryRowContext(ctx, query).Scan(&omaVMID)
+	err := r.db.QueryRowContext(ctx, query).Scan(&shaVMID)
 	if err != nil {
-		return "", fmt.Errorf("failed to query OMA VM ID from ossea_configs: %w", err)
+		return "", fmt.Errorf("failed to query SHA VM ID from ossea_configs: %w", err)
 	}
 
-	if omaVMID == "" {
-		return "", fmt.Errorf("OMA VM ID is empty in ossea_configs table")
+	if shaVMID == "" {
+		return "", fmt.Errorf("SHA VM ID is empty in ossea_configs table")
 	}
 
-	return omaVMID, nil
+	return shaVMID, nil
 }

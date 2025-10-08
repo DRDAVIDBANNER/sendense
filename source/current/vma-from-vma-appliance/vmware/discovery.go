@@ -17,7 +17,7 @@ import (
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 
-	"github.com/vexxhost/migratekit/internal/oma/models"
+	"github.com/vexxhost/migratekit/internal/sha/models"
 )
 
 // Config holds VMware connection configuration

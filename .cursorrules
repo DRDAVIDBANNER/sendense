@@ -1,0 +1,240 @@
+# Sendense Project Rules - MANDATORY FOR ALL AI SESSIONS
+
+**CRITICAL: Read this BEFORE any work. These are HARD CONSTRAINTS, not suggestions.**
+
+---
+
+## 🚨 ABSOLUTE PROHIBITIONS (NEVER VIOLATE)
+
+### 1. NO BINARIES IN SOURCE CODE
+- ❌ FORBIDDEN: ANY binary files in `source/current/`
+- ✅ REQUIRED: ALL binaries go in `source/builds/` ONLY
+- BEFORE ANY BUILD: Verify output path is `source/builds/`
+- If you find binaries in source/current/, STOP and alert user
+
+### 2. NO "PRODUCTION READY" CLAIMS WITHOUT EVIDENCE
+- ❌ FORBIDDEN: Claiming "production ready" without completing checklist
+- ❌ FORBIDDEN: Marking tasks "COMPLETE" without functional testing
+- ❌ FORBIDDEN: "95% done" claims when end-to-end doesn't work
+- ✅ REQUIRED: Evidence of successful execution before ANY completion claim
+- ✅ REQUIRED: Link to test results, logs, or proof of functionality
+
+### 3. NO PLACEHOLDER/SIMULATION CODE
+- ❌ FORBIDDEN: Commented-out code blocks >10 lines
+- ❌ FORBIDDEN: Simulation logic or fake implementations
+- ❌ FORBIDDEN: "TODO" comments in committed code
+- ✅ REQUIRED: Proper refactoring (build tags, feature flags, or separate binaries)
+- ✅ REQUIRED: Professional code quality
+
+### 4. MANDATORY DOCUMENTATION UPDATES
+- ❌ FORBIDDEN: API changes without updating `source/current/api-documentation/`
+- ✅ REQUIRED: Update API_REFERENCE.md with EVERY API change
+- ✅ REQUIRED: Update DB_SCHEMA.md with EVERY schema change
+- ✅ REQUIRED: Update CHANGELOG.md with significant changes
+- BEFORE COMMITTING: Verify documentation is current
+
+### 5. NO ARCHITECTURE VIOLATIONS
+- ❌ FORBIDDEN: Direct OSSEA volume calls (use Volume Daemon via volume_client.go)
+- ❌ FORBIDDEN: Direct logrus/slog in business logic (use internal/joblog)
+- ❌ FORBIDDEN: Network traffic outside port 443 SSH tunnel
+- ✅ REQUIRED: Follow established patterns in existing code
+
+---
+
+## ✅ MANDATORY VERIFICATION BEFORE "COMPLETE" CLAIMS
+
+**A task is NOT complete until ALL these are true:**
+
+```markdown
+- [ ] Code written and compiles cleanly
+- [ ] Linter passes with zero errors
+- [ ] Unit tests pass (if applicable)
+- [ ] Integration test passes
+- [ ] End-to-end test succeeds (prove functionality)
+- [ ] Documentation updated (API docs, README, changelog)
+- [ ] No binaries in source/current/
+- [ ] No commented code blocks >10 lines
+- [ ] Project goals document updated
+- [ ] Evidence linked (test results, logs, screenshots)
+```
+
+**Only mark "COMPLETE" or "✅" after ALL boxes checked.**
+
+---
+
+## 📊 STATUS REPORTING STANDARDS
+
+**Use HONEST status reporting:**
+
+❌ WRONG:
+- "95% Complete" (when critical blocker exists)
+- "Production Ready" (when not tested)
+- "Working" (when end-to-end fails)
+
+✅ CORRECT:
+- "60% Complete - BLOCKED by qemu-nbd issue"
+- "Code Complete - Pending Testing"
+- "IN PROGRESS - Multi-disk logic implemented, needs deployment"
+
+**Format:**
+```markdown
+**Status:** [percentage]% [state] - [blocker if any]
+**Last Tested:** [date] - [result]
+**Next Step:** [specific action]
+```
+
+---
+
+## 🔄 SESSION START PROCEDURE (MANDATORY)
+
+**At start of EVERY session:**
+
+1. **Check for active blockers:**
+   - Read `job-sheets/CURRENT-ACTIVE-WORK.md` if it exists
+   - Ask user about known issues before assuming previous work is done
+
+2. **Verify binary locations:**
+   ```bash
+   find source/current -type f -executable -size +1M
+   ```
+   If this returns anything, STOP and alert user (rule violation)
+
+3. **Check recent changes:**
+   - What was changed in last session?
+   - Was it marked "complete" but untested?
+   - Are there handover notes claiming things work?
+
+4. **Validate claims:**
+   - If previous session claimed "complete", verify functionality
+   - If previous session claimed "production ready", check evidence
+   - Don't trust status claims - verify with code/tests
+
+---
+
+## 🎯 WHEN TO STOP AND ASK
+
+**STOP and ask user if:**
+
+- You're about to commit a binary to source/current/
+- You're about to mark something "complete" without testing it
+- You're about to claim "production ready" without evidence
+- You find major discrepancies (claimed 95% but nothing works)
+- You're about to make API changes without documenting them
+- You encounter architecture violations in existing code
+- A task marked "complete" doesn't actually work when you check
+
+**DON'T GUESS. DON'T ASSUME. ASK.**
+
+---
+
+## 📁 FILE LOCATIONS (AUTHORITY)
+
+**Source Code (ONLY authoritative location):**
+- `source/current/` - All source code
+- `source/builds/` - ALL binaries (nothing in current/)
+- `source/current/api-documentation/` - Must stay current
+
+**Project Governance:**
+- `start_here/PROJECT_RULES.md` - Complete rules (read if needed)
+- `project-goals/` - Approved roadmap (don't deviate)
+- `job-sheets/` - Active work tracking
+
+**Components:**
+- SHA (Sendense Hub Appliance) - formerly OMA
+- SNA (Sendense Node Appliance) - formerly VMA
+- SCA (Sendense Control Appliance) - MSP platform
+
+**Binaries:**
+- `sendense-hub` (not oma-api)
+- `sna-api` (not vma-api)
+- Location: `/usr/local/bin/` (not /opt/migratekit/bin/)
+
+---
+
+## 🔧 CODE QUALITY GATES
+
+**Before committing ANY code:**
+
+- [ ] No binaries in source/current/
+- [ ] No commented code blocks >10 lines
+- [ ] Linter passes
+- [ ] Follows existing patterns
+- [ ] Documentation updated
+- [ ] Architecture rules followed
+
+**If any fail, FIX FIRST before claiming done.**
+
+---
+
+## 🚨 CRITICAL ARCHITECTURE RULES
+
+**Volume Operations:**
+```go
+// ❌ FORBIDDEN
+osseaClient.AttachVolume(...)
+
+// ✅ REQUIRED
+volumeClient := common.NewVolumeClient("http://localhost:8090")
+volumeClient.AttachVolume(...)
+```
+
+**Logging:**
+```go
+// ❌ FORBIDDEN in business logic
+log.Info("message")
+
+// ✅ REQUIRED
+tracker := joblog.New(db, stdoutHandler, dbHandler)
+ctx, jobID, _ := tracker.StartJob(ctx, joblog.JobStart{...})
+tracker.RunStep(ctx, jobID, "step", func(ctx context.Context) error {
+    log := tracker.Logger(ctx)
+    log.Info("message")
+    return nil
+})
+```
+
+**Network:**
+- ALL traffic via SSH tunnel on port 443
+- NO direct NBD port exposure
+- NO connections outside tunnel
+
+---
+
+## 📚 QUICK REFERENCE
+
+**Definition of "Complete":**
+- Code + Compiles + Tests Pass + Docs Updated + Evidence Provided
+
+**Definition of "Production Ready":**
+- Complete + Load Tested + Security Reviewed + Deployed Successfully + Monitored
+
+**Evidence Required:**
+- Test results with timestamps
+- Log output showing success
+- Screenshots of working functionality
+- Performance benchmarks
+- Security scan reports
+
+**Status Format:**
+```markdown
+**Status:** [X]% [STATE] - [BLOCKER]
+**Evidence:** [link/description]
+**Next:** [specific action]
+```
+
+---
+
+## 🎓 REMEMBER
+
+1. **Trust but verify** - Previous sessions may have lied about completion
+2. **Evidence required** - "It should work" ≠ "It works"
+3. **Test before claiming** - Compilation ≠ Functionality
+4. **Honest reporting** - Better to say "60% with blocker" than "95% almost done"
+5. **Follow rules** - They exist for good reasons
+6. **Ask when unsure** - Don't guess about critical decisions
+
+---
+
+**If you violate these rules, the user will be rightfully pissed. Follow them.**
+
+**Session ID for tracking violations: Include in all reports**

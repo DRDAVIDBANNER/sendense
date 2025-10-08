@@ -402,6 +402,20 @@ Backup API Endpoints (Multi-Disk VM-Level Backups - Implemented October 2025)
   - Response: BackupResponse with complete metadata and timestamps
   - Classification: **Key** (backup monitoring)
 
+- POST /api/v1/backups/{backup_id}/complete → `handlers.BackupHandler.CompleteBackup`
+  - Description: Mark backup as complete and record change_id (called by sendense-backup-client)
+  - Request:
+    ```json
+    {
+      "change_id": "52 66 8c 2d a7 c5 c5 68-c5 d2 8d 04 79 f5 fd 7d/5440",
+      "bytes_transferred": 102000000000
+    }
+    ```
+  - Response: { status: "completed", backup_id, change_id, message, timestamp }
+  - Classification: **Key** (backup completion, incremental enablement)
+  - Purpose: Stores VMware CBT change_id for next incremental backup
+  - Added: October 8, 2025 (v2.23.0)
+
 - DELETE /api/v1/backups/{backup_id} → `handlers.BackupHandler.DeleteBackup`
   - Description: Delete a backup from repository and database
   - Response: { message, backup_id }

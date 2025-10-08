@@ -56,9 +56,9 @@ func NewNbdkitServers(vddk *VddkConfig, vm *object.VirtualMachine) *NbdkitServer
 }
 
 func (s *NbdkitServers) createSnapshot(ctx context.Context) error {
-	// Send VMA progress update for snapshot creation start
-	if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-		if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
+	// Send SNA progress update for snapshot creation start
+	if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+		if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
 			vpc.SendStageUpdate("Creating Snapshot", 10)
 		}
 	}
@@ -80,9 +80,9 @@ func (s *NbdkitServers) createSnapshot(ctx context.Context) error {
 		return err
 	}
 
-	// Send VMA progress update for snapshot creation completion
-	if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-		if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
+	// Send SNA progress update for snapshot creation completion
+	if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+		if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
 			vpc.SendStageUpdate("Creating Snapshot", 15)
 		}
 	}
@@ -297,7 +297,7 @@ func isZeroBlockSampled(handle *libnbd.Libnbd, offset int64, size int) bool {
 }
 
 func (s *NbdkitServer) FullCopyToTarget(ctx context.Context, t target.Target, path string, targetIsClean bool) error {
-	// Initialize VMA progress tracking variables
+	// Initialize SNA progress tracking variables
 	var (
 		totalBytesTransferred int64
 		totalBytes            int64
@@ -315,13 +315,13 @@ func (s *NbdkitServer) FullCopyToTarget(ctx context.Context, t target.Target, pa
 
 	logger.Info("Starting full copy")
 
-	// 🎯 CRITICAL: Send initial job type to VMA now that we know it's confirmed
-	if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-		if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
-			vpc.SendUpdate(progress.VMAProgressUpdate{
+	// 🎯 CRITICAL: Send initial job type to SNA now that we know it's confirmed
+	if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+		if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
+			vpc.SendUpdate(progress.SNAProgressUpdate{
 				Stage:    "Transfer",
 				Status:   "in_progress",
-				SyncType: "initial", // 🎯 CRITICAL: Tell VMA this is initial/full copy
+				SyncType: "initial", // 🎯 CRITICAL: Tell SNA this is initial/full copy
 				Percent:  0,
 			})
 		}
@@ -340,7 +340,7 @@ func (s *NbdkitServer) FullCopyToTarget(ctx context.Context, t target.Target, pa
 			diskInfo.UsedGB, diskInfo.SizeGB)
 	}
 
-	// 🎯 FULL COPY WITH LIBNBD + VMA PROGRESS INTEGRATION
+	// 🎯 FULL COPY WITH LIBNBD + SNA PROGRESS INTEGRATION
 	handle, err := libnbd.Create()
 	if err != nil {
 		return err
@@ -505,15 +505,15 @@ func (s *NbdkitServer) FullCopyToTarget(ctx context.Context, t target.Target, pa
 
 		offset += int64(chunkSize)
 
-		// 🎯 CRITICAL: VMA Progress Integration - Real-time progress callbacks
+		// 🎯 CRITICAL: SNA Progress Integration - Real-time progress callbacks
 		totalBytesTransferred += int64(chunkSize)
 		currentPercent := (float64(totalBytesTransferred) / float64(totalBytes)) * 100
 		timeSinceUpdate := time.Since(lastProgressUpdate)
 
-		// Send VMA progress update every 2 seconds or 1% progress change (matching working pattern)
+		// Send SNA progress update every 2 seconds or 1% progress change (matching working pattern)
 		if timeSinceUpdate >= 2*time.Second || currentPercent >= lastProgressPercent+1.0 {
-			if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-				if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
+			if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+				if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
 					// Calculate throughput (bytes per second)
 					elapsed := time.Since(startTime).Seconds()
 					var throughputBPS int64
@@ -525,8 +525,8 @@ func (s *NbdkitServer) FullCopyToTarget(ctx context.Context, t target.Target, pa
 					diskPath := s.Disk.Backing.(types.BaseVirtualDeviceFileBackingInfo).GetVirtualDeviceFileBackingInfo().FileName
 					vmName := s.Servers.VirtualMachine.Name()
 
-					// Send VMA progress update matching working log format
-					vpc.SendUpdate(progress.VMAProgressUpdate{
+					// Send SNA progress update matching working log format
+					vpc.SendUpdate(progress.SNAProgressUpdate{
 						Stage:            "Transfer",
 						Status:           "in_progress",
 						BytesTransferred: totalBytesTransferred,
@@ -544,7 +544,7 @@ func (s *NbdkitServer) FullCopyToTarget(ctx context.Context, t target.Target, pa
 						"vm":                vmName,
 						"disk":              diskPath,
 						"job_id":            ctx.Value("jobID"),
-					}).Debug("📊 Progress update sent to VMA")
+					}).Debug("📊 Progress update sent to SNA")
 
 					lastProgressUpdate = time.Now()
 					lastProgressPercent = currentPercent
@@ -553,11 +553,11 @@ func (s *NbdkitServer) FullCopyToTarget(ctx context.Context, t target.Target, pa
 		}
 	}
 
-	// 🎯 CRITICAL: Send final 100% progress update to VMA (matching working pattern)
-	if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-		if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
+	// 🎯 CRITICAL: Send final 100% progress update to SNA (matching working pattern)
+	if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+		if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
 			// Send final 100% completion update
-			vpc.SendUpdate(progress.VMAProgressUpdate{
+			vpc.SendUpdate(progress.SNAProgressUpdate{
 				Stage:            "Transfer",
 				Status:           "completed",
 				BytesTransferred: totalBytes,
@@ -574,7 +574,7 @@ func (s *NbdkitServer) FullCopyToTarget(ctx context.Context, t target.Target, pa
 				"vm":     vmName,
 				"disk":   diskPath,
 				"job_id": ctx.Value("jobID"),
-			}).Info("📊 Final progress update sent to VMA")
+			}).Info("📊 Final progress update sent to SNA")
 		}
 	}
 
@@ -594,7 +594,7 @@ func (s *NbdkitServer) FullCopyToTarget(ctx context.Context, t target.Target, pa
 }
 
 func (s *NbdkitServer) IncrementalCopyToTarget(ctx context.Context, t target.Target, path string) error {
-	// Initialize VMA progress tracking variables
+	// Initialize SNA progress tracking variables
 	var (
 		totalBytesTransferred int64
 		totalBytes            int64
@@ -609,13 +609,13 @@ func (s *NbdkitServer) IncrementalCopyToTarget(ctx context.Context, t target.Tar
 
 	logger.Info("Starting incremental copy")
 
-	// 🎯 CRITICAL: Send incremental job type to VMA now that we know it's confirmed
-	if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-		if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
-			vpc.SendUpdate(progress.VMAProgressUpdate{
+	// 🎯 CRITICAL: Send incremental job type to SNA now that we know it's confirmed
+	if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+		if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
+			vpc.SendUpdate(progress.SNAProgressUpdate{
 				Stage:    "Transfer",
 				Status:   "in_progress",
-				SyncType: "incremental", // 🎯 CRITICAL: Tell VMA this is incremental
+				SyncType: "incremental", // 🎯 CRITICAL: Tell SNA this is incremental
 				Percent:  0,
 			})
 		}
@@ -744,15 +744,15 @@ func (s *NbdkitServer) IncrementalCopyToTarget(ctx context.Context, t target.Tar
 				bar.Set64(offset + chunkSize)
 				offset += chunkSize
 
-				// 🎯 CRITICAL: VMA Progress Integration - Real-time progress callbacks
+				// 🎯 CRITICAL: SNA Progress Integration - Real-time progress callbacks
 				totalBytesTransferred += chunkSize
 				currentPercent := (float64(totalBytesTransferred) / float64(totalBytes)) * 100
 				timeSinceUpdate := time.Since(lastProgressUpdate)
 
-				// Send VMA progress update every 2 seconds or 1% progress change (matching working pattern)
+				// Send SNA progress update every 2 seconds or 1% progress change (matching working pattern)
 				if timeSinceUpdate >= 2*time.Second || currentPercent >= lastProgressPercent+1.0 {
-					if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-						if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
+					if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+						if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
 							// Calculate throughput (bytes per second)
 							elapsed := time.Since(startTime).Seconds()
 							var throughputBPS int64
@@ -764,8 +764,8 @@ func (s *NbdkitServer) IncrementalCopyToTarget(ctx context.Context, t target.Tar
 							diskPath := s.Disk.Backing.(types.BaseVirtualDeviceFileBackingInfo).GetVirtualDeviceFileBackingInfo().FileName
 							vmName := s.Servers.VirtualMachine.Name()
 
-							// Send VMA progress update matching working log format
-							vpc.SendUpdate(progress.VMAProgressUpdate{
+							// Send SNA progress update matching working log format
+							vpc.SendUpdate(progress.SNAProgressUpdate{
 								Stage:            "Transfer",
 								Status:           "in_progress",
 								BytesTransferred: totalBytesTransferred,
@@ -783,7 +783,7 @@ func (s *NbdkitServer) IncrementalCopyToTarget(ctx context.Context, t target.Tar
 								"vm":                vmName,
 								"disk":              diskPath,
 								"job_id":            ctx.Value("jobID"),
-							}).Debug("📊 Progress update sent to VMA")
+							}).Debug("📊 Progress update sent to SNA")
 
 							lastProgressUpdate = time.Now()
 							lastProgressPercent = currentPercent
@@ -801,11 +801,11 @@ func (s *NbdkitServer) IncrementalCopyToTarget(ctx context.Context, t target.Tar
 		}
 	}
 
-	// 🎯 CRITICAL: Send final 100% progress update to VMA (matching working pattern)
-	if vmaProgressClient := ctx.Value("vmaProgressClient"); vmaProgressClient != nil {
-		if vpc, ok := vmaProgressClient.(*progress.VMAProgressClient); ok && vpc.IsEnabled() {
+	// 🎯 CRITICAL: Send final 100% progress update to SNA (matching working pattern)
+	if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
+		if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
 			// Send final 100% completion update
-			vpc.SendUpdate(progress.VMAProgressUpdate{
+			vpc.SendUpdate(progress.SNAProgressUpdate{
 				Stage:            "Transfer",
 				Status:           "completed",
 				BytesTransferred: totalBytes,
@@ -821,7 +821,7 @@ func (s *NbdkitServer) IncrementalCopyToTarget(ctx context.Context, t target.Tar
 				"disk":   diskPath,
 				"job_id": ctx.Value("jobID"),
 				"vm":     vmName,
-			}).Info("📊 Final progress update sent to VMA")
+			}).Info("📊 Final progress update sent to SNA")
 		}
 	}
 

@@ -1,4 +1,4 @@
-// Package api provides the VMA Control API server for OMA communication
+// Package api provides the SNA Control API server for SHA communication
 // This implements the minimal 4-endpoint API design for bidirectional tunnel communication
 package api
 
@@ -13,13 +13,13 @@ import (
 
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
-	"github.com/vexxhost/migratekit/source/current/vma/cbt"
-	"github.com/vexxhost/migratekit/source/current/vma/progress"
-	"github.com/vexxhost/migratekit/source/current/vma/services"
+	"github.com/vexxhost/migratekit/source/current/sna/cbt"
+	"github.com/vexxhost/migratekit/source/current/sna/progress"
+	"github.com/vexxhost/migratekit/source/current/sna/services"
 )
 
-// VMAControlServer provides the minimal VMA control API
-type VMAControlServer struct {
+// SNAControlServer provides the minimal SNA control API
+type SNAControlServer struct {
 	port              int
 	jobTracker        *JobTracker
 	vmwareClient      VMwareClientInterface
@@ -83,7 +83,7 @@ type HealthResponse struct {
 	Uptime    string `json:"uptime"`
 }
 
-// DiscoveryRequest represents a VM discovery request from OMA
+// DiscoveryRequest represents a VM discovery request from SHA
 type DiscoveryRequest struct {
 	VCenter    string `json:"vcenter"`
 	Username   string `json:"username"`
@@ -149,14 +149,14 @@ type NetworkInfo struct {
 	Type        string `json:"type"` // Network type for compatibility
 }
 
-// ReplicationRequest represents a replication job request from OMA
+// ReplicationRequest represents a replication job request from SHA
 type ReplicationRequest struct {
 	JobID      string      `json:"job_id"`
 	VCenter    string      `json:"vcenter"`
 	Username   string      `json:"username"`
 	Password   string      `json:"password"`
 	VMPaths    []string    `json:"vm_paths"`
-	OMAUrl     string      `json:"oma_url"`
+	SHAUrl     string      `json:"oma_url"`
 	NBDTargets []NBDTarget `json:"nbd_targets,omitempty"` // NBD target devices
 }
 
@@ -194,9 +194,9 @@ type VMSpecChangesResponse struct {
 	ErrorMessage   string `json:"error_message,omitempty"`
 }
 
-// NewVMAControlServer creates a new VMA control API server
-func NewVMAControlServer(port int, vmwareClient VMwareClientInterface) *VMAControlServer {
-	server := &VMAControlServer{
+// NewVMAControlServer creates a new SNA control API server
+func NewVMAControlServer(port int, vmwareClient VMwareClientInterface) *SNAControlServer {
+	server := &SNAControlServer{
 		port: port,
 		jobTracker: &JobTracker{
 			jobs:    make(map[string]*JobStatus),
@@ -210,10 +210,10 @@ func NewVMAControlServer(port int, vmwareClient VMwareClientInterface) *VMAContr
 	return server
 }
 
-// NewVMAControlServerWithServices creates a new VMA control API server with injected services
+// NewVMAControlServerWithServices creates a new SNA control API server with injected services
 func NewVMAControlServerWithServices(port int, vmwareClient VMwareClientInterface,
-	discoveryProvider services.VMwareDiscoveryProvider, specChecker services.VMSpecificationChecker) *VMAControlServer {
-	server := &VMAControlServer{
+	discoveryProvider services.VMwareDiscoveryProvider, specChecker services.VMSpecificationChecker) *SNAControlServer {
+	server := &SNAControlServer{
 		port: port,
 		jobTracker: &JobTracker{
 			jobs:    make(map[string]*JobStatus),
@@ -229,8 +229,8 @@ func NewVMAControlServerWithServices(port int, vmwareClient VMwareClientInterfac
 	return server
 }
 
-// setupRoutes configures the VMA Control API endpoints
-func (s *VMAControlServer) setupRoutes() {
+// setupRoutes configures the SNA Control API endpoints
+func (s *SNAControlServer) setupRoutes() {
 	api := s.router.PathPrefix("/api/v1").Subrouter()
 
 	// Core control endpoints
@@ -241,21 +241,21 @@ func (s *VMAControlServer) setupRoutes() {
 	api.HandleFunc("/health", s.handleHealth).Methods("GET")
 	api.HandleFunc("/vms/{vm_path:.*}/cbt-status", s.handleCBTStatus).Methods("GET")
 
-	// OMA-initiated workflow endpoints
+	// SHA-initiated workflow endpoints
 	api.HandleFunc("/discover", s.handleDiscover).Methods("POST")
 	api.HandleFunc("/replicate", s.handleReplicate).Methods("POST")
 	api.HandleFunc("/vm-spec-changes", s.handleVMSpecChanges).Methods("POST")
 
-	log.WithField("endpoints", 7).Info("VMA Control API routes configured")
+	log.WithField("endpoints", 7).Info("SNA Control API routes configured")
 }
 
 // GetRouter returns the router instance for external route registration
-func (s *VMAControlServer) GetRouter() *mux.Router {
+func (s *SNAControlServer) GetRouter() *mux.Router {
 	return s.router
 }
 
 // AddJobWithProgress adds a job to tracking with progress parser
-func (s *VMAControlServer) AddJobWithProgress(jobID, vmPath string) {
+func (s *SNAControlServer) AddJobWithProgress(jobID, vmPath string) {
 	s.jobTracker.mu.Lock()
 	defer s.jobTracker.mu.Unlock()
 
@@ -281,7 +281,7 @@ func (s *VMAControlServer) AddJobWithProgress(jobID, vmPath string) {
 }
 
 // RemoveJob removes a job from tracking and cleans up resources
-func (s *VMAControlServer) RemoveJob(jobID string) {
+func (s *SNAControlServer) RemoveJob(jobID string) {
 	s.jobTracker.mu.Lock()
 	defer s.jobTracker.mu.Unlock()
 
@@ -296,7 +296,7 @@ func (s *VMAControlServer) RemoveJob(jobID string) {
 }
 
 // UpdateNBDProgress updates NBD progress from pipe data
-func (s *VMAControlServer) UpdateNBDProgress(jobID string, bytesTransferred, totalBytes int64) {
+func (s *SNAControlServer) UpdateNBDProgress(jobID string, bytesTransferred, totalBytes int64) {
 	s.jobTracker.mu.RLock()
 	parser, exists := s.jobTracker.parsers[jobID]
 	s.jobTracker.mu.RUnlock()
@@ -313,8 +313,8 @@ func (s *VMAControlServer) UpdateNBDProgress(jobID string, bytesTransferred, tot
 	}
 }
 
-// handleCleanup processes cleanup operation requests from OMA
-func (s *VMAControlServer) handleCleanup(w http.ResponseWriter, r *http.Request) {
+// handleCleanup processes cleanup operation requests from SHA
+func (s *SNAControlServer) handleCleanup(w http.ResponseWriter, r *http.Request) {
 	var req CleanupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
@@ -324,7 +324,7 @@ func (s *VMAControlServer) handleCleanup(w http.ResponseWriter, r *http.Request)
 	log.WithFields(log.Fields{
 		"job_id": req.JobID,
 		"action": req.Action,
-	}).Info("Received cleanup request from OMA")
+	}).Info("Received cleanup request from SHA")
 
 	switch req.Action {
 	case "delete_snapshot":
@@ -364,7 +364,7 @@ func (s *VMAControlServer) handleCleanup(w http.ResponseWriter, r *http.Request)
 }
 
 // handleStatus returns the current status of a migration job
-func (s *VMAControlServer) handleStatus(w http.ResponseWriter, r *http.Request) {
+func (s *SNAControlServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	jobID := vars["job_id"]
 
@@ -379,7 +379,7 @@ func (s *VMAControlServer) handleStatus(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleProgress returns detailed progress information including throughput and errors
-func (s *VMAControlServer) handleProgress(w http.ResponseWriter, r *http.Request) {
+func (s *SNAControlServer) handleProgress(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	jobID := vars["job_id"]
 
@@ -415,8 +415,8 @@ func (s *VMAControlServer) handleProgress(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(jobProgress)
 }
 
-// handleConfig processes configuration updates from OMA
-func (s *VMAControlServer) handleConfig(w http.ResponseWriter, r *http.Request) {
+// handleConfig processes configuration updates from SHA
+func (s *SNAControlServer) handleConfig(w http.ResponseWriter, r *http.Request) {
 	var req ConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
@@ -427,7 +427,7 @@ func (s *VMAControlServer) handleConfig(w http.ResponseWriter, r *http.Request) 
 		"nbd_port":      req.NBDPort,
 		"export_name":   req.ExportName,
 		"target_device": req.TargetDevice,
-	}).Info("Received configuration update from OMA")
+	}).Info("Received configuration update from SHA")
 
 	// TODO: Implement dynamic stunnel configuration generation
 	// This will generate new stunnel config with the provided port/export
@@ -440,7 +440,7 @@ func (s *VMAControlServer) handleConfig(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleHealth provides health check endpoint
-func (s *VMAControlServer) handleHealth(w http.ResponseWriter, r *http.Request) {
+func (s *SNAControlServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	uptime := time.Since(time.Now()) // This would be actual server start time
 
 	response := HealthResponse{
@@ -453,8 +453,8 @@ func (s *VMAControlServer) handleHealth(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(response)
 }
 
-// handleDiscover processes VM discovery requests from OMA
-func (s *VMAControlServer) handleDiscover(w http.ResponseWriter, r *http.Request) {
+// handleDiscover processes VM discovery requests from SHA
+func (s *SNAControlServer) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	var req DiscoveryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
@@ -465,7 +465,7 @@ func (s *VMAControlServer) handleDiscover(w http.ResponseWriter, r *http.Request
 		"vcenter":    req.VCenter,
 		"datacenter": req.Datacenter,
 		"filter":     req.Filter,
-	}).Info("Received VM discovery request from OMA")
+	}).Info("Received VM discovery request from SHA")
 
 	// Call VMware client to discover VMs with filter
 	inventory, err := s.vmwareClient.DiscoverVMsWithFilter(req.VCenter, req.Username, req.Password, req.Datacenter, req.Filter)
@@ -487,8 +487,8 @@ func (s *VMAControlServer) handleDiscover(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(inventory)
 }
 
-// handleReplicate processes replication job requests from OMA
-func (s *VMAControlServer) handleReplicate(w http.ResponseWriter, r *http.Request) {
+// handleReplicate processes replication job requests from SHA
+func (s *SNAControlServer) handleReplicate(w http.ResponseWriter, r *http.Request) {
 	var req ReplicationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
@@ -499,7 +499,7 @@ func (s *VMAControlServer) handleReplicate(w http.ResponseWriter, r *http.Reques
 		"job_id":   req.JobID,
 		"vcenter":  req.VCenter,
 		"vm_count": len(req.VMPaths),
-	}).Info("Received replication request from OMA")
+	}).Info("Received replication request from SHA")
 
 	// Start replication using VMware client
 	response, err := s.vmwareClient.StartReplication(&req)
@@ -522,20 +522,20 @@ func (s *VMAControlServer) handleReplicate(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(response)
 }
 
-// Start starts the VMA control API server
-func (s *VMAControlServer) Start() error {
+// Start starts the SNA control API server
+func (s *SNAControlServer) Start() error {
 	addr := fmt.Sprintf(":%d", s.port)
 
 	log.WithFields(log.Fields{
 		"port":      s.port,
 		"endpoints": 6,
-	}).Info("🚀 Starting VMA Control API server")
+	}).Info("🚀 Starting SNA Control API server")
 
 	return http.ListenAndServe(addr, s.router)
 }
 
 // AddJob adds a new job to the tracker
-func (s *VMAControlServer) AddJob(jobID string) {
+func (s *SNAControlServer) AddJob(jobID string) {
 	s.jobTracker.jobs[jobID] = &JobStatus{
 		JobID:            jobID,
 		Status:           "running",
@@ -549,7 +549,7 @@ func (s *VMAControlServer) AddJob(jobID string) {
 }
 
 // UpdateJobProgress updates the progress of a running job
-func (s *VMAControlServer) UpdateJobProgress(jobID string, progress float64, operation string) {
+func (s *SNAControlServer) UpdateJobProgress(jobID string, progress float64, operation string) {
 	if job, exists := s.jobTracker.jobs[jobID]; exists {
 		job.ProgressPercent = progress
 		job.CurrentOperation = operation
@@ -577,7 +577,7 @@ func (s *VMAControlServer) UpdateJobProgress(jobID string, progress float64, ope
 // @Failure 400 {object} ErrorResponse "Invalid request parameters"
 // @Failure 500 {object} ErrorResponse "CBT check failed"
 // @Router /api/v1/vms/{vm_path}/cbt-status [get]
-func (s *VMAControlServer) handleCBTStatus(w http.ResponseWriter, r *http.Request) {
+func (s *SNAControlServer) handleCBTStatus(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	vmPath, err := url.QueryUnescape(vars["vm_path"])
 	if err != nil {
@@ -626,7 +626,7 @@ func (s *VMAControlServer) handleCBTStatus(w http.ResponseWriter, r *http.Reques
 }
 
 // handleVMSpecChanges checks for VM specification changes compared to stored data
-func (s *VMAControlServer) handleVMSpecChanges(w http.ResponseWriter, r *http.Request) {
+func (s *SNAControlServer) handleVMSpecChanges(w http.ResponseWriter, r *http.Request) {
 	var req VMSpecChangesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
@@ -710,7 +710,7 @@ func (s *VMAControlServer) handleVMSpecChanges(w http.ResponseWriter, r *http.Re
 // Helper methods for VM specification change detection
 
 // convertAPIVMInfoToServices converts API VMInfo to services.StoredVMInfo
-func (s *VMAControlServer) convertAPIVMInfoToServices(apiVM *VMInfo) *services.StoredVMInfo {
+func (s *SNAControlServer) convertAPIVMInfoToServices(apiVM *VMInfo) *services.StoredVMInfo {
 	// Convert disks
 	var disks []services.StoredDiskInfo
 	for _, disk := range apiVM.Disks {
@@ -762,7 +762,7 @@ func (s *VMAControlServer) convertAPIVMInfoToServices(apiVM *VMInfo) *services.S
 }
 
 // sendVMSpecChangesResponse sends the VM specification changes response
-func (s *VMAControlServer) sendVMSpecChangesResponse(w http.ResponseWriter, response VMSpecChangesResponse) {
+func (s *SNAControlServer) sendVMSpecChangesResponse(w http.ResponseWriter, response VMSpecChangesResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.WithError(err).Error("Failed to encode VM specification changes response")

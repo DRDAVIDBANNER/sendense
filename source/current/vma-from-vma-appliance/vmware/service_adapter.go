@@ -1,11 +1,11 @@
-// Package vmware provides VMware service adapters that implement VMA service interfaces
+// Package vmware provides VMware service adapters that implement SNA service interfaces
 package vmware
 
 import (
 	"context"
 
-	"github.com/vexxhost/migratekit/internal/oma/models"
-	"github.com/vexxhost/migratekit/source/current/vma/services"
+	"github.com/vexxhost/migratekit/internal/sha/models"
+	"github.com/vexxhost/migratekit/source/current/sna/services"
 )
 
 // SpecificationServiceAdapter adapts VMSpecificationService to the services interface

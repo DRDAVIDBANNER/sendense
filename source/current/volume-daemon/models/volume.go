@@ -109,7 +109,7 @@ type AttachVolumeRequest struct {
 type CleanupRequest struct {
 	TestVMID   string `json:"test_vm_id" validate:"required"`
 	VolumeID   string `json:"volume_id" validate:"required"`
-	OMAVMID    string `json:"oma_vm_id" validate:"required"`
+	SHAVMID    string `json:"oma_vm_id" validate:"required"`
 	DeleteVM   bool   `json:"delete_vm"`
 	ForceClean bool   `json:"force_clean"`
 }

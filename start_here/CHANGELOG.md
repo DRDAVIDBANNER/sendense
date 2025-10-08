@@ -43,9 +43,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Job Sheet**: `job-sheets/2025-10-08-phase1-backup-completion.md`
 
 ### Fixed
+- **Change ID Recording for Incremental Backups** (October 8, 2025):
+  - **Status**: ✅ COMPLETE - Change ID now recorded, incremental backups enabled
+  - **Problem**: Full backup completed but `backup_jobs.change_id = NULL`, preventing incremental backups
+  - **Root Cause**: SNA `buildBackupCommand()` not setting `MIGRATEKIT_JOB_ID` environment variable
+  - **Solution**: Added environment variable configuration in `sna/api/server.go` lines 691-701
+  - **Changes**:
+    - Added `cmd.Env = append(os.Environ(), fmt.Sprintf("MIGRATEKIT_JOB_ID=%s", req.JobID))`
+    - Added `MIGRATEKIT_PREVIOUS_CHANGE_ID` for incremental backups
+    - sendense-backup-client now receives job ID and can store change_id in SHA database
+  - **Binary**: `sna-api-server-v1.12.0-changeid-fix` (20MB)
+  - **Deployed**: SNA at 10.0.100.231:8081
+  - **Testing**: Full backup running with confirmed `MIGRATEKIT_JOB_ID` set
+  - **Evidence**: Log shows "Set progress tracking job ID from command line flag"
+  - **Impact**: Enables VMware CBT-based incremental backups (90%+ space/time savings)
+  - **Job Sheet**: `job-sheets/2025-10-08-changeid-recording-fix.md`
+  - **Documentation**: Updated `start_here/PHASE_1_CONTEXT_HELPER.md` with SNA credentials
+
 - **E2E Multi-Disk Backup Test** (October 8, 2025):
   - **Status**: 🟡 IN PROGRESS - Test running, data flowing correctly
-  - **Test Started**: October 8, 2025 06:33 UTC
+  - **Test Started**: October 8, 2025 07:37 UTC (after change_id fix)
   - **VM**: pgtest1 (2 disks: 102GB + 5GB)
   - **Verified Working**:
     - Backup API call successful (backup-pgtest1-1759901593)

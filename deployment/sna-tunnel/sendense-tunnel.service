@@ -1,0 +1,43 @@
+[Unit]
+Description=Sendense SSH Tunnel Manager
+Documentation=https://sendense.io/docs/tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vma
+Group=vma
+
+# Environment variables (can be overridden)
+Environment="SHA_HOST=10.245.246.134"
+Environment="SHA_PORT=443"
+Environment="SSH_KEY=/home/vma/.ssh/cloudstack_key"
+
+# Tunnel script
+ExecStart=/usr/local/bin/sendense-tunnel.sh
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sendense-tunnel
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/log
+
+# Resource limits
+LimitNOFILE=65536
+TasksMax=100
+
+[Install]
+WantedBy=multi-user.target

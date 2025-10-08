@@ -1,4 +1,4 @@
-// Package client provides the VMA client for communicating with OMA API
+// Package client provides the SNA client for communicating with SHA API
 // This handles VM inventory submission and replication job management with dynamic port allocation
 package client
 
@@ -13,22 +13,22 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/vexxhost/migratekit/internal/oma/models"
+	"github.com/vexxhost/migratekit/internal/sha/models"
 )
 
-// Config holds the configuration for OMA client
+// Config holds the configuration for SHA client
 type Config struct {
-	// OMA API endpoint
+	// SHA API endpoint
 	BaseURL string `json:"base_url"`
-	// VMA authentication token
+	// SNA authentication token
 	AuthToken string `json:"auth_token"`
-	// VMA appliance ID
+	// SNA appliance ID
 	ApplianceID string `json:"appliance_id"`
 	// HTTP client timeout
 	Timeout time.Duration `json:"timeout"`
 }
 
-// DefaultConfig returns default OMA client configuration
+// DefaultConfig returns default SHA client configuration
 func DefaultConfig() Config {
 	return Config{
 		BaseURL:     "http://localhost:8082",
@@ -37,7 +37,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// Client provides OMA API communication capabilities with automatic token renewal
+// Client provides SHA API communication capabilities with automatic token renewal
 type Client struct {
 	config       Config
 	httpClient   *http.Client
@@ -46,7 +46,7 @@ type Client struct {
 	authMutex    sync.RWMutex
 }
 
-// NewClient creates a new OMA API client
+// NewClient creates a new SHA API client
 func NewClient(config Config) *Client {
 	return &Client{
 		config: config,
@@ -56,7 +56,7 @@ func NewClient(config Config) *Client {
 	}
 }
 
-// Authenticate authenticates with OMA and gets session token
+// Authenticate authenticates with SHA and gets session token
 func (c *Client) Authenticate() error {
 	c.authMutex.Lock()
 	defer c.authMutex.Unlock()
@@ -87,7 +87,7 @@ func (c *Client) Authenticate() error {
 	log.WithFields(log.Fields{
 		"expires_at":     authResp.ExpiresAt,
 		"valid_duration": time.Until(authResp.ExpiresAt),
-	}).Info("Successfully authenticated with OMA")
+	}).Info("Successfully authenticated with SHA")
 
 	return nil
 }
@@ -110,7 +110,7 @@ func (c *Client) ensureAuthenticated() error {
 	return nil
 }
 
-// SendVMInventory sends VM inventory to OMA
+// SendVMInventory sends VM inventory to SHA
 func (c *Client) SendVMInventory(inventory *models.VMInventoryRequest) error {
 	resp, err := c.makeAuthenticatedRequest("POST", "/api/v1/vms/inventory", inventory)
 	if err != nil {
@@ -122,7 +122,7 @@ func (c *Client) SendVMInventory(inventory *models.VMInventoryRequest) error {
 		return fmt.Errorf("VM inventory submission failed with status %d", resp.StatusCode)
 	}
 
-	log.WithField("vm_count", len(inventory.VMs)).Info("Successfully sent VM inventory to OMA")
+	log.WithField("vm_count", len(inventory.VMs)).Info("Successfully sent VM inventory to SHA")
 	return nil
 }
 
@@ -294,7 +294,7 @@ func (c *Client) doAuthenticatedRequest(method, path string, body interface{}) (
 	return c.httpClient.Do(req)
 }
 
-// GetPreviousChangeID retrieves the previous change ID for a VM from OMA
+// GetPreviousChangeID retrieves the previous change ID for a VM from SHA
 func (c *Client) GetPreviousChangeID(vmPath string) (string, error) {
 	url := fmt.Sprintf("/api/v1/replications/changeid?vm_path=%s", vmPath)
 	resp, err := c.makeAuthenticatedRequest("GET", url, nil)
@@ -304,7 +304,7 @@ func (c *Client) GetPreviousChangeID(vmPath string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("OMA API returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("SHA API returned status %d", resp.StatusCode)
 	}
 
 	var response map[string]string

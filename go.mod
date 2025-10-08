@@ -4,14 +4,14 @@ go 1.23.0
 
 toolchain go1.24.6
 
-// Replace with local OMA module for cross-module access
-replace github.com/vexxhost/migratekit-oma => ./source/current/oma
+// Replace with local SHA module for cross-module access
+replace github.com/vexxhost/migratekit-sha => ./source/current/sha
 
 // Replace with local Volume Daemon module for cross-module access
 replace github.com/vexxhost/migratekit-volume-daemon => ./source/current/volume-daemon
 
 require (
-	github.com/vexxhost/migratekit-oma v0.0.0-00010101000000-000000000000
+	github.com/vexxhost/migratekit-sha v0.0.0-00010101000000-000000000000
 	github.com/vexxhost/migratekit-volume-daemon v0.0.0-00010101000000-000000000000
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/apache/cloudstack-go v2.4.1+incompatible
