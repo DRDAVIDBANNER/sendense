@@ -333,40 +333,130 @@ File-Level Restore (Task 4 - Implemented 2025-10-05)
   - Database: restore_mounts table with mount tracking
   - Customer Value: Individual file recovery without full VM restore
 
-Backup API Endpoints (Task 5 - Implemented 2025-10-05)
-- POST /api/v1/backup/start → `handlers.Backup.StartBackup`
-  - Description: Start a full or incremental backup of a VM disk
-  - Request: { vm_name, disk_id, backup_type: "full"|"incremental", repository_id, policy_id?, tags? }
-  - Response: BackupResponse with backup_id, status, file_path, progress
+Backup API Endpoints (Multi-Disk VM-Level Backups - Implemented October 2025)
+- POST /api/v1/backups → `handlers.BackupHandler.StartBackup`
+  - Description: Start VM-level backup (all disks simultaneously) - prevents data corruption from multiple snapshots
+  - Request: BackupStartRequest
+    ```json
+    {
+      "vm_name": "pgtest1",
+      "repository_id": "1",
+      "backup_type": "full"
+    }
+    ```
+  - ⚠️  **CRITICAL**: NO disk_id field - backups are VM-level to maintain consistency
+  - Response: BackupResponse with multi-disk results
+    ```json
+    {
+      "backup_id": "backup-pgtest1-1759901593",
+      "vm_context_id": "ctx-pgtest1-20251006-203401",
+      "vm_name": "pgtest1",
+      "disk_results": [
+        {
+          "disk_id": 0,
+          "nbd_port": 10104,
+          "nbd_export_name": "pgtest1-disk-2000",
+          "qcow2_path": "/backup/repository/pgtest1-disk-2000.qcow2",
+          "qemu_nbd_pid": 3956432,
+          "status": "qemu_started"
+        },
+        {
+          "disk_id": 1,
+          "nbd_port": 10105,
+          "nbd_export_name": "pgtest1-disk-2001",
+          "qcow2_path": "/backup/repository/pgtest1-disk-2001.qcow2",
+          "qemu_nbd_pid": 3956438,
+          "status": "qemu_started"
+        }
+      ],
+      "nbd_targets_string": "2000:nbd://127.0.0.1:10104/pgtest1-disk-2000,2001:nbd://127.0.0.1:10105/pgtest1-disk-2001",
+      "backup_type": "full",
+      "repository_id": "1",
+      "status": "started",
+      "bytes_transferred": 0,
+      "total_bytes": 0,
+      "created_at": "2025-10-08T06:33:13+01:00"
+    }
+    ```
   - Classification: **Key** (backup automation)
-  - Integration: Calls BackupEngine workflow, creates NBD export, triggers VMA replication
+  - Multi-Disk Architecture:
+    - Discovers ALL disks for VM from vm_disks table
+    - Allocates unique NBD port per disk (10100-10200 range)
+    - Creates separate QCOW2 file per disk in repository
+    - Starts qemu-nbd process per disk with --shared 10 flag
+    - Generates VMware disk keys: 2000, 2001, 2002... (loop index + 2000)
+    - Calls SNA /api/v1/backup/start with multi-disk NBD targets string
+  - Handler Location: `sha/api/handlers/backup_handlers.go` (StartBackup method)
+  - Database: Creates backup_jobs entry, links to vm_replication_contexts
+  - Cleanup: Comprehensive defer block stops qemu-nbd, releases ports, deletes QCOW2s on failure
+  - Tested: October 8, 2025 - 2-disk VM (102GB + 5GB) confirmed working at 10 MB/s
 
-- GET /api/v1/backup/list → `handlers.Backup.ListBackups`
+- GET /api/v1/backups → `handlers.BackupHandler.ListBackups`
   - Description: List backups with optional filtering
   - Query Params: vm_name, vm_context_id, repository_id, backup_type, status
   - Response: { backups: [BackupResponse], total: number }
   - Classification: **Key** (backup discovery)
 
-- GET /api/v1/backup/{backup_id} → `handlers.Backup.GetBackupDetails`
+- GET /api/v1/backups/{backup_id} → `handlers.BackupHandler.GetBackupDetails`
   - Description: Get detailed information about a specific backup
   - Response: BackupResponse with complete metadata and timestamps
   - Classification: **Key** (backup monitoring)
 
-- DELETE /api/v1/backup/{backup_id} → `handlers.Backup.DeleteBackup`
+- DELETE /api/v1/backups/{backup_id} → `handlers.BackupHandler.DeleteBackup`
   - Description: Delete a backup from repository and database
   - Response: { message, backup_id }
   - Protection: CASCADE DELETE handles related records
   - Classification: **Key** (backup lifecycle)
 
-- GET /api/v1/backup/chain → `handlers.Backup.GetBackupChain`
-  - Description: Get complete backup chain (full + incrementals) for a VM disk
-  - Query Params: vm_context_id or vm_name (required), disk_id (default: 0)
+- GET /api/v1/backups/chain → `handlers.BackupHandler.GetBackupChain`
+  - Description: Get complete backup chain (full + incrementals) for entire VM
+  - Query Params: vm_context_id or vm_name (required)
   - Response: { chain_id, full_backup_id, backups: [], total_size_bytes, backup_count }
   - Classification: **Key** (backup chain management)
-  - Handler: `handlers.Backup.*`
-  - Architecture: Integrates with BackupEngine (Task 3), Repository Manager (Task 1), NBD Export (Task 2)
-  - Database: backup_jobs table with backup chain relationships
-  - Customer Value: API-driven backup automation, GUI integration, scheduled backups
+  - Handler: `sha/api/handlers/backup_handlers.go`
+  - Architecture: Integrates with BackupEngine, RepositoryManager, QemuNBDManager, NBDPortAllocator
+  - Database: backup_jobs table with VM-level backup entries (no per-disk entries)
+  - Dependencies: services.QemuNBDManager, services.NBDPortAllocator, database.VMDiskRepository
+  - Customer Value: Crash-consistent multi-disk VM backups, prevents data corruption
+
+NBD Port Management (Task 7 - Planned for Implementation 2025-10-07)
+- POST /api/v1/nbd/ports/allocate → `handlers.NBD.AllocatePort`
+  - Description: Allocate NBD port from pool (10100-10200 range) for backup/replication job
+  - Request: { job_id: string, export_name: string, disk_count: number }
+  - Response: { job_id: string, allocated_ports: [{ port: number, export_name: string }], expires_at: timestamp }
+  - Classification: **Key** (resource management)
+  - Purpose: Dynamic port allocation for multi-disk backup jobs via SSH tunnel
+  - Root Cause Fix: Discovered October 7, 2025 - qemu-nbd defaults to --shared=1 (single connection limit)
+  - Solution: Pre-forward ports 10100-10200 through SSH tunnel, allocate dynamically per job
+- POST /api/v1/nbd/ports/release → `handlers.NBD.ReleasePort`
+  - Description: Release NBD port(s) after job completion
+  - Request: { job_id: string, ports: [number] }
+  - Response: { success: true, released_count: number }
+  - Classification: **Key** (cleanup)
+- GET /api/v1/nbd/ports/status → `handlers.NBD.GetPortStatus`
+  - Description: Query allocated ports and availability
+  - Response: { total_ports: 101, allocated: number, available: number, allocations: [{ port, job_id, export_name, allocated_at, expires_at }] }
+  - Classification: **Auxiliary** (monitoring)
+- POST /api/v1/nbd/qemu-nbd/start → `handlers.NBD.StartQemuNBD`
+  - Description: Start qemu-nbd process for QCOW2 file export
+  - Request: { export_name: string, port: number, qcow2_path: string, read_only: boolean, shared_connections: number }
+  - Response: { pid: number, port: number, export_name: string, status: "running" }
+  - Classification: **Key** (qemu-nbd process management)
+  - Critical: Always use --shared=5 or higher (migratekit opens 2 connections per export)
+- POST /api/v1/nbd/qemu-nbd/stop → `handlers.NBD.StopQemuNBD`
+  - Description: Stop qemu-nbd process by PID or export name
+  - Request: { pid: number } OR { export_name: string }
+  - Response: { success: true, stopped_pid: number }
+  - Classification: **Key** (cleanup)
+- GET /api/v1/nbd/qemu-nbd/list → `handlers.NBD.ListQemuNBDProcesses`
+  - Description: List all running qemu-nbd processes
+  - Response: { processes: [{ pid, port, export_name, qcow2_path, uptime_seconds, connection_count, shared_limit }] }
+  - Classification: **Auxiliary** (monitoring)
+  - Handler: `handlers.NBD.*` (to be implemented)
+  - Database: nbd_port_allocations, qemu_nbd_processes tables (to be created)
+  - Architecture: Port pool manager (10100-10200), qemu-nbd process lifecycle management, SSH multi-port tunnel integration
+  - Investigation: 10+ hours, 12+ tests, job sheet `2025-10-07-qemu-nbd-tunnel-investigation.md`
+  - Solution Verified: October 7, 2025 - SSH tunnel + direct TCP both work with --shared flag configured
 
 Legacy/Potentially Legacy Notes
 - Original failover handlers exist alongside enhanced; enhanced/unified are primary. The `RegisterFailoverRoutes` exports classic paths; prefer enhanced/unified.

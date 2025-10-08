@@ -41,6 +41,25 @@ VMware Credentials
 - CRUD /vmware-credentials → reads/writes `vmware_credentials`; may update `vm_replication_contexts.credential_id`
 - GET /vmware-credentials/default → reads `vmware_credentials` with `is_default=1`
 
+Backup Operations (Multi-Disk VM-Level Backups - October 2025)
+- POST /api/v1/backups → creates `backup_jobs` entry (VM-level, NOT per-disk)
+  - Table: `backup_jobs`
+  - Writes: backup_id, vm_context_id, vm_name, repository_id, backup_type, status='started', nbd_targets_string, created_at
+  - FK: vm_context_id references vm_replication_contexts(context_id)
+  - FK: repository_id references repositories(id)
+  - Reads: `vm_disks` table to discover all disks for VM
+  - Reads: `vmware_credentials` table via CredentialService for vCenter authentication
+  - Multi-Disk: Creates ONE backup_jobs entry for entire VM (all disks processed as single unit)
+  - NBD Management: Allocates ports via NBDPortAllocator (in-memory), starts qemu-nbd per disk
+  - SNA Integration: Calls SNA /api/v1/backup/start with comma-separated nbd_targets_string
+  - Cleanup: On failure, defer block releases ports, stops qemu-nbd processes, deletes QCOW2 files
+- GET /api/v1/backups → reads `backup_jobs` with optional filters
+- GET /api/v1/backups/{backup_id} → reads `backup_jobs` by backup_id
+- DELETE /api/v1/backups/{backup_id} → deletes from `backup_jobs`, cascades to related records
+- GET /api/v1/backups/chain → reads `backup_jobs` filtered by vm_context_id, ordered by created_at
+  - Returns full backup + incrementals chain for VM
+  - Database: Uses backup_jobs.parent_backup_id to link incremental to full backup
+
 CloudStack Settings
 - POST /settings/cloudstack/* → reads/writes `ossea_configs` (test/validate/discover resources); `ossea_configs.is_active` toggles
 - Detect OMA VM may record `ossea_configs.oma_vm_id`
