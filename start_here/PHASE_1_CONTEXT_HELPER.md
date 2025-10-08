@@ -178,13 +178,18 @@ GET /api/v1/backups/chain/{vm_name}
 
 ## 📁 FILE STRUCTURE
 
-### **QCOW2 Storage**
+### **QCOW2 Storage** (Current: Flat, No Backing Files Yet)
 ```
+/backup/repository/
+├── pgtest1-disk-2000.qcow2   # Full backup (19GB)
+└── pgtest1-disk-2001.qcow2   # Full backup (97MB)
+
+# Expected after incremental fix:
 /backup/repository/
 └── ctx-{vm_name}-{timestamp}/
     ├── disk-0/
     │   ├── backup-{vm_name}-{timestamp}-full.qcow2
-    │   └── backup-{vm_name}-{timestamp2}-incr.qcow2  # Backing file: full.qcow2
+    │   └── backup-{vm_name}-{timestamp2}-incr.qcow2  # ✅ Backing file: full.qcow2
     └── disk-1/
         ├── backup-{vm_name}-{timestamp}-full.qcow2
         └── backup-{vm_name}-{timestamp2}-incr.qcow2
@@ -305,14 +310,23 @@ pkill -9 qemu-nbd
 rm -rf /backup/repository/ctx-*
 ```
 
-### **Issue: change_id not recorded**
+### **Issue: change_id not recorded** ✅ FIXED
 **Symptom:** `backup_jobs.change_id = NULL` after full backup  
-**Cause:** `MIGRATEKIT_JOB_ID` env var not set in SNA  
-**Solution:** ✅ FIXED in `sna-api-server-v1.12.0-changeid-fix`
-- Added `cmd.Env` configuration in `sna/api/server.go` lines 691-701
-- Binary deployed on SNA (10.0.100.231:8081)
-- Verified working: log shows "Set progress tracking job ID from command line flag"
-- Job sheet: `job-sheets/2025-10-08-changeid-recording-fix.md`
+**Root Causes:** Multiple backend issues discovered
+1. SNA not passing `MIGRATEKIT_JOB_ID` to sendense-backup-client
+2. SHA StartBackup not creating backup_jobs database record
+3. FK constraints violated (empty string vs NULL for policy_id, parent_backup_id)
+4. Wrong API endpoint - client calling replication endpoint for backup jobs
+
+**Solution:** ✅ COMPLETE (October 8, 2025)
+- **SNA:** Added environment variables in `sna/api/server.go` buildBackupCommand()
+- **SHA:** Added database record creation in `backup_handlers.go::StartBackup()` (lines 458-477)
+- **SHA:** Changed PolicyID and ParentBackupID to *string pointers for NULL support
+- **SHA:** New endpoint `POST /api/v1/backups/{backup_id}/complete` (records change_id)
+- **Client:** Auto-detect job type from ID prefix (backup- vs replication)
+- **Binaries:** `sna-api-server-v1.12.0-changeid-fix`, `sendense-hub-v2.23.2-null-fix`
+- **Validated:** Full backup test successful, change_id: `52 ed 45 cf 23 2c 6a f0-a5 26 59 71 b7 9f 1f b3/4442`
+- **Job sheet:** `job-sheets/2025-10-08-changeid-recording-fix-EXPANDED.md`
 
 ### **Issue: Disk keys wrong (both disks same)**
 **Symptom:** Data corruption in multi-disk backups  
@@ -323,6 +337,29 @@ rm -rf /backup/repository/ctx-*
 **Symptom:** "Port already in use" errors  
 **Cause:** `QemuNBDManager` not releasing ports on failure  
 **Solution:** Integrated `NBDPortAllocator` into cleanup (completed)
+
+### **Issue: Incremental backups not working** 🔴 CRITICAL
+**Symptom:** Incremental backup request creates full QCOW2 instead of incremental with backing file  
+**Root Cause:** Backup handlers bypass BackupEngine and directly create QCOW2s via qemuManager  
+**Impact:** All backups consume full disk space, no space/time savings  
+**Status:** 🔴 BLOCKED - Architectural refactoring needed  
+
+**What Works:**
+- ✅ change_id recording (100% operational)
+- ✅ BackupEngine has incremental logic (`workflows/backup.go` lines 135-145)
+- ✅ LocalRepository creates incremental QCOW2s (`storage/local_repository.go` lines 85-106)
+- ✅ QCOW2Manager supports backing files (`storage/qcow2_manager.go` lines 68-100)
+
+**What's Broken:**
+- ❌ Handlers call `qemuManager.Start()` directly (line 259+ in `backup_handlers.go`)
+- ❌ Handlers don't use `BackupEngine.ExecuteBackup()`
+- ❌ No parent backup lookup
+- ❌ No backing file creation
+
+**Solution:** Refactor handlers to call BackupEngine instead of directly managing QCOW2s  
+**Effort:** 2-3 hours  
+**Job Sheet:** `job-sheets/2025-10-08-incremental-qcow2-architecture-fix.md` (COMPLETE DESIGN)  
+**Files:** `sha/api/handlers/backup_handlers.go` (lines 133-481), `sha/workflows/backup.go`
 
 ---
 
@@ -338,6 +375,9 @@ Password: Password1
 ```bash
 cd /home/oma_admin/sendense/source/current/sha/cmd
 go build -o /home/oma_admin/sendense/source/builds/sendense-hub-v2.X.0-description main.go
+
+# Latest working binary (October 8, 2025)
+# sendense-hub-v2.23.2-null-fix (includes completion endpoint + NULL handling)
 ```
 
 ### **Deploy SHA Binary**
@@ -353,6 +393,9 @@ nohup /usr/local/bin/sendense-hub -port=8082 -auth=false \
 ```bash
 cd /home/oma_admin/sendense/source/current/sna-api-server
 go build -o /home/oma_admin/sendense/source/builds/sna-api-server-v1.X.0-description .
+
+# Latest working binary (October 8, 2025)
+# sna-api-server-v1.12.0-changeid-fix (includes MIGRATEKIT_JOB_ID env vars)
 ```
 
 ### **Deploy SNA Binary**
@@ -387,7 +430,16 @@ EOF
 
 **Recent Job Sheets:**  
 `job-sheets/2025-10-08-phase1-backup-completion.md` (multi-disk backup infrastructure)  
-`job-sheets/2025-10-08-changeid-recording-fix.md` (✅ COMPLETE - incremental backups enabled)
+`job-sheets/2025-10-08-changeid-recording-fix-EXPANDED.md` (✅ COMPLETE - change_id recording)
+- Full E2E validation: backup-pgtest1-1759913694
+- change_id recorded: 52 ed 45 cf 23 2c 6a f0-a5 26 59 71 b7 9f 1f b3/4442
+- Client-side incremental logic ready (uses change_id)
+
+`job-sheets/2025-10-08-incremental-qcow2-architecture-fix.md` (🔴 BLOCKED - needs refactoring)
+- **Issue:** Handlers bypass BackupEngine, create full QCOW2s for incremental requests
+- **Solution:** Refactor handlers to call BackupEngine.ExecuteBackup()
+- **Status:** Complete design document, ready for implementation
+- **Estimated:** 2-3 hours
 
 **Cleanup Script:**  
 `scripts/cleanup-backup-environment.sh`  
