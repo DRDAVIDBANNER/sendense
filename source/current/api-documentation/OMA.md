@@ -433,6 +433,30 @@ Backup API Endpoints (Multi-Disk VM-Level Backups - Implemented October 2025)
   - Dependencies: services.QemuNBDManager, services.NBDPortAllocator, database.VMDiskRepository
   - Customer Value: Crash-consistent multi-disk VM backups, prevents data corruption
 
+- GET /api/v1/backups/changeid → `handlers.BackupHandler.GetChangeID`
+  - Description: Get last successful change_id for specific VM disk (used by sendense-backup-client for incremental backups)
+  - Query Params: 
+    - vm_name (required): VM name
+    - disk_id (required): Disk index (0, 1, 2...)
+  - Response:
+    ```json
+    {
+      "vm_name": "pgtest1",
+      "disk_id": "0",
+      "change_id": "52 66 8c 2d a7 c5 c5 68-c5 d2 8d 04 79 f5 fd 7d/5530",
+      "backup_id": "backup-pgtest1-1759947871",
+      "backup_type": "full",
+      "completed_at": "2025-10-08T19:54:00Z"
+    }
+    ```
+  - Classification: **Critical** (enables incremental backups via VMware CBT)
+  - Handler: `sha/api/handlers/backup_handlers.go` (GetChangeID method, added v2.11.0)
+  - Database: Queries backup_disks table with JOIN to vm_backup_contexts
+  - Purpose: Provides backup client with last change_id to enable VMware CBT incremental transfers
+  - Architecture Change: Separates backup change_ids from replication change_ids (different tables/workflows)
+  - Testing: October 8, 2025 - Multi-disk VM confirmed working (pgtest1: disk 0 + disk 1)
+  - Note: Returns 404 if no completed backup found for VM+disk combination
+
 NBD Port Management (Task 7 - Planned for Implementation 2025-10-07)
 - POST /api/v1/nbd/ports/allocate → `handlers.NBD.AllocatePort`
   - Description: Allocate NBD port from pool (10100-10200 range) for backup/replication job

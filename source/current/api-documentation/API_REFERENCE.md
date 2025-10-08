@@ -1,7 +1,7 @@
 # Sendense API Reference
 
-**Version:** v2.7.6  
-**Last Updated:** October 5, 2025  
+**Version:** v2.18.0  
+**Last Updated:** October 8, 2025  
 **Project:** Sendense Universal Backup Platform
 
 ---

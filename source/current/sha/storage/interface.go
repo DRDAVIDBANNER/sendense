@@ -34,14 +34,16 @@ type Repository interface {
 
 // BackupRequest encapsulates parameters for creating a backup.
 type BackupRequest struct {
-	VMContextID    string         `json:"vm_context_id"`
-	VMName         string         `json:"vm_name"`
-	DiskID         int            `json:"disk_id"`
-	BackupType     BackupType     `json:"backup_type"`
-	ParentBackupID string         `json:"parent_backup_id,omitempty"` // For incrementals
-	TotalBytes     int64          `json:"total_bytes"`
-	ChangeID       string         `json:"change_id,omitempty"` // VMware CBT change ID
-	Metadata       BackupMetadata `json:"metadata"`
+	VMContextID       string         `json:"vm_context_id"`        // Legacy replication context
+	VMBackupContextID string         `json:"vm_backup_context_id"` // NEW: Backup context for proper parent-child relationships
+	ParentJobID       string         `json:"parent_job_id"`        // NEW: Parent backup job ID (for backup_disks FK)
+	VMName            string         `json:"vm_name"`
+	DiskID            int            `json:"disk_id"`
+	BackupType        BackupType     `json:"backup_type"`
+	ParentBackupID    string         `json:"parent_backup_id,omitempty"` // For incrementals (QCOW2 backing file)
+	TotalBytes        int64          `json:"total_bytes"`
+	ChangeID          string         `json:"change_id,omitempty"` // VMware CBT change ID
+	Metadata          BackupMetadata `json:"metadata"`
 }
 
 // Backup represents a single backup in the repository.

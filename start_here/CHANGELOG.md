@@ -9,6 +9,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [SHA v2.22.0-chain-fix-v2] - 2025-10-08
+
+### Fixed
+- **Backup Chain Metadata Tracking** (CRITICAL):
+  - Fixed `backup_chains` table not incrementing `total_backups` count after incremental backups
+  - Fixed per-disk `backup_jobs` status not updating to "completed"
+  - Root cause: Per-disk job ID lookup was generating IDs instead of querying database
+  - Solution: Query actual per-disk `backup_jobs` records using context ID, backup type, disk index pattern, and time window
+  - Added `AddBackupToChain()` calls in completion workflow to update chain metadata
+  - Result: Chain counts now accurate, all 8 per-disk jobs show "completed" status
+  - Testing: 4th incremental backup confirmed chain increment from 4 to 5
+
+---
+
+## [SHA v2.21.0-chain-fix] - 2025-10-08
+
+### Fixed
+- **Backup Chain Update Logic** (Non-functional):
+  - Added logic to update `backup_chains` table when backups complete
+  - Fixed FK constraint errors by using correct per-disk job IDs
+  - Issue: Logic had compilation errors and didn't execute
+  - Superseded by v2.22.0
+
+---
+
+## [SHA v2.20.0-context-fix] - 2025-10-08
+
+### Fixed
+- **Incremental Backup Context ID Bug** (CRITICAL):
+  - Fixed `workflows/backup.go` using wrong context ID for backup chain lookups
+  - Bug: Using `VMContextID` (replication context) instead of `VMBackupContextID` (backup context)
+  - Solution: Added fallback logic to use correct backup context ID
+  - Result: Incremental backups now find parent backups correctly
+  - Testing: 2nd incremental backup started successfully
+
+---
+
+## [SHA v2.19.0-incremental-fix] - 2025-10-08
+
+### Fixed
+- **Incremental Backup Detection Bug** (CRITICAL):
+  - Fixed `StartBackup` handler querying wrong table for previous backups
+  - Bug: Querying deprecated `backup_jobs.disk_id` and `backup_jobs.change_id` columns
+  - Solution: Query new `backup_disks` table with JOIN to `vm_backup_contexts`
+  - Result: Incremental backups now detect previous backups correctly
+  - Testing: Incremental backup request succeeded
+
+---
+
+## [SHA v2.18.0-duplicate-fix] - 2025-10-08
+
+### Fixed
+- **Duplicate INSERT Bug** (CRITICAL):
+  - Fixed `StartBackup` handler creating parent `backup_jobs` record twice
+  - Bug: Handler created record via RAW SQL at line 243, then tried again via GORM at line 466
+  - Solution: Removed duplicate GORM Create() call
+  - Result: No more duplicate key errors in logs
+  - Testing: Full backup completed without database errors
+
+---
+
+## [SHA v2.17.0-qemu-cleanup] - 2025-10-08
+
+### Added
+- **Automatic qemu-nbd Cleanup**:
+  - Added cleanup logic in `CompleteBackup()` to stop qemu-nbd processes
+  - Releases NBD ports after all disks complete for a backup job
+  - Prevents resource leaks and locked QCOW2 files
+  - Testing: No stale qemu-nbd processes after backup completion
+
+---
+
+## [SHA v2.16.0-context-arch] - 2025-10-08
+
+### Added
+- **VM-Centric Backup Context Architecture** (MAJOR REFACTORING):
+  - New `vm_backup_contexts` table as master context for backup VMs
+  - New `backup_disks` table for per-disk tracking with individual change_ids
+  - Eliminates fragile timestamp-window hack for matching parent/child jobs
+  - Proper FK relationships with CASCADE DELETE support
+  - Migration script: `20251008_backup_context_architecture.sql`
+  
+### Changed
+- `backup_jobs` table:
+  - Added `vm_backup_context_id` FK to `vm_backup_contexts`
+  - Deprecated `disk_id` and `change_id` columns (now in `backup_disks`)
+- `backup_chains` table:
+  - Changed FK from `vm_replication_contexts` to `vm_backup_contexts`
+- `CompleteBackup()` workflow:
+  - Now writes directly to `backup_disks` table
+  - No more 1-hour timestamp window matching
+- `GetChangeID()` API:
+  - Queries `backup_disks` with JOIN to `vm_backup_contexts`
+
+### Database Migration
+- Migrated existing `backup_jobs` data to new architecture
+- Preserved all `change_id` and `qcow2_path` information
+- Verified FK relationships and CASCADE DELETE functionality
+
+---
+
+## [Unreleased]
+
 ### Added
 - **Backup Environment Cleanup Script** (October 8, 2025):
   - **Status**: ✅ COMPLETE - Automated cleanup system operational

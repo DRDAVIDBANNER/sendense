@@ -49,3 +49,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Maintainer:** Sendense Engineering Team  
 **Last Updated:** October 7, 2025
+

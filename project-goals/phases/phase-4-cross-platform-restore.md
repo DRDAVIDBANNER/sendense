@@ -78,6 +78,152 @@
 
 ---
 
+## 🔍 PREREQUISITE: Phase 1 Backup System (October 2025)
+
+**⚠️ CRITICAL: Phase 1 VMware backups are PRODUCTION READY**
+
+Before implementing cross-platform restore, you **MUST** understand the current backup system architecture:
+
+### **Quick Facts** 📊
+- **Status:** Production-ready as of October 8, 2025
+- **Architecture:** VM-centric with multi-disk support
+- **Storage:** QCOW2 backing chains (full + incrementals)
+- **Efficiency:** 99.7% size reduction on incrementals
+- **Database:** `vm_backup_contexts` → `backup_disks` → `backup_chains`
+
+### **Key Tables for Restore Implementation**
+
+**1. `vm_backup_contexts`** - Master record per VM+repository
+```sql
+-- Links to source VM metadata (vCenter, datacenter, VMware UUID)
+-- Essential for understanding source platform details
+```
+
+**2. `backup_disks`** - Per-disk tracking with QCOW2 paths
+```sql
+-- disk_index (0,1,2) = order matters for VM reconstruction
+-- qcow2_path = actual file location
+-- disk_change_id = VMware CBT tracking (for future incrementals)
+```
+
+**3. `backup_chains`** - Backup chain metadata
+```sql
+-- full_backup_id = starting point
+-- total_backups = count of full + incrementals
+-- ALL incrementals point to SAME full backup (not chain-of-chains!)
+```
+
+### **Multi-Disk Support** 💾
+
+**CRITICAL: VMs can have multiple disks - restore engine MUST handle this!**
+
+Example: `pgtest1` has 2 disks:
+```
+disk-0: 102GB (19GB QCOW2 full + 4 incrementals)
+disk-1: 5GB (97MB QCOW2 full + 4 incrementals)
+```
+
+**Restore Requirements:**
+- Query `backup_disks` WHERE `backup_job_id = 'backup-pgtest1-xxx'`
+- Results will have multiple rows (one per disk)
+- Each disk has independent QCOW2 chain
+- Must convert and restore ALL disks to target platform
+
+### **QCOW2 Backing Chain** 🔗
+
+**Structure (Production Evidence):**
+```
+Full Backup:     backup-disk0-192431.qcow2 (19GB)
+                          ↑
+Incremental 1:   backup-disk0-200751.qcow2 (58MB) ──┐
+Incremental 2:   backup-disk0-201358.qcow2 (30MB) ──┤ All point to full
+Incremental 3:   backup-disk0-201743.qcow2 (34MB) ──┘
+```
+
+**For Restore:**
+- To restore ANY incremental point: Need `full.qcow2` + `incremental.qcow2`
+- QCOW2 overlay automatically merges (no manual merge needed)
+- Can mount incremental directly: `qemu-nbd backup-disk0-200751.qcow2`
+
+### **Example Restore Workflow**
+
+```go
+// Step 1: Query backup to restore
+var backupJob BackupJob
+db.Where("id = ?", selectedBackupID).First(&backupJob)
+
+// Step 2: Get ALL disks for this backup
+var disks []BackupDisk
+db.Where("backup_job_id = ?", backupJob.ID).
+   Order("disk_index").  // CRITICAL: preserve order
+   Find(&disks)
+
+// Step 3: For each disk, convert and restore
+for _, disk := range disks {
+    qcow2Path := disk.QCOW2Path
+    
+    // Convert to target format
+    targetPath := convertFormat(qcow2Path, targetPlatform)
+    
+    // Deploy to target (platform-specific)
+    deployToTarget(targetPath, disk.DiskIndex)
+}
+```
+
+### **Platform-Specific Notes**
+
+**VMware (Source):**
+- Backups captured via VMware NBD (not VDDK)
+- Change tracking via VMware CBT
+- Metadata in `vm_backup_contexts`: vcenter_host, datacenter, vm_path
+
+**CloudStack (Common Target):**
+- Native QCOW2 format (no conversion needed!)
+- Volume Daemon at localhost:8090 for volume operations
+- Replication code can be reused for restore
+
+**Format Conversion:**
+```bash
+# QCOW2 → VMDK (for VMware restore)
+qemu-img convert -f qcow2 -O vmdk -o subformat=streamOptimized backup.qcow2 output.vmdk
+
+# QCOW2 → VHD (for Hyper-V/Azure)
+qemu-img convert -f qcow2 -O vpc backup.qcow2 output.vhd
+
+# QCOW2 → RAW (for AWS/bare metal)
+qemu-img convert -f qcow2 -O raw backup.qcow2 output.img
+```
+
+### **API Endpoints Available**
+
+```http
+GET  /api/v1/backups?vm_name={name}&status=completed
+GET  /api/v1/backups/chain?vm_name={name}
+GET  /api/v1/backups/{backup_id}
+POST /api/v1/backups (start new backup)
+GET  /api/v1/backups/changeid?vm_name={name}&disk_id={N}
+```
+
+### **Required Documentation Reading**
+
+Before starting Phase 4 implementation, READ these in order:
+
+1. **`start_here/PHASE_1_CONTEXT_HELPER.md`** - Overview + current status
+2. **`api-documentation/DB_SCHEMA.md`** - Complete database schema
+3. **`project-goals/phases/phase-1-vmware-backup.md`** - Phase 1 completion details
+4. **`project-goals/modules/04-restore-engine.md`** - This module's implementation guide
+5. **`start_here/CHANGELOG.md`** - v2.16.0 through v2.22.0 for backup architecture evolution
+
+### **Common Pitfalls** ⚠️
+
+1. **Single-disk assumption** - ALWAYS query `backup_disks` for all disks
+2. **Deprecated fields** - Don't use `backup_jobs.disk_id` or `backup_jobs.change_id`
+3. **Breaking chains** - Don't move/rename QCOW2 files without updating backing file paths
+4. **Ignoring disk_index** - Order matters for proper VM boot sequence
+5. **Missing context** - `vm_backup_contexts` has source platform metadata you'll need
+
+---
+
 ## 🔄 Cross-Platform Restore Matrix
 
 ### **Supported Combinations (Phase 4)**

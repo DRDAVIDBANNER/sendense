@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -194,172 +192,167 @@ func (bh *BackupHandler) StartBackup(w http.ResponseWriter, r *http.Request) {
 	}).Info("📀 Found disks for multi-disk backup")
 
 	// ========================================================================
-	// STEP 3 & 4: Allocate NBD ports for ALL disks
+	// STEP 2.5: Find or create vm_backup_contexts record (NEW ARCHITECTURE!)
 	// ========================================================================
-	backupJobID := fmt.Sprintf("backup-%s-%d", req.VMName, time.Now().Unix())
-	diskResults := make([]DiskBackupResult, len(vmDisks))
-	allocatedPorts := []int{}
-	var allocationErr error
-
-	// Comprehensive cleanup function for ALL failure scenarios
-	defer func() {
-		if allocationErr != nil {
-			log.WithField("backup_job_id", backupJobID).Warn("🧹 COMPREHENSIVE CLEANUP: Failure detected, cleaning up ALL resources")
-			
-			cleanupErrors := 0
-			cleanupSuccess := 0
-			
-			// 1. Stop ALL qemu-nbd processes
-			for i := range diskResults {
-				if diskResults[i].QemuNBDPID > 0 {
-					if err := bh.qemuManager.Stop(diskResults[i].NBDPort); err != nil {
-						log.WithError(err).WithField("port", diskResults[i].NBDPort).Warn("❌ Failed to stop qemu-nbd")
-						cleanupErrors++
-					} else {
-						log.WithField("port", diskResults[i].NBDPort).Debug("✅ qemu-nbd stopped")
-						cleanupSuccess++
-					}
-				}
-			}
-			
-			// 2. Release ALL allocated NBD ports
-			for _, port := range allocatedPorts {
-				bh.portAllocator.Release(port)
-				log.WithField("port", port).Debug("✅ NBD port released")
-				cleanupSuccess++
-			}
-			
-			// 3. Delete ALL created QCOW2 files
-			for i := range diskResults {
-				if diskResults[i].QCOW2Path != "" {
-					if err := os.Remove(diskResults[i].QCOW2Path); err != nil {
-						log.WithError(err).WithField("path", diskResults[i].QCOW2Path).Warn("❌ Failed to delete QCOW2 file")
-						cleanupErrors++
-					} else {
-						log.WithField("path", diskResults[i].QCOW2Path).Debug("✅ QCOW2 file deleted")
-						cleanupSuccess++
-					}
-				}
-			}
-			
-			// 4. Cleanup summary
-			if cleanupErrors > 0 {
-				log.WithFields(log.Fields{
-					"cleanup_success": cleanupSuccess,
-					"cleanup_errors":  cleanupErrors,
-				}).Warn("⚠️  Comprehensive cleanup completed with errors")
-			} else {
-				log.WithField("cleanup_actions", cleanupSuccess).Info("✅ Comprehensive cleanup completed successfully")
-			}
+	var vmBackupContext database.VMBackupContext
+	err = bh.db.GetGormDB().
+		Where("vm_name = ? AND repository_id = ?", req.VMName, req.RepositoryID).
+		First(&vmBackupContext).Error
+	
+	if err != nil {
+		// Context doesn't exist - create it
+		vmBackupContext = database.VMBackupContext{
+			ContextID:    fmt.Sprintf("ctx-backup-%s-%d", req.VMName, time.Now().Unix()),
+			VMName:       req.VMName,
+			VMwareVMID:   vmContext.VMwareVMID,
+			VMPath:       vmContext.VMPath,
+			VCenterHost:  vmContext.VCenterHost,
+			Datacenter:   vmContext.Datacenter,
+			RepositoryID: req.RepositoryID,
 		}
-	}()
-
-	// backupJobID already defined above before defer
-
-	for i, vmDisk := range vmDisks {
-		exportName := fmt.Sprintf("%s-%s", req.VMName, vmDisk.DiskID)
-		diskJobID := fmt.Sprintf("%s-%s", backupJobID, vmDisk.DiskID)
-
-		// Allocate NBD port
-		nbdPort, err := bh.portAllocator.Allocate(diskJobID, req.VMName, exportName)
-		if err != nil {
-			log.WithError(err).WithField("unit_number", vmDisk.UnitNumber).Error("❌ Failed to allocate NBD port")
-			allocationErr = err
-			bh.sendError(w, http.StatusServiceUnavailable, "no available NBD ports", err.Error())
+		
+		if err := bh.db.GetGormDB().Create(&vmBackupContext).Error; err != nil {
+			log.WithError(err).Error("Failed to create vm_backup_contexts record")
+			bh.sendError(w, http.StatusInternalServerError, "failed to create backup context", err.Error())
 			return
 		}
-		allocatedPorts = append(allocatedPorts, nbdPort)
-
-		log.WithFields(log.Fields{
-			"unit_number": vmDisk.UnitNumber,
-			"nbd_port":    nbdPort,
-			"export_name": exportName,
-		}).Info("✅ NBD port allocated for disk")
-
-		diskResults[i] = DiskBackupResult{
-			DiskID:     i, // Use loop index for unique disk numbering
-			NBDPort:    nbdPort,
-			ExportName: exportName,
-			Status:     "port_allocated",
-		}
+		
+		log.WithField("context_id", vmBackupContext.ContextID).Info("✅ Created new vm_backup_context")
+	} else {
+		log.WithField("context_id", vmBackupContext.ContextID).Info("📋 Using existing vm_backup_context")
 	}
 
 	// ========================================================================
-	// STEP 5: Start qemu-nbd for ALL disks
+	// STEP 3: Prepare backup for each disk using BackupEngine
 	// ========================================================================
-	for i := range diskResults {
-		vmDisk := vmDisks[i]
-		result := &diskResults[i]
+	backupJobID := fmt.Sprintf("backup-%s-%d", req.VMName, time.Now().Unix())
+	diskResults := make([]DiskBackupResult, len(vmDisks))
+	var preparationErr error
 
-		// Determine QCOW2 file path (use DiskID for uniqueness)
-		qcow2Path := filepath.Join("/backup/repository",
-			fmt.Sprintf("%s-%s.qcow2", req.VMName, vmDisk.DiskID))
+	// STEP 3.1: Create parent backup_jobs record FIRST (for backup_disks FK constraint)
+	// This ensures the FK reference exists before per-disk records are created
+	now := time.Now()
+	parentJobInsert := `
+		INSERT INTO backup_jobs (
+			id, vm_backup_context_id, vm_context_id, vm_name, repository_id,
+			backup_type, status, repository_path, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	err = bh.db.GetGormDB().Exec(parentJobInsert,
+		backupJobID, vmBackupContext.ContextID, vmContext.ContextID, req.VMName, req.RepositoryID,
+		req.BackupType, "running", "/multi-disk-parent", now,
+	).Error
+	
+	if err != nil {
+		log.WithError(err).Error("Failed to create parent backup_jobs record")
+		bh.sendError(w, http.StatusInternalServerError, "failed to create parent backup job", err.Error())
+		return
+	}
+	
+	log.WithField("backup_job_id", backupJobID).Info("✅ Created parent backup_jobs record for multi-disk backup")
 
-		// ================================================================
-		// 🔧 FIX: Create QCOW2 file BEFORE starting qemu-nbd
-		// ================================================================
-		// Convert GB to bytes (vmDisk.SizeGB is in GB from VMware)
-		sizeBytes := int64(vmDisk.SizeGB) * 1024 * 1024 * 1024
-
-		// Create QCOW2 file using QCOW2Manager
-		qcow2Manager, err := storage.NewQCOW2Manager()
-		if err != nil {
-			log.WithError(err).Error("❌ Failed to create QCOW2Manager")
-			result.Status = "failed"
-			result.ErrorMessage = err.Error()
-			allocationErr = err
-			bh.sendError(w, http.StatusInternalServerError, "failed to create QCOW2 manager", err.Error())
-			return
+	// Cleanup function for failure scenarios
+	defer func() {
+		if preparationErr != nil {
+			log.WithField("backup_job_id", backupJobID).Warn("🧹 CLEANUP: Failure detected, cleaning up resources")
+			
+			// BackupEngine handles cleanup internally (qemu-nbd stop, port release, QCOW2 delete)
+			// Only need to stop qemu-nbd processes that were successfully started
+			for i := range diskResults {
+				if diskResults[i].NBDPort > 0 {
+					bh.qemuManager.Stop(diskResults[i].NBDPort)
+					bh.portAllocator.Release(diskResults[i].NBDPort)
+				}
+			}
+			
+			// Also delete parent backup_jobs record on failure
+			bh.db.GetGormDB().Exec("DELETE FROM backup_jobs WHERE id = ?", backupJobID)
 		}
-		if err := qcow2Manager.CreateFull(r.Context(), qcow2Path, sizeBytes); err != nil {
+	}()
+
+	// Prepare each disk backup using BackupEngine
+	for i, vmDisk := range vmDisks {
+		// Use loop index as disk ID since unit_number can be duplicated (VMware bug)
+		diskIndex := i
+		
+		// For incremental backups, look up previous change_id
+		var previousChangeID string
+		if req.BackupType == "incremental" {
+			// NEW ARCHITECTURE: Query backup_disks table with JOIN to vm_backup_contexts
+			// This uses the vm_backup_contexts + backup_disks architecture (v2.16.0+)
+			var prevDisk database.BackupDisk
+			err := bh.db.GetGormDB().
+				Table("backup_disks bd").
+				Select("bd.*").
+				Joins("JOIN vm_backup_contexts vbc ON bd.vm_backup_context_id = vbc.context_id").
+				Where("vbc.vm_name = ? AND bd.disk_index = ? AND bd.status = ? AND bd.disk_change_id IS NOT NULL", req.VMName, diskIndex, "completed").
+				Order("bd.completed_at DESC").
+				First(&prevDisk).Error
+			
+			if err != nil {
+				log.WithError(err).WithFields(log.Fields{
+					"vm_name":    req.VMName,
+					"disk_index": diskIndex,
+				}).Error("❌ No previous backup found for incremental - full backup required first")
+				preparationErr = fmt.Errorf("no previous backup found for incremental - full backup required first")
+				bh.sendError(w, http.StatusBadRequest, "no previous backup found", "full backup required before incremental")
+				return
+			}
+			
+			if prevDisk.DiskChangeID != nil {
+				previousChangeID = *prevDisk.DiskChangeID
+			}
+			log.WithFields(log.Fields{
+				"disk_index":         diskIndex,
+				"previous_backup_id": prevDisk.BackupJobID,
+				"previous_change_id": previousChangeID,
+			}).Info("📎 Found previous backup for incremental")
+		}
+
+		// Build BackupRequest for this disk
+		backupReq := &workflows.BackupRequest{
+			VMContextID:       vmContext.ContextID,                // Legacy replication context
+			VMBackupContextID: vmBackupContext.ContextID,          // NEW: Backup context for proper parent-child relationships
+			ParentJobID:       backupJobID,                        // NEW: Parent job ID that backup client knows about
+			VMName:            req.VMName,
+			DiskID:            diskIndex, // Use loop index (0, 1, 2...) to avoid unit_number duplicates
+			BackupType:        storage.BackupType(req.BackupType),
+			RepositoryID:      req.RepositoryID,
+			TotalBytes:        int64(vmDisk.SizeGB) * 1024 * 1024 * 1024,
+			PreviousChangeID:  previousChangeID, // For incremental backups
+			Tags:              req.Tags,
+		}
+
+		// Call BackupEngine to prepare disk (parent lookup + QCOW2 create + qemu-nbd)
+		result, err := bh.backupEngine.PrepareBackupDisk(ctx, backupReq)
+		if err != nil {
 			log.WithError(err).WithFields(log.Fields{
 				"unit_number": vmDisk.UnitNumber,
-				"qcow2_path":  qcow2Path,
-				"size_gb":     vmDisk.SizeGB,
-			}).Error("❌ Failed to create QCOW2 file")
-			result.Status = "failed"
-			result.ErrorMessage = err.Error()
-			allocationErr = err
-			bh.sendError(w, http.StatusInternalServerError, "failed to create QCOW2 file", err.Error())
+				"disk_id":     vmDisk.DiskID,
+			}).Error("❌ Failed to prepare backup disk")
+			preparationErr = err
+			bh.sendError(w, http.StatusInternalServerError, "failed to prepare backup disk", err.Error())
 			return
 		}
 
-		log.WithFields(log.Fields{
-			"unit_number": vmDisk.UnitNumber,
-			"qcow2_path":  qcow2Path,
-			"size_gb":     vmDisk.SizeGB,
-		}).Info("📁 Created QCOW2 file for backup")
-
-		// Start qemu-nbd process
-		diskJobID := fmt.Sprintf("%s-disk%d", backupJobID, vmDisk.UnitNumber)
-		qemuProcess, err := bh.qemuManager.Start(
-			result.NBDPort,
-			result.ExportName,
-			qcow2Path,
-			diskJobID,
-			req.VMName,
-			vmDisk.UnitNumber,
-		)
-
-		if err != nil {
-			log.WithError(err).WithField("unit_number", vmDisk.UnitNumber).Error("❌ Failed to start qemu-nbd")
-			result.Status = "failed"
-			result.ErrorMessage = err.Error()
-			allocationErr = err
-			bh.sendError(w, http.StatusInternalServerError, "failed to start qemu-nbd", err.Error())
-			return
+		// Store result
+		diskResults[i] = DiskBackupResult{
+			DiskID:        diskIndex, // Use loop index consistently
+			NBDPort:       result.NBDPort,
+			ExportName:    result.NBDExportName,
+			QCOW2Path:     result.FilePath,
+			QemuNBDPID:    result.QemuNBDPID,
+			Status:        "prepared",
+			ErrorMessage:  "",
 		}
 
-		result.QCOW2Path = qcow2Path
-		result.QemuNBDPID = qemuProcess.PID
-		result.Status = "qemu_started"
-
 		log.WithFields(log.Fields{
-			"unit_number": vmDisk.UnitNumber,
-			"port":        result.NBDPort,
-			"pid":         result.QemuNBDPID,
-			"qcow2":       qcow2Path,
-		}).Info("✅ qemu-nbd started for disk")
+			"disk_id":      vmDisk.UnitNumber,
+			"backup_id":    result.BackupID,
+			"backup_type":  result.BackupType,
+			"nbd_port":     result.NBDPort,
+			"qemu_nbd_pid": result.QemuNBDPID,
+		}).Info("✅ Disk backup prepared successfully")
 	}
 
 	// ========================================================================
@@ -422,6 +415,7 @@ func (bh *BackupHandler) StartBackup(w http.ResponseWriter, r *http.Request) {
 		"nbd_targets":       nbdTargetsString, // ← Multi-disk NBD targets!
 		"job_id":            backupJobID,
 		"backup_type":       req.BackupType,
+		"previous_change_id": "PLACEHOLDER",  // ✅ NEW: Backup client queries SHA database per-disk for actual change_ids
 	}
 
 	jsonData, _ := json.Marshal(snaReq)
@@ -430,7 +424,7 @@ func (bh *BackupHandler) StartBackup(w http.ResponseWriter, r *http.Request) {
 	resp, err := http.Post(snaURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.WithError(err).Error("❌ Failed to call SNA VMA API")
-		allocationErr = err
+		preparationErr = err
 		bh.sendError(w, http.StatusInternalServerError, "failed to call SNA API", err.Error())
 		return
 	}
@@ -440,7 +434,7 @@ func (bh *BackupHandler) StartBackup(w http.ResponseWriter, r *http.Request) {
 		log.WithFields(log.Fields{
 			"status": resp.StatusCode,
 		}).Error("❌ SNA VMA API returned error")
-		allocationErr = fmt.Errorf("SNA API error: %d", resp.StatusCode)
+		preparationErr = fmt.Errorf("SNA API error: %d", resp.StatusCode)
 		bh.sendError(w, http.StatusInternalServerError, "SNA API error", fmt.Sprintf("status: %d", resp.StatusCode))
 		return
 	}
@@ -453,35 +447,8 @@ func (bh *BackupHandler) StartBackup(w http.ResponseWriter, r *http.Request) {
 	}).Info("✅ SNA VMA API called successfully for multi-disk backup")
 
 	// ========================================================================
-	// STEP 7.5: Create backup job database record
-	// ========================================================================
-	// Prepare optional policy_id
-	var policyIDPtr *string
-	if req.PolicyID != "" {
-		policyIDPtr = &req.PolicyID
-	}
-
-	backupJob := &database.BackupJob{
-		ID:             backupJobID,
-		VMContextID:    vmContext.ContextID,
-		VMName:         req.VMName,
-		BackupType:     req.BackupType,
-		RepositoryID:   req.RepositoryID,
-		PolicyID:       policyIDPtr, // NULL if not provided
-		Status:         "running",
-		RepositoryPath: "/backup/repository", // Will be updated on completion
-		CreatedAt:      time.Now(),
-		StartedAt:      timePtr(time.Now()),
-	}
-
-	if err := bh.backupJobRepo.Create(ctx, backupJob); err != nil {
-		log.WithError(err).Error("Failed to create backup job record")
-		// Don't fail the backup - it's already running on SNA
-		// Just log the error for investigation
-	} else {
-		log.WithField("backup_id", backupJobID).Info("✅ Backup job record created in database")
-	}
-
+	// NOTE: Parent backup_jobs record already created via RAW SQL at line ~243
+	// No need for duplicate GORM Create() here - it was causing duplicate key errors
 	// ========================================================================
 	// STEP 8: Return response with ALL disk details
 	// ========================================================================
@@ -759,6 +726,7 @@ func (bh *BackupHandler) CompleteBackup(w http.ResponseWriter, r *http.Request) 
 	// Parse request body
 	var req struct {
 		ChangeID         string `json:"change_id"`
+		DiskID           int    `json:"disk_id"`           // NEW: numeric disk ID for multi-disk VMs
 		BytesTransferred int64  `json:"bytes_transferred"`
 	}
 	
@@ -775,12 +743,13 @@ func (bh *BackupHandler) CompleteBackup(w http.ResponseWriter, r *http.Request) 
 
 	log.WithFields(log.Fields{
 		"backup_id":         backupID,
+		"disk_id":           req.DiskID,
 		"change_id":         req.ChangeID,
 		"bytes_transferred": req.BytesTransferred,
 	}).Info("📝 Completing backup job and storing change_id")
 
 	// Call BackupEngine.CompleteBackup()
-	err := bh.backupEngine.CompleteBackup(r.Context(), backupID, req.ChangeID, req.BytesTransferred)
+	err := bh.backupEngine.CompleteBackup(r.Context(), backupID, req.DiskID, req.ChangeID, req.BytesTransferred)
 	if err != nil {
 		// Check if backup job not found
 		if strings.Contains(err.Error(), "not found") {
@@ -802,6 +771,103 @@ func (bh *BackupHandler) CompleteBackup(w http.ResponseWriter, r *http.Request) 
 
 	log.WithField("backup_id", backupID).Info("✅ Backup completed and change_id stored")
 	bh.sendJSON(w, http.StatusOK, response)
+}
+
+// GetChangeID retrieves the last successful change_id for a VM disk
+// This enables incremental backups by providing the previous snapshot point
+// @Summary Get previous change ID for backup
+// @Description Get the change ID from the last successful backup for incremental support
+// @Tags backups
+// @Produce json
+// @Param vm_name query string true "VM name (e.g., pgtest1)"
+// @Param disk_id query int false "Disk ID (numeric 0, 1, 2..., defaults to 0)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /api/v1/backups/changeid [get]
+func (bh *BackupHandler) GetChangeID(w http.ResponseWriter, r *http.Request) {
+	vmName := r.URL.Query().Get("vm_name")
+	diskIDStr := r.URL.Query().Get("disk_id")
+	
+	if vmName == "" {
+		bh.sendError(w, http.StatusBadRequest, "missing vm_name", "vm_name query parameter is required")
+		return
+	}
+	
+	diskID := 0 // Default to first disk
+	if diskIDStr != "" {
+		var err error
+		diskID, err = strconv.Atoi(diskIDStr)
+		if err != nil {
+			bh.sendError(w, http.StatusBadRequest, "invalid disk_id", "disk_id must be numeric")
+			return
+		}
+	}
+	
+	log.WithFields(log.Fields{
+		"vm_name": vmName,
+		"disk_id": diskID,
+	}).Info("📡 Querying previous change_id for incremental backup")
+	
+	// NEW ARCHITECTURE: Query backup_disks with JOIN to vm_backup_contexts
+	// This eliminates any time-window matching - direct FK relationship
+	var backupDisk database.BackupDisk
+	err := bh.db.GetGormDB().
+		Table("backup_disks").
+		Select("backup_disks.*").
+		Joins("JOIN vm_backup_contexts ON backup_disks.vm_backup_context_id = vm_backup_contexts.context_id").
+		Where("vm_backup_contexts.vm_name = ? AND backup_disks.disk_index = ? AND backup_disks.status = ? AND backup_disks.disk_change_id IS NOT NULL AND backup_disks.disk_change_id != ''",
+			vmName, diskID, "completed").
+		Order("backup_disks.completed_at DESC").
+		First(&backupDisk).Error
+	
+	if err != nil {
+		// Check if it's a "not found" error (not an actual error condition)
+		if strings.Contains(err.Error(), "record not found") {
+			// No previous backup found - return empty (not an error for first backup)
+			log.WithFields(log.Fields{
+				"vm_name": vmName,
+				"disk_id": diskID,
+			}).Info("📋 No previous backup found - this will be a full backup")
+			
+			bh.sendJSON(w, http.StatusOK, map[string]string{
+				"vm_name":   vmName,
+				"disk_id":   fmt.Sprintf("%d", diskID),
+				"change_id": "",
+				"message":   "No previous backup found",
+			})
+			return
+		}
+		
+		// Actual database error
+		log.WithError(err).WithFields(log.Fields{
+			"vm_name": vmName,
+			"disk_id": diskID,
+		}).Error("Failed to query previous backup")
+		bh.sendError(w, http.StatusInternalServerError, "database error", err.Error())
+		return
+	}
+	
+	// Return change_id from backup_disks
+	changeID := ""
+	if backupDisk.DiskChangeID != nil {
+		changeID = *backupDisk.DiskChangeID
+	}
+	
+	log.WithFields(log.Fields{
+		"vm_name":      vmName,
+		"disk_id":      diskID,
+		"change_id":    changeID,
+		"backup_job_id": backupDisk.BackupJobID,
+	}).Info("✅ Previous change_id found from backup_disks")
+	
+	bh.sendJSON(w, http.StatusOK, map[string]string{
+		"vm_name":      vmName,
+		"disk_id":      fmt.Sprintf("%d", diskID), // Return as string for JSON compatibility
+		"change_id":    changeID,
+		"backup_job_id": backupDisk.BackupJobID,
+		"message":      "Previous change_id found",
+	})
 }
 
 // ========================================================================
@@ -901,17 +967,20 @@ func (bh *BackupHandler) RegisterRoutes(r *mux.Router) {
 	// 2. GET /api/v1/backups - List all backups (with optional filters)
 	r.HandleFunc("/backups", bh.ListBackups).Methods("GET")
 	
-	// 3. GET /api/v1/backups/{vm_name}/chain - Get backup chain for VM (MUST come before /{backup_id})
+	// 3. GET /api/v1/backups/changeid - Get previous change_id for incremental (MUST come before parameterized routes)
+	r.HandleFunc("/backups/changeid", bh.GetChangeID).Methods("GET")
+	
+	// 4. GET /api/v1/backups/{vm_name}/chain - Get backup chain for VM (MUST come before /{backup_id})
 	r.HandleFunc("/backups/{vm_name}/chain", bh.GetBackupChain).Methods("GET")
 	
-	// 4. POST /api/v1/backups/{backup_id}/complete - Complete backup and record change_id (MUST come before /{backup_id})
+	// 5. POST /api/v1/backups/{backup_id}/complete - Complete backup and record change_id (MUST come before /{backup_id})
 	r.HandleFunc("/backups/{backup_id}/complete", bh.CompleteBackup).Methods("POST")
 	
-	// 5. GET /api/v1/backups/{backup_id} - Get backup details
+	// 6. GET /api/v1/backups/{backup_id} - Get backup details
 	r.HandleFunc("/backups/{backup_id}", bh.GetBackupDetails).Methods("GET")
 	
-	// 6. DELETE /api/v1/backups/{backup_id} - Delete backup
+	// 7. DELETE /api/v1/backups/{backup_id} - Delete backup
 	r.HandleFunc("/backups/{backup_id}", bh.DeleteBackup).Methods("DELETE")
 
-	log.Info("✅ Backup API routes registered - 6 RESTful endpoints (start, complete, list, get, delete, chain)")
+	log.Info("✅ Backup API routes registered - 7 RESTful endpoints (start, complete, changeid, list, get, delete, chain)")
 }

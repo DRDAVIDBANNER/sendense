@@ -254,3 +254,4 @@ qemu-nbd -f qcow2 -x test-export -p 10150 -b 0.0.0.0 --shared=10 -t /backup/repo
 
 **Document Created:** 2025-10-07 17:52 UTC  
 **For Session:** Next session (qemu-nbd debugging)
+

@@ -352,3 +352,4 @@ sudo journalctl -u sendense-hub -f
 
 **Session completed: 2025-10-07 17:52 UTC**  
 **Next session: Debug qemu-nbd startup failure**
+

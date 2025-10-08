@@ -51,3 +51,4 @@ exec /usr/bin/ssh -i "$SSH_KEY" -p "$SHA_PORT" -N \
     -o ExitOnForwardFailure=yes \
     $PORT_FORWARDS \
     vma_tunnel@$SHA_HOST
+

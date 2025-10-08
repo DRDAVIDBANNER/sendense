@@ -146,6 +146,53 @@ func (a *NBDPortAllocator) ReleaseByJobID(jobID string) int {
 	return released
 }
 
+// GetPortsForBackupJob returns all NBD ports allocated for per-disk jobs of a parent backup
+// Matches by VM name from the parent backup ID since per-disk job IDs don't contain parent ID
+// Example: parent "backup-pgtest1-1759947265" extracts "pgtest1" and matches any allocation for that VM
+func (a *NBDPortAllocator) GetPortsForBackupJob(parentBackupID string) []int {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	
+	// Extract VM name from parent backup ID format: "backup-{vm_name}-{timestamp}"
+	// Example: "backup-pgtest1-1759947265" → "pgtest1"
+	vmName := ""
+	if len(parentBackupID) > 7 && parentBackupID[:7] == "backup-" {
+		parts := parentBackupID[7:] // Remove "backup-" prefix
+		// Find last hyphen (before timestamp)
+		lastHyphen := -1
+		for i := len(parts) - 1; i >= 0; i-- {
+			if parts[i] == '-' {
+				lastHyphen = i
+				break
+			}
+		}
+		if lastHyphen > 0 {
+			vmName = parts[:lastHyphen]
+		}
+	}
+	
+	if vmName == "" {
+		log.WithField("parent_backup_id", parentBackupID).Warn("Could not extract VM name from backup ID")
+		return []int{}
+	}
+	
+	ports := []int{}
+	for port, allocation := range a.allocated {
+		// Match ports allocated to the same VM
+		if allocation.VMName == vmName {
+			ports = append(ports, port)
+			log.WithFields(log.Fields{
+				"port":            port,
+				"job_id":          allocation.JobID,
+				"vm_name":         vmName,
+				"parent_backup_id": parentBackupID,
+			}).Debug("Found NBD port for backup job")
+		}
+	}
+	
+	return ports
+}
+
 // GetAllocation returns allocation details for a specific port
 func (a *NBDPortAllocator) GetAllocation(port int) (*PortAllocation, bool) {
 	a.mu.RLock()

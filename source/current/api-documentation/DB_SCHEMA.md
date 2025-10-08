@@ -116,12 +116,37 @@ Backup Repository System (Phase 1 - Added 2025-10-04)
   - Fields: copy_mode ENUM('immediate','scheduled','manual'), priority INT, enabled BOOLEAN, verify_after_copy BOOLEAN
   - Indexes: idx_policy, idx_priority
 
+- vm_backup_contexts (Added 2025-10-08 v2.16.0 - VM-Centric Backup Architecture)
+  - PK: context_id (varchar 64)
+  - Unique: (vm_name, repository_id)
+  - FK: repository_id → backup_repositories(id) RESTRICT
+  - Fields: vm_name, vmware_vm_id, vm_path, vcenter_host, datacenter
+  - Counters: total_backups_run, successful_backups, failed_backups
+  - Tracking: last_backup_id, last_backup_type ENUM('full','incremental'), last_backup_at
+  - Timestamps: created_at, updated_at
+  - Indexes: idx_vm_name, idx_last_backup
+  - Purpose: Master context for backup VMs (eliminates fragile timestamp-window matching)
+
+- backup_disks (Added 2025-10-08 v2.16.0 - Per-Disk Tracking)
+  - PK: id (bigint auto)
+  - Unique: (backup_job_id, disk_index)
+  - FKs: vm_backup_context_id → vm_backup_contexts(context_id) CASCADE; backup_job_id → backup_jobs(id) CASCADE
+  - Fields: disk_index (0,1,2...), vmware_disk_key (2000,2001...), size_gb, unit_number
+  - CBT: disk_change_id (varchar 255) - VMware CBT change ID for incremental backups
+  - Storage: qcow2_path (varchar 512), bytes_transferred
+  - Status: status ENUM('pending','running','completed','failed'), error_message, completed_at
+  - Timestamps: created_at
+  - Indexes: idx_change_id_lookup (vm_backup_context_id, disk_index, status), idx_completion (backup_job_id, status)
+  - Purpose: Per-disk backup tracking with individual change_ids (replaced time-window hack)
+
 - backup_jobs
   - PK: id (varchar 64)
-  - FKs: vm_context_id → vm_replication_contexts(context_id) CASCADE; repository_id → backup_repositories(id) RESTRICT; policy_id → backup_policies(id) SET NULL; parent_backup_id → backup_jobs(id) SET NULL
-  - Fields: vm_name, backup_type ENUM('full','incremental','differential'), status ENUM('pending','running','completed','failed','cancelled'), repository_path, change_id, bytes_transferred, total_bytes, compression_enabled, error_message
+  - FKs: vm_context_id → vm_replication_contexts(context_id) CASCADE; vm_backup_context_id → vm_backup_contexts(context_id) CASCADE; repository_id → backup_repositories(id) RESTRICT; policy_id → backup_policies(id) SET NULL; parent_backup_id → backup_jobs(id) SET NULL
+  - Fields: vm_name, backup_type ENUM('full','incremental','differential'), status ENUM('pending','running','completed','failed','cancelled'), repository_path, bytes_transferred, total_bytes, compression_enabled, error_message
+  - Deprecated (v2.16.0+): disk_id, change_id - now stored in backup_disks table per-disk
   - Timestamps: created_at, started_at, completed_at
   - Indexes: idx_vm_context, idx_repository, idx_policy, idx_status, idx_created, idx_parent
+  - Note: Parent job represents entire multi-disk backup; per-disk details in backup_disks table
 
 - backup_copies
   - PK: id (varchar 64)
@@ -134,9 +159,10 @@ Backup Repository System (Phase 1 - Added 2025-10-04)
 - backup_chains
   - PK: id (varchar 64)
   - Unique: (vm_context_id, disk_id)
-  - FK: vm_context_id → vm_replication_contexts(context_id) CASCADE
+  - FK: vm_context_id → vm_backup_contexts(context_id) CASCADE (Changed 2025-10-08 - was vm_replication_contexts)
   - Fields: disk_id, full_backup_id, latest_backup_id, total_backups INT, total_size_bytes BIGINT
   - Index: idx_vm_context
+  - Purpose: Tracks backup chain metadata (full + incrementals) per disk
 
 File-Level Restore System (Task 4 - Added 2025-10-05)
 - restore_mounts

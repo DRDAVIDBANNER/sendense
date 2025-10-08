@@ -207,13 +207,15 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 
 		// Initialize Backup handler (Task 5: Backup API Endpoints)
 		// Requires BackupEngine integration with repository manager
-		backupEngine := workflows.NewBackupEngine(db, repositoryHandler.repoManager, snaAPIEndpoint)
 		
 		// 🆕 Initialize NBD Port Allocator (10100-10200 range for 100 concurrent backups)
 		nbdPortAllocator := services.NewNBDPortAllocator(10100, 10200)
 		
 		// 🆕 Initialize qemu-nbd Process Manager with automatic port release
 		qemuNBDManager := services.NewQemuNBDManager(nbdPortAllocator)
+		
+		// Initialize BackupEngine with NBD infrastructure
+		backupEngine := workflows.NewBackupEngine(db, repositoryHandler.repoManager, nbdPortAllocator, qemuNBDManager, snaAPIEndpoint)
 		
 		backupHandler := NewBackupHandler(db, backupEngine, nbdPortAllocator, qemuNBDManager, vmwareCredentialService)
 		handlers.Backup = backupHandler

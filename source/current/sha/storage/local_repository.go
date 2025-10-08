@@ -135,19 +135,19 @@ func (lr *LocalRepository) CreateBackup(ctx context.Context, req BackupRequest) 
 		CreatedAt:      now,
 	}
 
-	// Insert into database
+	// Insert backup_jobs record (parent record)
 	query := `
 		INSERT INTO backup_jobs (
-			id, vm_context_id, vm_name, repository_id,
+			id, vm_backup_context_id, vm_context_id, vm_name, repository_id, disk_id,
 			backup_type, status, repository_path,
 			parent_backup_id, change_id,
 			bytes_transferred, total_bytes,
 			compression_enabled, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, execErr := lr.db.ExecContext(ctx, query,
-		backup.ID, backup.VMContextID, backup.VMName, lr.config.ID,
+		backup.ID, nullString(req.VMBackupContextID), backup.VMContextID, backup.VMName, lr.config.ID, backup.DiskID,
 		backup.BackupType, backup.Status, backup.FilePath,
 		nullString(backup.ParentBackupID), nullString(backup.ChangeID),
 		backup.SizeBytes, backup.TotalBytes,
@@ -159,7 +159,42 @@ func (lr *LocalRepository) CreateBackup(ctx context.Context, req BackupRequest) 
 		return nil, &BackupError{
 			BackupID: backupID,
 			Op:       "insert_database",
-			Err:      fmt.Errorf("failed to insert backup: %w", execErr),
+			Err:      fmt.Errorf("failed to insert backup_jobs: %w", execErr),
+		}
+	}
+
+	// 🆕 NEW ARCHITECTURE: Create backup_disks record for proper parent-child relationships
+	if req.VMBackupContextID != "" && req.ParentJobID != "" {
+		diskQuery := `
+			INSERT INTO backup_disks (
+				vm_backup_context_id, backup_job_id, disk_index, 
+				vmware_disk_key, size_gb, qcow2_path, status, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		`
+		
+		// Calculate size in GB (round up)
+		sizeGB := (req.TotalBytes + 1073741823) / 1073741824
+		
+		// vmware_disk_key = disk_index + 2000 (standard VMware calculation)
+		vmwareDiskKey := req.DiskID + 2000
+		
+		// CRITICAL FIX: Use ParentJobID (not backup.ID) so completion API can find records!
+		_, diskErr := lr.db.ExecContext(ctx, diskQuery,
+			req.VMBackupContextID, req.ParentJobID, req.DiskID,
+			vmwareDiskKey, sizeGB, backup.FilePath, "pending", backup.CreatedAt,
+		)
+		if diskErr != nil {
+			log.WithError(diskErr).WithFields(log.Fields{
+				"backup_id":             backup.ID,
+				"vm_backup_context_id":  req.VMBackupContextID,
+				"disk_index":            req.DiskID,
+			}).Error("Failed to create backup_disks record - backup created but new architecture tracking incomplete")
+			// Don't fail the backup - disk record can be created later
+		} else {
+			log.WithFields(log.Fields{
+				"backup_id":  backup.ID,
+				"disk_index": req.DiskID,
+			}).Info("✅ Created backup_disks record (NEW ARCHITECTURE)")
 		}
 	}
 

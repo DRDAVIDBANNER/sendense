@@ -10,29 +10,79 @@ import (
 // BackupJob represents a backup job record in the database
 // Maps to backup_jobs table (created in 20251004120000_add_backup_tables.up.sql)
 type BackupJob struct {
-	ID                 string     `gorm:"column:id;primaryKey" json:"id"`
-	VMContextID        string     `gorm:"column:vm_context_id;not null;index" json:"vm_context_id"`
-	VMName             string     `gorm:"column:vm_name;not null" json:"vm_name"`
-	DiskID             int        `gorm:"column:disk_id;not null;default:0" json:"disk_id"` // Added in Task 4 migration
-	RepositoryID       string     `gorm:"column:repository_id;not null;index" json:"repository_id"`
-	PolicyID           *string    `gorm:"column:policy_id;index" json:"policy_id"` // Pointer for NULL support
-	BackupType         string     `gorm:"column:backup_type;not null" json:"backup_type"` // full, incremental, differential
-	Status             string     `gorm:"column:status;not null;default:'pending'" json:"status"`
-	RepositoryPath     string     `gorm:"column:repository_path;not null" json:"repository_path"`
-	ParentBackupID     *string    `gorm:"column:parent_backup_id" json:"parent_backup_id"` // Pointer for NULL support
-	ChangeID           string     `gorm:"column:change_id" json:"change_id"`
-	BytesTransferred   int64      `gorm:"column:bytes_transferred;default:0" json:"bytes_transferred"`
-	TotalBytes         int64      `gorm:"column:total_bytes;default:0" json:"total_bytes"`
-	CompressionEnabled bool       `gorm:"column:compression_enabled;default:true" json:"compression_enabled"`
-	ErrorMessage       string     `gorm:"column:error_message" json:"error_message"`
-	CreatedAt          time.Time  `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
-	StartedAt          *time.Time `gorm:"column:started_at" json:"started_at"`
-	CompletedAt        *time.Time `gorm:"column:completed_at" json:"completed_at"`
+	ID                  string     `gorm:"column:id;primaryKey" json:"id"`
+	VMBackupContextID   *string    `gorm:"column:vm_backup_context_id;index" json:"vm_backup_context_id"` // NEW: FK to vm_backup_contexts
+	VMContextID         string     `gorm:"column:vm_context_id;not null;index" json:"vm_context_id"`
+	VMName              string     `gorm:"column:vm_name;not null" json:"vm_name"`
+	DiskID              int        `gorm:"column:disk_id;not null;default:0" json:"disk_id"` // DEPRECATED: Moved to backup_disks
+	RepositoryID        string     `gorm:"column:repository_id;not null;index" json:"repository_id"`
+	PolicyID            *string    `gorm:"column:policy_id;index" json:"policy_id"` // Pointer for NULL support
+	BackupType          string     `gorm:"column:backup_type;not null" json:"backup_type"` // full, incremental, differential
+	Status              string     `gorm:"column:status;not null;default:'pending'" json:"status"`
+	RepositoryPath      string     `gorm:"column:repository_path;not null" json:"repository_path"`
+	ParentBackupID      *string    `gorm:"column:parent_backup_id" json:"parent_backup_id"` // Pointer for NULL support
+	ChangeID            string     `gorm:"column:change_id" json:"change_id"` // DEPRECATED: Moved to backup_disks
+	BytesTransferred    int64      `gorm:"column:bytes_transferred;default:0" json:"bytes_transferred"`
+	TotalBytes          int64      `gorm:"column:total_bytes;default:0" json:"total_bytes"`
+	CompressionEnabled  bool       `gorm:"column:compression_enabled;default:true" json:"compression_enabled"`
+	ErrorMessage        string     `gorm:"column:error_message" json:"error_message"`
+	CreatedAt           time.Time  `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	StartedAt           *time.Time `gorm:"column:started_at" json:"started_at"`
+	CompletedAt         *time.Time `gorm:"column:completed_at" json:"completed_at"`
 }
 
 // TableName returns the table name for BackupJob
 func (BackupJob) TableName() string {
 	return "backup_jobs"
+}
+
+// VMBackupContext represents a VM backup context (master context for backup VMs)
+// Maps to vm_backup_contexts table (created in 20251008_backup_context_architecture.sql)
+type VMBackupContext struct {
+	ContextID         string     `gorm:"column:context_id;primaryKey" json:"context_id"`
+	VMName            string     `gorm:"column:vm_name;not null;index" json:"vm_name"`
+	VMwareVMID        string     `gorm:"column:vmware_vm_id;not null" json:"vmware_vm_id"`
+	VMPath            string     `gorm:"column:vm_path;not null" json:"vm_path"`
+	VCenterHost       string     `gorm:"column:vcenter_host;not null" json:"vcenter_host"`
+	Datacenter        string     `gorm:"column:datacenter;not null" json:"datacenter"`
+	RepositoryID      string     `gorm:"column:repository_id;not null;index" json:"repository_id"`
+	TotalBackupsRun   int        `gorm:"column:total_backups_run;default:0" json:"total_backups_run"`
+	SuccessfulBackups int        `gorm:"column:successful_backups;default:0" json:"successful_backups"`
+	FailedBackups     int        `gorm:"column:failed_backups;default:0" json:"failed_backups"`
+	LastBackupID      *string    `gorm:"column:last_backup_id" json:"last_backup_id"`
+	LastBackupType    *string    `gorm:"column:last_backup_type" json:"last_backup_type"` // full, incremental
+	LastBackupAt      *time.Time `gorm:"column:last_backup_at" json:"last_backup_at"`
+	CreatedAt         time.Time  `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt         time.Time  `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
+
+// TableName returns the table name for VMBackupContext
+func (VMBackupContext) TableName() string {
+	return "vm_backup_contexts"
+}
+
+// BackupDisk represents a per-disk backup tracking record
+// Maps to backup_disks table (created in 20251008_backup_context_architecture.sql)
+type BackupDisk struct {
+	ID                  int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	VMBackupContextID   string     `gorm:"column:vm_backup_context_id;not null;index" json:"vm_backup_context_id"`
+	BackupJobID         string     `gorm:"column:backup_job_id;not null;index" json:"backup_job_id"`
+	DiskIndex           int        `gorm:"column:disk_index;not null" json:"disk_index"` // 0, 1, 2...
+	VMwareDiskKey       int        `gorm:"column:vmware_disk_key;not null;default:0" json:"vmware_disk_key"` // 2000, 2001...
+	SizeGB              int64      `gorm:"column:size_gb;not null;default:0" json:"size_gb"`
+	UnitNumber          *int       `gorm:"column:unit_number" json:"unit_number"`
+	DiskChangeID        *string    `gorm:"column:disk_change_id" json:"disk_change_id"` // VMware CBT change ID
+	QCOW2Path           *string    `gorm:"column:qcow2_path" json:"qcow2_path"`
+	BytesTransferred    int64      `gorm:"column:bytes_transferred;default:0" json:"bytes_transferred"`
+	Status              string     `gorm:"column:status;not null;default:'pending'" json:"status"` // pending, running, completed, failed
+	ErrorMessage        *string    `gorm:"column:error_message" json:"error_message"`
+	CreatedAt           time.Time  `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	CompletedAt         *time.Time `gorm:"column:completed_at" json:"completed_at"`
+}
+
+// TableName returns the table name for BackupDisk
+func (BackupDisk) TableName() string {
+	return "backup_disks"
 }
 
 // BackupJobRepository provides database operations for backup jobs

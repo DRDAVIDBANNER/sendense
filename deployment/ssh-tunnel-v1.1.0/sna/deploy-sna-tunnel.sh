@@ -111,3 +111,4 @@ echo "Next steps:"
 echo "1. Verify tunnel connected: systemctl status sendense-tunnel"
 echo "2. Check forwarded ports: netstat -an | grep LISTEN | grep 1010"
 echo "3. Test SHA connectivity: curl http://localhost:8082/health"
+

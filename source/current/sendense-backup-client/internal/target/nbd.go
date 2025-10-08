@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -257,6 +258,40 @@ func (t *NBDTarget) getCurrentDiskID() string {
 	return diskID
 }
 
+// getDiskIndexFromJobID extracts the numeric disk index from the backup job ID or NBD export name
+// For multi-disk backups, extracts from: "backup-pgtest1-disk0-..." or "pgtest1-disk0"
+// This extracts the "0" from "disk0"
+func (t *NBDTarget) getDiskIndexFromJobID(jobID string) int {
+	// First try: Extract from job ID pattern (backup-...-disk0-...)
+	re := regexp.MustCompile(`-disk(\d+)-`)
+	matches := re.FindStringSubmatch(jobID)
+	
+	if len(matches) > 1 {
+		diskIndex, err := strconv.Atoi(matches[1])
+		if err == nil {
+			log.Printf("🎯 Extracted disk index %d from job ID: %s", diskIndex, jobID)
+			return diskIndex
+		}
+	}
+	
+	// Second try: Extract from NBD export name (pgtest1-disk0)
+	if t.nbdExportName != "" {
+		re2 := regexp.MustCompile(`disk(\d+)$`)
+		matches2 := re2.FindStringSubmatch(t.nbdExportName)
+		if len(matches2) > 1 {
+			diskIndex, err := strconv.Atoi(matches2[1])
+			if err == nil {
+				log.Printf("🎯 Extracted disk index %d from NBD export name: %s", diskIndex, t.nbdExportName)
+				return diskIndex
+			}
+		}
+	}
+	
+	// Fallback: default to disk 0 for single-disk VMs
+	log.Printf("⚠️ Could not extract disk index from job ID %s or export %s, defaulting to 0", jobID, t.nbdExportName)
+	return 0
+}
+
 // determineNBDExportForDisk determines the correct NBD export for the current disk
 func (t *NBDTarget) determineNBDExportForDisk(ctx context.Context) (string, error) {
 	// Check if multi-disk targets are provided
@@ -361,18 +396,36 @@ func (t *NBDTarget) getChangeIDFromOMA(vmPath string) (string, error) {
 		shaURL = "http://localhost:8082" // Default for SNA tunnel
 	}
 
-	// NEW: Calculate disk ID for this specific disk
-	diskID := t.getCurrentDiskID() // Use our existing method!
-
-	// Encode parameters
-	encodedVMPath := url.QueryEscape(vmPath)
-	encodedDiskID := url.QueryEscape(diskID)
-
-	// NEW: Include disk_id parameter for multi-disk support
-	apiURL := fmt.Sprintf("%s/api/v1/replications/changeid?vm_path=%s&disk_id=%s",
-		shaURL, encodedVMPath, encodedDiskID)
-
-	log.Printf("📡 Getting ChangeID from SHA API for disk %s: %s", diskID, apiURL)
+	// Determine if this is a backup or replication
+	jobID := os.Getenv("MIGRATEKIT_JOB_ID")
+	isBackup := strings.HasPrefix(jobID, "backup-")
+	
+	var apiURL string
+	
+	if isBackup {
+		// ✅ NEW: Use backup-specific endpoint
+		// Extract VM name from vmPath (/DatabanxDC/vm/pgtest1 → pgtest1)
+		parts := strings.Split(vmPath, "/")
+		vmName := parts[len(parts)-1]
+		
+		// Get disk index from job ID (e.g., "backup-pgtest1-disk0-..." → 0)
+		diskIndex := t.getDiskIndexFromJobID(jobID)
+		
+		apiURL = fmt.Sprintf("%s/api/v1/backups/changeid?vm_name=%s&disk_id=%d",
+			shaURL, url.QueryEscape(vmName), diskIndex)
+		
+		log.Printf("📡 Getting ChangeID from BACKUP API for VM %s disk %d", vmName, diskIndex)
+	} else {
+		// Replication - use existing logic
+		diskID := t.getCurrentDiskID()
+		encodedVMPath := url.QueryEscape(vmPath)
+		encodedDiskID := url.QueryEscape(diskID)
+		
+		apiURL = fmt.Sprintf("%s/api/v1/replications/changeid?vm_path=%s&disk_id=%s",
+			shaURL, encodedVMPath, encodedDiskID)
+		
+		log.Printf("📡 Getting ChangeID from REPLICATION API for disk %s", diskID)
+	}
 
 	resp, err := http.Get(apiURL)
 	if err != nil {
@@ -392,9 +445,9 @@ func (t *NBDTarget) getChangeIDFromOMA(vmPath string) (string, error) {
 
 	changeID := response["change_id"]
 	if changeID != "" {
-		log.Printf("📋 Found previous ChangeID for disk %s: %s", diskID, changeID)
+		log.Printf("📋 Found previous ChangeID: %s", changeID)
 	} else {
-		log.Printf("📋 No previous ChangeID found for disk %s", diskID)
+		log.Printf("📋 No previous ChangeID found")
 	}
 
 	return changeID, nil
@@ -417,13 +470,17 @@ func (t *NBDTarget) storeChangeIDInOMA(jobID, changeID string) error {
 		// Backup job - use backup completion endpoint
 		apiURL = fmt.Sprintf("%s/api/v1/backups/%s/complete", shaURL, jobID)
 		
-		// Backup API accepts change_id (bytes_transferred will be 0 if not tracked)
+		// Extract disk index from job ID (e.g., "backup-pgtest1-disk0-..." → 0)
+		diskIndex := t.getDiskIndexFromJobID(jobID)
+		
+		// Backup API accepts change_id with disk_id for multi-disk support
 		payload = map[string]interface{}{
 			"change_id":         changeID,
-			"bytes_transferred": 0, // Client doesn't track total bytes
+			"disk_id":           diskIndex, // ✅ NEW: numeric disk index for multi-disk VMs
+			"bytes_transferred": 0,         // Client doesn't track total bytes
 		}
 		
-		log.Printf("📡 Storing ChangeID via BACKUP completion API")
+		log.Printf("📡 Storing ChangeID via BACKUP completion API for disk %d", diskIndex)
 	} else {
 		// Replication job - use replication endpoint
 		apiURL = fmt.Sprintf("%s/api/v1/replications/%s/changeid", shaURL, jobID)

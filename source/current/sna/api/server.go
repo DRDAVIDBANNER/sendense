@@ -680,10 +680,9 @@ func (s *SNAControlServer) buildBackupCommand(req *BackupRequest) (*exec.Cmd, er
 		"--job-id", req.JobID,
 	}
 
-	// Add incremental backup parameters if needed
-	if req.BackupType == "incremental" && req.PreviousChangeID != "" {
-		args = append(args, "--change-id", req.PreviousChangeID)
-	}
+	// NOTE: For incremental backups, the backup client queries the SHA database
+	// directly for the previous change_id per disk (via GET /api/v1/backups/changeid)
+	// No need to pass it as a command-line flag
 
 	// Create command
 	cmd := exec.Command(sbcBinary, args...)

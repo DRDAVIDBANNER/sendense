@@ -315,3 +315,4 @@ qemu-img info incremental.qcow2
 **Full Backup:** Completed but change_id lost (fixable)  
 **Next Action:** Implement 7-line fix, redeploy SNA, test again
 
+
