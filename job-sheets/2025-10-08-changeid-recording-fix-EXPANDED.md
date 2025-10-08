@@ -2,7 +2,8 @@
 
 **Job Sheet ID:** 2025-10-08-changeid-recording-fix  
 **Created:** October 8, 2025  
-**Status:** ⏳ PENDING VALIDATION (E2E backup running)  
+**Completed:** October 8, 2025 12:23 UTC  
+**Status:** ✅ COMPLETE - Fully validated  
 **Priority:** 🔴 **CRITICAL** - Blocks incremental backups  
 **Actual Effort:** 4 hours (expanded scope)
 
@@ -328,6 +329,7 @@ sshpass -p 'Password1' ssh vma@10.0.100.231 \
 ---
 
 **Last Updated:** October 8, 2025 09:55 UTC  
-**Test Job Running:** backup-pgtest1-1759913694  
-**Expected Completion:** ~10:25 UTC (30 minutes)
+**Test Job:** backup-pgtest1-1759913694 ✅ COMPLETE  
+**Runtime:** 2.5 hours (08:54 - 12:23 UTC)  
+**Result:** SUCCESS - change_id stored, ready for incrementals
 
