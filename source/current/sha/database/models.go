@@ -558,3 +558,125 @@ type VMwareCredentials struct {
 	IsActive    bool   `json:"is_active"`
 	IsDefault   bool   `json:"is_default"`
 }
+
+// BackupRepository represents a backup storage repository
+type BackupRepository struct {
+	ID          string `json:"id" gorm:"primaryKey;type:varchar(64)"`
+	Name        string `json:"name" gorm:"type:varchar(255);not null"`
+	RepositoryType string `json:"repository_type" gorm:"type:enum('local','nfs','cifs','smb','s3','azure');not null"`
+	Enabled     bool   `json:"enabled" gorm:"default:true"`
+	Config      string `json:"config" gorm:"type:longtext;not null"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (BackupRepository) TableName() string {
+	return "backup_repositories"
+}
+
+// BackupPolicy represents backup retention and copy rules
+type BackupPolicy struct {
+	ID             string `json:"id" gorm:"primaryKey;type:varchar(64)"`
+	Name           string `json:"name" gorm:"type:varchar(255);not null"`
+	Enabled        bool   `json:"enabled" gorm:"default:true"`
+	PrimaryRepositoryID string `json:"primary_repository_id" gorm:"type:varchar(64);not null"`
+	RetentionDays  int    `json:"retention_days" gorm:"default:30"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (BackupPolicy) TableName() string {
+	return "backup_policies"
+}
+
+// ProtectionFlow represents a configured backup or replication flow
+type ProtectionFlow struct {
+	ID          string  `json:"id" gorm:"primaryKey;type:varchar(64);default:uuid()"`
+	Name        string  `json:"name" gorm:"not null;uniqueIndex;type:varchar(255)"`
+	Description *string `json:"description" gorm:"type:text"`
+
+	// Flow configuration
+	FlowType   string `json:"flow_type" gorm:"type:enum('backup','replication');not null"`
+	TargetType string `json:"target_type" gorm:"type:enum('vm','group');not null"`
+	TargetID   string `json:"target_id" gorm:"type:varchar(64);not null;index"`
+
+	// Backup configuration
+	RepositoryID *string `json:"repository_id" gorm:"type:varchar(64);index"`
+	PolicyID     *string `json:"policy_id" gorm:"type:varchar(64);index"`
+
+	// Replication configuration (Phase 5)
+	DestinationType  *string `json:"destination_type" gorm:"type:enum('ossea','vmware','hyperv')"`
+	DestinationConfig *string `json:"destination_config" gorm:"type:json"`
+
+	// Scheduling
+	ScheduleID *string `json:"schedule_id" gorm:"type:varchar(64);index"`
+
+	// Control
+	Enabled bool `json:"enabled" gorm:"default:true;index"`
+
+	// Statistics (denormalized for performance)
+	LastExecutionID     *string    `json:"last_execution_id" gorm:"type:varchar(64)"`
+	LastExecutionStatus string     `json:"last_execution_status" gorm:"type:enum('success','warning','error','running','pending');default:'pending'"`
+	LastExecutionTime   *time.Time `json:"last_execution_time"`
+	NextExecutionTime   *time.Time `json:"next_execution_time"`
+	TotalExecutions     int        `json:"total_executions" gorm:"default:0"`
+	SuccessfulExecutions int       `json:"successful_executions" gorm:"default:0"`
+	FailedExecutions    int       `json:"failed_executions" gorm:"default:0"`
+
+	// Metadata
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	CreatedBy string    `json:"created_by" gorm:"default:'system';type:varchar(255)"`
+
+	// Relationships (loaded with joins)
+	Schedule   *ReplicationSchedule `json:"schedule,omitempty" gorm:"foreignKey:ScheduleID;references:ID"`
+	Repository *BackupRepository    `json:"repository,omitempty" gorm:"foreignKey:RepositoryID;references:ID"`
+	Policy     *BackupPolicy        `json:"policy,omitempty" gorm:"foreignKey:PolicyID;references:ID"`
+	Executions []ProtectionFlowExecution `json:"executions,omitempty" gorm:"foreignKey:FlowID;references:ID"`
+}
+
+func (ProtectionFlow) TableName() string {
+	return "protection_flows"
+}
+
+// ProtectionFlowExecution tracks individual flow execution runs
+type ProtectionFlowExecution struct {
+	ID        string `json:"id" gorm:"primaryKey;type:varchar(64);default:uuid()"`
+	FlowID    string `json:"flow_id" gorm:"type:varchar(64);not null;index"`
+
+	// Execution details
+	Status        string `json:"status" gorm:"type:enum('pending','running','success','warning','error','cancelled');not null;default:'pending';index"`
+	ExecutionType string `json:"execution_type" gorm:"type:enum('scheduled','manual','api');not null"`
+
+	// Job tracking
+	JobsCreated   int `json:"jobs_created" gorm:"default:0"`
+	JobsCompleted int `json:"jobs_completed" gorm:"default:0"`
+	JobsFailed    int `json:"jobs_failed" gorm:"default:0"`
+	JobsSkipped   int `json:"jobs_skipped" gorm:"default:0"`
+
+	// Timing
+	StartedAt           *time.Time `json:"started_at"`
+	CompletedAt         *time.Time `json:"completed_at"`
+	ExecutionTimeSeconds int       `json:"execution_time_seconds"`
+
+	// Results
+	VMsProcessed      int     `json:"vms_processed" gorm:"default:0"`
+	BytesTransferred  int64   `json:"bytes_transferred" gorm:"default:0"`
+	ErrorMessage      *string `json:"error_message" gorm:"type:text"`
+	ExecutionMetadata *string `json:"execution_metadata" gorm:"type:json"`
+
+	// Links
+	CreatedJobIDs        *string `json:"created_job_ids" gorm:"type:json"`
+	ScheduleExecutionID  *string `json:"schedule_execution_id" gorm:"type:varchar(64)"`
+
+	// Metadata
+	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
+	TriggeredBy string    `json:"triggered_by" gorm:"default:'system';type:varchar(255)"`
+
+	// Relationships
+	Flow *ProtectionFlow `json:"flow,omitempty" gorm:"foreignKey:FlowID;references:ID"`
+}
+
+func (ProtectionFlowExecution) TableName() string {
+	return "protection_flow_executions"
+}

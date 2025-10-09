@@ -40,6 +40,10 @@ type SchedulerService struct {
 	shaAPIEndpoint string
 	shaClient      *http.Client
 
+	// ✅ NEW: Protection Flow Integration
+	flowService       *ProtectionFlowService
+	activeFlowSchedules map[string]cron.EntryID
+
 	// Concurrent execution tracking
 	runningMutex    sync.RWMutex
 	activeSchedules map[string]*ScheduleContext
@@ -191,11 +195,13 @@ type CBTHistoryInfo struct {
 
 // NewSchedulerService creates a new scheduler service
 // ✅ UPDATED: Now includes SNA discovery and SHA API integration (aligned with GUI workflow)
+// ✅ UPDATED: Now includes protection flow scheduling integration
 func NewSchedulerService(
 	schedulerRepo *database.SchedulerRepository,
 	replicationRepo *database.ReplicationJobRepository,
 	jobTracker *joblog.Tracker,
 	snaAPIEndpoint string,
+	flowService *ProtectionFlowService,
 ) *SchedulerService {
 	phantomDetector := NewPhantomJobDetector(replicationRepo, jobTracker, snaAPIEndpoint)
 	conflictDetector := NewJobConflictDetector(replicationRepo, schedulerRepo, jobTracker)
@@ -214,7 +220,11 @@ func NewSchedulerService(
 		shaAPIEndpoint: "http://localhost:8082", // Same endpoint as GUI
 		shaClient:      &http.Client{Timeout: 60 * time.Second},
 
+		// ✅ NEW: Protection Flow Integration
+		flowService: flowService,
+
 		activeSchedules: make(map[string]*ScheduleContext),
+		activeFlowSchedules: make(map[string]cron.EntryID), // Track flow schedule registrations
 		maxConcurrent:   10, // Maximum concurrent schedule executions
 		stopChan:        make(chan struct{}),
 	}
@@ -1221,6 +1231,108 @@ func (s *SchedulerService) callOMAReplicationAPI(ctx context.Context, req Create
 		"disks_count", len(result.Disks))
 
 	return &result, nil
+}
+
+// =============================================================================
+// PROTECTION FLOW SCHEDULING INTEGRATION
+// =============================================================================
+
+// RegisterFlowSchedule registers a protection flow for scheduled execution
+func (s *SchedulerService) RegisterFlowSchedule(flowID string, scheduleID string) error {
+	logger := s.jobTracker.Logger(context.Background())
+	logger.Info("Registering flow schedule", "flow_id", flowID, "schedule_id", scheduleID)
+
+	// Get schedule details
+	schedule, err := s.repository.GetScheduleByID(scheduleID)
+	if err != nil {
+		logger.Error("Failed to get schedule", "error", err)
+		return fmt.Errorf("failed to get schedule: %w", err)
+	}
+
+	// Add cron job that executes the flow
+	entryID, err := s.cron.AddFunc(schedule.CronExpression, func() {
+		ctx := context.Background()
+		s.ExecuteScheduledFlow(ctx, flowID, scheduleID)
+	})
+	if err != nil {
+		logger.Error("Failed to register cron job", "error", err)
+		return fmt.Errorf("failed to register cron job: %w", err)
+	}
+
+	// Track the cron entry
+	s.runningMutex.Lock()
+	s.activeFlowSchedules[flowID] = entryID
+	s.runningMutex.Unlock()
+
+	logger.Info("Flow schedule registered successfully",
+		"flow_id", flowID,
+		"schedule_id", scheduleID,
+		"cron_expression", schedule.CronExpression,
+		"entry_id", entryID)
+
+	return nil
+}
+
+// ExecuteScheduledFlow executes a protection flow on schedule
+func (s *SchedulerService) ExecuteScheduledFlow(ctx context.Context, flowID string, scheduleID string) {
+	logger := s.jobTracker.Logger(ctx)
+	logger.Info("Executing scheduled flow", "flow_id", flowID, "schedule_id", scheduleID)
+
+	// Check if flow service is available
+	if s.flowService == nil {
+		logger.Error("Flow service not available")
+		return
+	}
+
+	// Execute the flow
+	execution, err := s.flowService.ExecuteFlow(ctx, flowID, "scheduled")
+	if err != nil {
+		logger.Error("Flow execution failed", "error", err)
+		return
+	}
+
+	logger.Info("Scheduled flow execution completed",
+		"execution_id", execution.ID,
+		"status", execution.Status,
+		"jobs_created", execution.JobsCreated)
+}
+
+// UnregisterFlowSchedule removes a flow from scheduled execution
+func (s *SchedulerService) UnregisterFlowSchedule(flowID string) error {
+	logger := s.jobTracker.Logger(context.Background())
+	logger.Info("Unregistering flow schedule", "flow_id", flowID)
+
+	s.runningMutex.Lock()
+	defer s.runningMutex.Unlock()
+
+	entryID, exists := s.activeFlowSchedules[flowID]
+	if !exists {
+		logger.Warn("Flow schedule not found", "flow_id", flowID)
+		return fmt.Errorf("flow schedule not registered: %s", flowID)
+	}
+
+	// Remove from cron
+	s.cron.Remove(entryID)
+
+	// Remove from tracking
+	delete(s.activeFlowSchedules, flowID)
+
+	logger.Info("Flow schedule unregistered successfully", "flow_id", flowID)
+	return nil
+}
+
+// GetRegisteredFlowSchedules returns all registered flow schedules
+func (s *SchedulerService) GetRegisteredFlowSchedules() map[string]cron.EntryID {
+	s.runningMutex.RLock()
+	defer s.runningMutex.RUnlock()
+
+	// Return a copy to avoid race conditions
+	result := make(map[string]cron.EntryID)
+	for flowID, entryID := range s.activeFlowSchedules {
+		result[flowID] = entryID
+	}
+
+	return result
 }
 
 // Helper function for string pointers

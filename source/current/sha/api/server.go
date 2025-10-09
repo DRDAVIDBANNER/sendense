@@ -254,7 +254,41 @@ func (s *Server) setupRoutes() {
 		log.Info("✅ Backup API routes registered (start, list, get, delete, chain)")
 	}
 
-	log.WithField("endpoints", 96).Info("SHA API routes configured - includes file-level restore (Task 4) + backup operations (Task 5)")
+	// 🆕 NEW: Protection Flow API endpoints (Phase 1 Extension - Unified Backup Orchestration)
+	if s.handlers.ProtectionFlow != nil {
+		// Protection Flow collection operations
+		api.HandleFunc("/protection-flows", s.requireAuth(s.handlers.ProtectionFlow.CreateFlow)).Methods("POST")
+		api.HandleFunc("/protection-flows", s.requireAuth(s.handlers.ProtectionFlow.ListFlows)).Methods("GET")
+
+		// ✅ SPECIFIC ROUTES FIRST (before parameterized routes)
+		// Protection Flow summary
+		api.HandleFunc("/protection-flows/summary", s.requireAuth(s.handlers.ProtectionFlow.GetFlowSummary)).Methods("GET")
+
+		// Protection Flow bulk operations
+		api.HandleFunc("/protection-flows/bulk-enable", s.requireAuth(s.handlers.ProtectionFlow.BulkEnableFlows)).Methods("POST")
+		api.HandleFunc("/protection-flows/bulk-disable", s.requireAuth(s.handlers.ProtectionFlow.BulkDisableFlows)).Methods("POST")
+		api.HandleFunc("/protection-flows/bulk-delete", s.requireAuth(s.handlers.ProtectionFlow.BulkDeleteFlows)).Methods("POST")
+
+		// ✅ PARAMETERIZED ROUTES AFTER SPECIFIC ROUTES
+		// Protection Flow CRUD operations
+		api.HandleFunc("/protection-flows/{id}", s.requireAuth(s.handlers.ProtectionFlow.GetFlow)).Methods("GET")
+		api.HandleFunc("/protection-flows/{id}", s.requireAuth(s.handlers.ProtectionFlow.UpdateFlow)).Methods("PUT")
+		api.HandleFunc("/protection-flows/{id}", s.requireAuth(s.handlers.ProtectionFlow.DeleteFlow)).Methods("DELETE")
+
+		// Protection Flow control operations
+		api.HandleFunc("/protection-flows/{id}/enable", s.requireAuth(s.handlers.ProtectionFlow.EnableFlow)).Methods("PATCH")
+		api.HandleFunc("/protection-flows/{id}/disable", s.requireAuth(s.handlers.ProtectionFlow.DisableFlow)).Methods("PATCH")
+
+		// Protection Flow execution operations
+		api.HandleFunc("/protection-flows/{id}/execute", s.requireAuth(s.handlers.ProtectionFlow.ExecuteFlow)).Methods("POST")
+		api.HandleFunc("/protection-flows/{id}/executions", s.requireAuth(s.handlers.ProtectionFlow.GetFlowExecutions)).Methods("GET")
+		api.HandleFunc("/protection-flows/{id}/status", s.requireAuth(s.handlers.ProtectionFlow.GetFlowStatus)).Methods("GET")
+		api.HandleFunc("/protection-flows/{id}/test", s.requireAuth(s.handlers.ProtectionFlow.TestFlow)).Methods("POST")
+
+		log.Info("✅ Protection Flow API routes registered (Phase 1 Extension: Unified backup orchestration)")
+	}
+
+	log.WithField("endpoints", 96).Info("SHA API routes configured - includes file-level restore (Task 4) + backup operations (Task 5) + protection flows (Phase 1 Extension)")
 }
 
 // Middleware functions

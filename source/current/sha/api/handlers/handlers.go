@@ -44,7 +44,8 @@ type Handlers struct {
 	Policy                 *PolicyHandler                 // 🆕 NEW: Backup policy management (Backup Copy Engine Day 5)
 	Restore                *RestoreHandlers               // 🆕 NEW: File-level restore (Task 4 - 2025-10-05)
 	Backup                 *BackupHandler                 // 🆕 NEW: Backup API endpoints (Task 5 - 2025-10-05)
-	
+	ProtectionFlow         *ProtectionFlowHandler         // 🆕 NEW: Protection Flow orchestration (Phase 1 Extension)
+
 	// Exposed services for job recovery integration
 	SNAProgressClient *services.SNAProgressClient // SNA API client
 	SNAProgressPoller *services.SNAProgressPoller // SNA progress poller
@@ -108,6 +109,9 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 	replicationRepo := database.NewReplicationJobRepository(db)
 	vmContextRepo := database.NewVMReplicationContextRepository(db)
 
+	// Initialize flow-related services and repositories
+	flowRepo := database.NewFlowRepository(db)
+
 	// Initialize joblog tracker (mandatory for all operations)
 	var jobTracker *joblog.Tracker
 	if sqlDB, err := db.GetGormDB().DB(); err == nil {
@@ -119,10 +123,25 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 		return nil, err
 	}
 
+	// Initialize protection flow service
+	backupAPIURL := "http://localhost:8082" // SHA API endpoint
+	flowService := services.NewProtectionFlowService(
+		flowRepo,
+		nil, // schedulerService - will be set after creation (circular dependency)
+		nil, // machineGroupSvc - will be initialized later
+		vmContextRepo,
+		jobTracker,
+		db,
+		backupAPIURL,
+	)
+
 	// ✅ UPDATED: Scheduler service now uses SNA discovery + SHA API (aligned with GUI workflow)
 	// No longer needs direct Migration Engine access - uses same API path as GUI
 	snaAPIEndpoint := "http://localhost:9081" // SNA API via tunnel
-	schedulerService := services.NewSchedulerService(schedulerRepo, replicationRepo, jobTracker, snaAPIEndpoint)
+	schedulerService := services.NewSchedulerService(schedulerRepo, replicationRepo, jobTracker, snaAPIEndpoint, flowService)
+
+	// Set the scheduler service reference in flow service (resolve circular dependency)
+	flowService.SetSchedulerService(schedulerService)
 
 	// 🚀 CRITICAL: Start the scheduler service to enable automatic job scheduling
 	log.Info("🚀 Starting scheduler service for automatic job execution")
@@ -134,6 +153,9 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 
 	// Initialize machine group service
 	machineGroupService := services.NewMachineGroupService(schedulerRepo, jobTracker)
+
+	// Set machine group service in flow service
+	flowService.SetMachineGroupService(machineGroupService)
 
 	// Initialize enhanced discovery service with SNA API endpoint
 	// 🆕 Pass main database connection (not schedulerRepo) for vm_disks creation
@@ -220,6 +242,11 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 		backupHandler := NewBackupHandler(db, backupEngine, nbdPortAllocator, qemuNBDManager, vmwareCredentialService)
 		handlers.Backup = backupHandler
 		log.Info("✅ Backup API endpoints enabled (Task 5: Start, list, delete backups via REST API + Unified NBD Architecture)")
+
+		// Initialize Protection Flow handler (Phase 1 Extension: Protection Flows)
+		protectionFlowHandler := NewProtectionFlowHandler(flowService, jobTracker)
+		handlers.ProtectionFlow = protectionFlowHandler
+		log.Info("✅ Protection Flow API endpoints enabled (Phase 1 Extension: Unified backup orchestration)")
 	}
 
 	return handlers, nil
