@@ -13,11 +13,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FlowRowProps } from "./types";
 
-export function FlowRow({ flow, isSelected, onSelect, onViewDetails, onEdit, onDelete, onRunNow }: FlowRowProps) {
+export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow }: FlowRowProps) {
   const handleEdit = () => onEdit?.(flow);
   const handleDelete = () => onDelete?.(flow);
   const handleRunNow = () => onRunNow?.(flow);
-  const handleViewDetails = () => onViewDetails?.(flow);
   const formatDate = (dateString: string) => {
     try {
       return format(new Date(dateString), 'MMM dd, yyyy HH:mm');
@@ -31,7 +30,7 @@ export function FlowRow({ flow, isSelected, onSelect, onViewDetails, onEdit, onD
       className={`border-b border-border hover:bg-muted/50 cursor-pointer transition-colors ${
         isSelected ? 'bg-primary/5 border-primary/20' : ''
       }`}
-      onClick={() => handleViewDetails()}
+      onClick={() => onSelect(flow)}
     >
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
@@ -82,10 +81,6 @@ export function FlowRow({ flow, isSelected, onSelect, onViewDetails, onEdit, onD
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewDetails(); }}>
-              View Details
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEdit(); }}>
               Edit Flow
             </DropdownMenuItem>

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, ClipboardList } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
-import { FlowsTable, FlowDetailsPanel, JobLogPanel, CreateFlowModal, EditFlowModal, DeleteConfirmModal } from "@/components/features/protection-flows";
+import { FlowsTable, FlowDetailsPanel, JobLogsDrawer, CreateFlowModal, EditFlowModal, DeleteConfirmModal } from "@/components/features/protection-flows";
 import { Flow } from "@/src/features/protection-flows/types";
 
 const mockFlows: Flow[] = [
@@ -74,6 +75,35 @@ export default function ProtectionFlowsPage() {
   const [editingFlow, setEditingFlow] = useState<Flow | null>(null);
   const [deletingFlow, setDeletingFlow] = useState<Flow | null>(null);
 
+  // Job Logs Drawer state
+  const [isLogsOpen, setIsLogsOpen] = useState(false);
+
+  // Load drawer state from localStorage on mount
+  useEffect(() => {
+    const savedState = localStorage.getItem('jobLogsOpen')
+    if (savedState) {
+      setIsLogsOpen(JSON.parse(savedState))
+    }
+  }, [])
+
+  // Save drawer state to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('jobLogsOpen', JSON.stringify(isLogsOpen))
+  }, [isLogsOpen])
+
+  // Keyboard shortcut for toggling drawer
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'l') {
+        e.preventDefault()
+        setIsLogsOpen(prev => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   const selectedFlow = flows.find(flow => flow.id === selectedFlowId);
 
   const handleCreateFlow = () => {
@@ -124,36 +154,42 @@ export default function ProtectionFlowsPage() {
   };
 
   return (
-    <div className="h-full flex flex-col">
-      <PageHeader
-        title="Protection Flows"
-        breadcrumbs={[
-          { label: "Dashboard", href: "/dashboard" },
-          { label: "Protection Flows" }
-        ]}
-        actions={
-          <Button onClick={handleCreateFlow} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Flow
-          </Button>
-        }
-      />
-
-      <div className="flex-1 overflow-hidden flex">
-        {/* Left Section: Table + Details Panel */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Table Section - takes remaining space */}
-          <div className="flex-1 overflow-auto p-6">
-            <div className="max-w-7xl mx-auto">
-              <div className="mb-6">
-                <h2 className="text-lg font-semibold text-foreground mb-2">
+    <div className="h-screen bg-gray-900">
+      <PanelGroup direction="vertical">
+        {/* Top Panel: Flows Table */}
+        <Panel defaultSize={50} minSize={30}>
+          <div className="flex flex-col h-full bg-gray-900">
+            {/* Compact header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
                   Backup & Replication Jobs
                 </h2>
-                <p className="text-muted-foreground">
+                <p className="text-xs text-gray-400">
                   Manage and monitor your protection flows across all environments
                 </p>
               </div>
+              <div className="flex items-center gap-2">
+                <Button onClick={handleCreateFlow} color="blue" size="sm" className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create Flow
+                </Button>
+                <button
+                  onClick={() => setIsLogsOpen(!isLogsOpen)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    isLogsOpen
+                      ? 'bg-blue-500/20 text-blue-400'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                  title="Job Logs (Ctrl+L)"
+                >
+                  <ClipboardList className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
 
+            {/* Table (no extra container) */}
+            <div className="flex-1 overflow-auto">
               <FlowsTable
                 flows={flows}
                 selectedFlowId={selectedFlowId}
@@ -164,14 +200,29 @@ export default function ProtectionFlowsPage() {
               />
             </div>
           </div>
+        </Panel>
 
-          {/* Details Panel - resizable */}
-          <FlowDetailsPanel selectedFlow={selectedFlow} />
-        </div>
+        {/* Resize Handle */}
+        <PanelResizeHandle className="h-1 bg-gray-700 hover:bg-blue-500 transition-colors cursor-ns-resize" />
 
-        {/* Right Section: Job Log Panel */}
-        <JobLogPanel />
-      </div>
+        {/* Lower Panel: Flow Details */}
+        <Panel defaultSize={40} minSize={20}>
+          <div className="h-full bg-gray-900 border-t border-gray-700 overflow-auto">
+            {selectedFlow ? (
+              <FlowDetailsPanel flow={selectedFlow} />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-400 text-center">
+                  Select a flow to view details
+                </p>
+              </div>
+            )}
+          </div>
+        </Panel>
+      </PanelGroup>
+
+      {/* Job Logs Drawer */}
+      <JobLogsDrawer isOpen={isLogsOpen} onClose={() => setIsLogsOpen(false)} />
 
       {/* Modals */}
       <CreateFlowModal
