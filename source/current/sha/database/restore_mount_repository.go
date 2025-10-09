@@ -15,16 +15,17 @@ import (
 // RestoreMount represents an active QCOW2 backup mount
 // v2.16.0+: Uses backup_disk_id FK to backup_disks table
 type RestoreMount struct {
-	ID             string     `db:"id" gorm:"primaryKey" json:"id"`
-	BackupDiskID   int64      `db:"backup_disk_id" gorm:"column:backup_disk_id;not null" json:"backup_disk_id"` // v2.16.0+: FK to backup_disks.id
-	MountPath      string     `db:"mount_path" gorm:"column:mount_path" json:"mount_path"`
-	NBDDevice      string     `db:"nbd_device" gorm:"column:nbd_device" json:"nbd_device"`
-	FilesystemType string     `db:"filesystem_type" gorm:"column:filesystem_type" json:"filesystem_type"`
-	MountMode      string     `db:"mount_mode" gorm:"column:mount_mode" json:"mount_mode"`
-	Status         string     `db:"status" gorm:"column:status" json:"status"` // mounting, mounted, unmounting, failed
-	CreatedAt      time.Time  `db:"created_at" gorm:"column:created_at" json:"created_at"`
-	LastAccessedAt time.Time  `db:"last_accessed_at" gorm:"column:last_accessed_at" json:"last_accessed_at"`
-	ExpiresAt      *time.Time `db:"expires_at" gorm:"column:expires_at" json:"expires_at,omitempty"`
+	ID                string     `db:"id" gorm:"primaryKey" json:"id"`
+	BackupDiskID      int64      `db:"backup_disk_id" gorm:"column:backup_disk_id;not null" json:"backup_disk_id"` // v2.16.0+: FK to backup_disks.id
+	MountPath         string     `db:"mount_path" gorm:"column:mount_path" json:"mount_path"`
+	NBDDevice         string     `db:"nbd_device" gorm:"column:nbd_device" json:"nbd_device"`
+	FilesystemType    string     `db:"filesystem_type" gorm:"column:filesystem_type" json:"filesystem_type"`
+	MountMode         string     `db:"mount_mode" gorm:"column:mount_mode" json:"mount_mode"`
+	Status            string     `db:"status" gorm:"column:status" json:"status"` // mounting, mounted, unmounting, failed
+	CreatedAt         time.Time  `db:"created_at" gorm:"column:created_at" json:"created_at"`
+	LastAccessedAt    time.Time  `db:"last_accessed_at" gorm:"column:last_accessed_at" json:"last_accessed_at"`
+	ExpiresAt         *time.Time `db:"expires_at" gorm:"column:expires_at" json:"expires_at,omitempty"`
+	PartitionMetadata *string    `db:"partition_metadata" gorm:"column:partition_metadata;type:json" json:"partition_metadata,omitempty"` // 🆕 NEW: Partition details for multi-partition mounts
 }
 
 // TableName specifies the table name for GORM

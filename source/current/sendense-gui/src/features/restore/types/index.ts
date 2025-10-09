@@ -11,6 +11,7 @@ export interface RestoreMount {
   created_at: string;
   expires_at: string;
   last_accessed_at: string;
+  partition_metadata?: string;
   error_message?: string;
 }
 

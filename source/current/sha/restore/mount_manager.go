@@ -5,6 +5,7 @@ package restore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -33,6 +34,16 @@ const (
 	DefaultIdleTimeout   = 1 * time.Hour
 	DefaultMaxMounts     = 8
 )
+
+// PartitionMount represents a mounted partition
+type PartitionMount struct {
+	PartitionName string // "nbd0p1", "nbd0p4", etc.
+	DevicePath    string // "/dev/nbd0p1"
+	MountPath     string // "/mnt/restore/{mount_id}/partition-1"
+	Size          int64  // Partition size in bytes
+	Filesystem    string // "ntfs", "ext4", "vfat", etc.
+	Label         string // Optional: partition label
+}
 
 // MountManager handles QCOW2 backup mounting via qemu-nbd
 type MountManager struct {
@@ -178,25 +189,41 @@ func (mm *MountManager) MountBackup(ctx context.Context, req *MountRequest) (*Mo
 		return nil, fmt.Errorf("failed to create mount record: %w", err)
 	}
 
-	// Perform actual mount operation (qemu-nbd + filesystem mount)
-	if err := mm.performMount(ctx, backupFile, nbdDevice, mountPath, mountID); err != nil {
+	// Perform multi-partition mount operation (qemu-nbd + multiple filesystem mounts)
+	partitions, err := mm.performMultiPartitionMount(ctx, backupFile, nbdDevice, mountPath, mountID)
+	if err != nil {
 		// Cleanup: Update status to failed
 		mm.mountRepo.UpdateStatus(ctx, mountID, "failed")
 		return nil, fmt.Errorf("mount operation failed: %w", err)
 	}
 
-	// Detect filesystem type
-	filesystemType, err := mm.detectFilesystem(nbdDevice)
-	if err != nil {
-		log.WithError(err).Warn("Failed to detect filesystem type - continuing")
-		filesystemType = "unknown"
+	// Use filesystem type from first partition (primary data partition)
+	filesystemType := "unknown"
+	if len(partitions) > 0 {
+		filesystemType = partitions[0].Filesystem
 	}
 
-	// Update mount record with filesystem type and status: mounted
+	// Store partition metadata as JSON
+	partitionInfo := make([]map[string]interface{}, len(partitions))
+	for i, p := range partitions {
+		partitionInfo[i] = map[string]interface{}{
+			"partition_name": p.PartitionName,
+			"size":           p.Size,
+			"filesystem":     p.Filesystem,
+			"label":          p.Label,
+			"mount_path":     filepath.Base(p.MountPath), // "partition-1"
+		}
+	}
+	metadataJSON, _ := json.Marshal(map[string]interface{}{
+		"partitions": partitionInfo,
+	})
+
+	// Update mount record with filesystem type, partition metadata, and status: mounted
 	updateCtx := context.Background()
 	updateData := map[string]interface{}{
-		"filesystem_type": filesystemType,
-		"status":          "mounted",
+		"filesystem_type":  filesystemType,
+		"partition_metadata": string(metadataJSON),
+		"status":           "mounted",
 	}
 	if err := mm.mountRepo.UpdateFields(updateCtx, mountID, updateData); err != nil {
 		log.WithError(err).Warn("Failed to update filesystem type - continuing")
@@ -389,6 +416,42 @@ func (mm *MountManager) performMount(ctx context.Context, backupFile, nbdDevice,
 	return nil
 }
 
+// performMultiPartitionMount handles multi-partition mounting for file-level restore
+func (mm *MountManager) performMultiPartitionMount(ctx context.Context, backupFile, nbdDevice, baseMountPath, mountID string) ([]*PartitionMount, error) {
+	log.WithFields(log.Fields{
+		"backup_file": backupFile,
+		"nbd_device":  nbdDevice,
+		"mount_path":  baseMountPath,
+	}).Info("🔧 Executing multi-partition mount operation")
+
+	// Step 1: Export QCOW2 via qemu-nbd
+	if err := mm.exportQCOW2(backupFile, nbdDevice); err != nil {
+		return nil, fmt.Errorf("failed to export QCOW2: %w", err)
+	}
+
+	// Step 2: Wait for NBD device to be ready
+	if err := mm.waitForNBDDevice(nbdDevice); err != nil {
+		// Cleanup: Disconnect qemu-nbd
+		mm.disconnectNBD(nbdDevice)
+		return nil, fmt.Errorf("NBD device not ready: %w", err)
+	}
+
+	// Step 3: Mount all partitions
+	partitions, err := mm.mountAllPartitions(nbdDevice, baseMountPath)
+	if err != nil {
+		// Cleanup: Disconnect qemu-nbd
+		mm.disconnectNBD(nbdDevice)
+		return nil, fmt.Errorf("failed to mount partitions: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"mount_id":        mountID,
+		"partition_count": len(partitions),
+	}).Info("✅ Multi-partition mount operation completed successfully")
+
+	return partitions, nil
+}
+
 // exportQCOW2 exports a QCOW2 file via qemu-nbd
 func (mm *MountManager) exportQCOW2(qcow2Path, nbdDevice string) error {
 	log.WithFields(log.Fields{
@@ -495,6 +558,103 @@ func (mm *MountManager) detectPartition(nbdDevice string) string {
 	return nbdDevice
 }
 
+// mountAllPartitions mounts all partitions from an NBD device
+func (mm *MountManager) mountAllPartitions(nbdDevice, baseMountPath string) ([]*PartitionMount, error) {
+	log.WithField("nbd_device", nbdDevice).Info("🔍 Detecting and mounting all partitions")
+
+	// Step 1: List all partitions using lsblk
+	cmd := exec.Command("lsblk", "-rno", "NAME,SIZE,FSTYPE,LABEL", nbdDevice)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list partitions: %w", err)
+	}
+
+	// Step 2: Parse partitions
+	var partitions []*PartitionMount
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	partitionIndex := 1
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+
+		name := fields[0]
+		sizeStr := fields[1]
+		fsType := ""
+		label := ""
+
+		if len(fields) >= 3 {
+			fsType = fields[2]
+		}
+		if len(fields) >= 4 {
+			label = strings.Join(fields[3:], " ")
+		}
+
+		// Skip the base device (only process partitions)
+		if !strings.Contains(name, "p") {
+			continue
+		}
+
+		devicePath := "/dev/" + name
+		size := mm.parseSizeToBytes(sizeStr)
+
+		// Skip very small partitions (< 1MB) - usually reserved/alignment
+		if size < 1024*1024 {
+			log.WithField("partition", devicePath).Debug("⏭️  Skipping tiny partition")
+			continue
+		}
+
+		// Create mount subdirectory
+		mountPath := filepath.Join(baseMountPath, fmt.Sprintf("partition-%d", partitionIndex))
+		if err := os.MkdirAll(mountPath, 0755); err != nil {
+			log.WithError(err).Warn("Failed to create partition mount directory")
+			continue
+		}
+
+		// Attempt to mount partition
+		if err := mm.mountFilesystem(devicePath, mountPath); err != nil {
+			log.WithFields(log.Fields{
+				"partition": devicePath,
+				"error":     err,
+			}).Warn("⚠️  Failed to mount partition - skipping")
+
+			// Clean up failed mount directory
+			os.RemoveAll(mountPath)
+			continue
+		}
+
+		partition := &PartitionMount{
+			PartitionName: name,
+			DevicePath:    devicePath,
+			MountPath:     mountPath,
+			Size:          size,
+			Filesystem:    fsType,
+			Label:         label,
+		}
+
+		partitions = append(partitions, partition)
+
+		log.WithFields(log.Fields{
+			"partition":  devicePath,
+			"mount_path": mountPath,
+			"size":       mm.formatBytes(size),
+			"filesystem": fsType,
+			"label":      label,
+		}).Info("✅ Partition mounted successfully")
+
+		partitionIndex++
+	}
+
+	if len(partitions) == 0 {
+		return nil, fmt.Errorf("no mountable partitions found")
+	}
+
+	log.WithField("partition_count", len(partitions)).Info("✅ All partitions mounted")
+	return partitions, nil
+}
+
 // parseSizeToBytes converts size string (e.g., "1.5G", "100M") to bytes
 func (mm *MountManager) parseSizeToBytes(sizeStr string) int64 {
 	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
@@ -582,9 +742,9 @@ func (mm *MountManager) performUnmount(ctx context.Context, mountPath, nbdDevice
 		"nbd_device": nbdDevice,
 	}).Info("🔧 Executing unmount operation")
 
-	// Step 1: Unmount filesystem
-	if err := mm.unmountFilesystem(mountPath); err != nil {
-		log.WithError(err).Warn("Failed to unmount filesystem - continuing with cleanup")
+	// Step 1: Unmount all partition filesystems (handles both single and multi-partition)
+	if err := mm.unmountAllPartitions(mountPath); err != nil {
+		log.WithError(err).Warn("Failed to unmount partitions - continuing with cleanup")
 	}
 
 	// Step 2: Remove mount directory
@@ -612,6 +772,68 @@ func (mm *MountManager) unmountFilesystem(mountPath string) error {
 	}
 
 	log.WithField("mount_path", mountPath).Info("✅ Filesystem unmounted")
+	return nil
+}
+
+// unmountAllPartitions unmounts all partition filesystems from a base mount path
+func (mm *MountManager) unmountAllPartitions(baseMountPath string) error {
+	log.WithField("base_path", baseMountPath).Info("🧹 Unmounting all partitions")
+
+	// Find all partition mount directories
+	entries, err := os.ReadDir(baseMountPath)
+	if err != nil {
+		// If the directory doesn't exist, consider it already unmounted
+		if os.IsNotExist(err) {
+			log.WithField("base_path", baseMountPath).Debug("Mount directory already removed")
+			return nil
+		}
+		return fmt.Errorf("failed to read mount directory: %w", err)
+	}
+
+	var errors []error
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		if strings.HasPrefix(entry.Name(), "partition-") {
+			partitionPath := filepath.Join(baseMountPath, entry.Name())
+
+			// Unmount partition
+			cmd := exec.Command("sudo", "umount", partitionPath)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				log.WithFields(log.Fields{
+					"partition": partitionPath,
+					"error":     err,
+					"output":    string(output),
+				}).Warn("⚠️  Failed to unmount partition")
+				errors = append(errors, err)
+			} else {
+				log.WithField("partition", partitionPath).Info("✅ Partition unmounted")
+			}
+
+			// Remove mount directory
+			os.RemoveAll(partitionPath)
+		}
+	}
+
+	// For backward compatibility, also try to unmount the base path directly
+	// (handles single-partition mounts that don't have partition subdirectories)
+	cmd := exec.Command("sudo", "umount", baseMountPath)
+	if _, err := cmd.CombinedOutput(); err != nil {
+		// This is expected to fail for multi-partition mounts, so only log at debug level
+		log.WithFields(log.Fields{
+			"base_path": baseMountPath,
+			"error":     err,
+		}).Debug("Base mount path unmount (expected for multi-partition)")
+	} else {
+		log.WithField("base_path", baseMountPath).Info("✅ Base mount path unmounted")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("failed to unmount %d partitions", len(errors))
+	}
+
 	return nil
 }
 

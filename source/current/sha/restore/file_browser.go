@@ -5,6 +5,7 @@ package restore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -77,33 +78,60 @@ func (fb *FileBrowser) ListFiles(ctx context.Context, req *ListFilesRequest) (*L
 	// Update last accessed time (for idle timeout detection)
 	fb.mountRepo.UpdateLastAccessed(ctx, req.MountID)
 
-	// Normalize and validate path
+	// Normalize path
 	requestPath := req.Path
 	if requestPath == "" {
 		requestPath = "/"
 	}
 
-	// Validate and sanitize path (SECURITY: prevent path traversal)
-	safePath, err := fb.ValidateAndSanitizePath(mount.MountPath, requestPath)
-	if err != nil {
-		return nil, fmt.Errorf("path validation failed: %w", err)
+	// Check if mount has multi-partition metadata
+	var partitionMetadata []map[string]interface{}
+	if mount.PartitionMetadata != nil && *mount.PartitionMetadata != "" {
+		var metadata map[string]interface{}
+		if err := json.Unmarshal([]byte(*mount.PartitionMetadata), &metadata); err == nil {
+			if partitions, ok := metadata["partitions"].([]interface{}); ok {
+				partitionMetadata = make([]map[string]interface{}, len(partitions))
+				for i, p := range partitions {
+					if partitionMap, ok := p.(map[string]interface{}); ok {
+						partitionMetadata[i] = partitionMap
+					}
+				}
+			}
+		}
 	}
 
-	log.WithFields(log.Fields{
-		"mount_path": mount.MountPath,
-		"safe_path":  safePath,
-	}).Debug("✅ Path validation passed")
-
-	// List files
+	// Handle multi-partition browsing
 	var files []*FileInfo
-	if req.Recursive {
-		files, err = fb.listFilesRecursive(safePath, requestPath)
+	if len(partitionMetadata) > 0 && requestPath == "/" {
+		// ROOT PATH: Show partition folders as virtual directories
+		files = fb.listPartitionFolders(mount, partitionMetadata)
+	} else if strings.HasPrefix(requestPath, "/partition-") {
+		// PARTITION PATH: List files within partition
+		files, err = fb.listFilesInPartition(mount, requestPath, req.Recursive)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list files in partition: %w", err)
+		}
 	} else {
-		files, err = fb.listFilesSingle(safePath, requestPath)
-	}
+		// LEGACY: Single partition mount (backward compatibility)
+		safePath, err := fb.ValidateAndSanitizePath(mount.MountPath, requestPath)
+		if err != nil {
+			return nil, fmt.Errorf("path validation failed: %w", err)
+		}
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to list files: %w", err)
+		log.WithFields(log.Fields{
+			"mount_path": mount.MountPath,
+			"safe_path":  safePath,
+		}).Debug("✅ Path validation passed")
+
+		if req.Recursive {
+			files, err = fb.listFilesRecursive(safePath, requestPath)
+		} else {
+			files, err = fb.listFilesSingle(safePath, requestPath)
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to list files: %w", err)
+		}
 	}
 
 	log.WithFields(log.Fields{
@@ -419,5 +447,93 @@ func (fb *FileBrowser) CalculateDirectorySize(ctx context.Context, dirPath strin
 	}).Debug("✅ Directory size calculated")
 
 	return totalSize, fileCount, nil
+}
+
+// listPartitionFolders creates virtual directory entries for each mounted partition
+func (fb *FileBrowser) listPartitionFolders(mount *database.RestoreMount, metadata []map[string]interface{}) []*FileInfo {
+	files := make([]*FileInfo, 0, len(metadata))
+
+	for i, partition := range metadata {
+		partitionNum := i + 1
+		size := int64(0)
+		if sizeVal, ok := partition["size"].(float64); ok {
+			size = int64(sizeVal)
+		}
+
+		label := ""
+		if labelVal, ok := partition["label"].(string); ok {
+			label = labelVal
+		}
+
+		// Generate friendly name
+		name := fmt.Sprintf("Partition %d", partitionNum)
+		if label != "" {
+			name = fmt.Sprintf("Partition %d - %s", partitionNum, label)
+		}
+		name = fmt.Sprintf("%s (%s)", name, fb.formatBytes(size))
+
+		fileInfo := &FileInfo{
+			Name:         name,
+			Path:         fmt.Sprintf("/partition-%d", partitionNum),
+			Type:         "directory",
+			Size:         size,
+			Mode:         "0755",
+			ModifiedTime: mount.CreatedAt,
+			IsSymlink:    false,
+		}
+
+		files = append(files, fileInfo)
+	}
+
+	return files
+}
+
+// listFilesInPartition lists files within a specific partition
+func (fb *FileBrowser) listFilesInPartition(mount *database.RestoreMount, path string, recursive bool) ([]*FileInfo, error) {
+	// Extract partition folder: "/partition-1/Users" → "partition-1"
+	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("invalid partition path")
+	}
+
+	partitionFolder := parts[0] // "partition-1"
+
+	// Build actual filesystem path
+	fsPath := filepath.Join(mount.MountPath, partitionFolder)
+	if len(parts) > 1 {
+		fsPath = filepath.Join(fsPath, strings.Join(parts[1:], "/"))
+	}
+
+	// Validate path is within mount (SECURITY)
+	safePath, err := fb.ValidateAndSanitizePath(mount.MountPath, "/"+partitionFolder)
+	if err != nil {
+		return nil, fmt.Errorf("partition path validation failed: %w", err)
+	}
+
+	// Ensure the relative path is within the partition directory
+	relPath := strings.TrimPrefix(fsPath, safePath)
+	if strings.HasPrefix(relPath, "..") || strings.Contains(relPath, "../") {
+		return nil, fmt.Errorf("path traversal attempt detected")
+	}
+
+	// List files using existing logic
+	if recursive {
+		return fb.listFilesRecursive(fsPath, path)
+	}
+	return fb.listFilesSingle(fsPath, path)
+}
+
+// formatBytes formats byte count to human-readable string
+func (fb *FileBrowser) formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGT"[exp])
 }
 
