@@ -104,16 +104,16 @@ export function JobLogsDrawer({ isOpen, onClose }: JobLogsDrawerProps) {
     <>
       {/* Drawer */}
       <div
-        className="fixed top-0 bottom-0 right-0 bg-gray-900 border-l border-gray-700 flex flex-col z-50 shadow-2xl"
+        className="fixed top-0 bottom-0 right-0 bg-background border-l border-border flex flex-col z-50 shadow-2xl"
         style={{
           width: isOpen ? `${width}px` : '0px',
           transition: isResizing ? 'none' : 'width 300ms ease-in-out'
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-800/50 shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/50 shrink-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-white">Job Logs</h3>
+            <h3 className="text-sm font-semibold text-foreground">Job Logs</h3>
             <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded flex items-center gap-1">
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
               Live
@@ -124,7 +124,7 @@ export function JobLogsDrawer({ isOpen, onClose }: JobLogsDrawerProps) {
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value as any)}
-              className="text-xs bg-gray-700 border-gray-600 text-white rounded px-2 py-1"
+              className="text-xs bg-muted border-border text-foreground rounded px-2 py-1"
             >
               <option value="All">All</option>
               <option value="INFO">Info</option>
@@ -145,14 +145,14 @@ export function JobLogsDrawer({ isOpen, onClose }: JobLogsDrawerProps) {
 
             <button
               onClick={handleClear}
-              className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-400 hover:bg-gray-600"
+              className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground hover:bg-muted/80"
             >
               <X className="h-3 w-3" />
             </button>
 
             <button
               onClick={onClose}
-              className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-400 hover:bg-gray-600"
+              className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground hover:bg-muted/80"
             >
               ✕
             </button>
@@ -165,16 +165,16 @@ export function JobLogsDrawer({ isOpen, onClose }: JobLogsDrawerProps) {
           className="flex-1 overflow-auto p-2 space-y-0.5"
         >
           {filteredLogs.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
               No logs to display
             </div>
           ) : (
             filteredLogs.map((log, index) => (
               <div
                 key={index}
-                className="px-2 py-1 font-mono text-xs hover:bg-gray-800/30 cursor-pointer rounded"
+                className="px-2 py-1 font-mono text-xs hover:bg-muted/30 cursor-pointer rounded"
               >
-                <span className="text-gray-500">{log.time}</span>
+                <span className="text-muted-foreground">{log.time}</span>
                 {' '}
                 <span className={`font-semibold ${logLevelColors[log.level]}`}>
                   [{log.level}]

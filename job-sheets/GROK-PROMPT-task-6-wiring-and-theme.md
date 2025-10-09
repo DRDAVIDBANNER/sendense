@@ -52,7 +52,22 @@ This job sheet contains:
 **Show me a git diff after this step.**
 
 ### Step 2: Wire API Integration 🔌
-1. Create API service layer: `src/features/protection-flows/api/protectionFlowsApi.ts`
+
+**⚠️ CRITICAL FIX REQUIRED:** The API file already exists but uses `http://localhost:8082` which bypasses the Next.js proxy!
+
+**Fix in `src/features/protection-flows/api/protectionFlowsApi.ts` line 3:**
+```typescript
+// ❌ WRONG (current)
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082';
+
+// ✅ CORRECT (change to this)
+const API_BASE = '';  // Empty string uses Next.js rewrites proxy
+```
+
+**Why:** Next.js has a rewrite rule that proxies `/api/v1/*` to `http://localhost:8082/api/v1/*`. Using relative URLs avoids CORS issues and works in production.
+
+**Then:**
+1. Fix API_BASE in `protectionFlowsApi.ts` (line 3)
 2. Create React Query hooks: `src/features/protection-flows/hooks/useProtectionFlows.ts`
 3. Update `page.tsx` to use real API hooks
 4. Update `FlowDetailsPanel.tsx` to use real execution data
@@ -99,9 +114,28 @@ bg-primary           /* Primary action color */
 text-primary         /* Primary text color */
 ```
 
-**API Base URL:**
+**API URLs (CRITICAL):**
+```typescript
+// ❌ WRONG - Do NOT use absolute URL
+const API_BASE = 'http://localhost:8082';
+
+// ✅ CORRECT - Use empty string for Next.js proxy
+const API_BASE = '';
+
+// Then all calls use relative URLs:
+axios.get('/api/v1/protection-flows')  // ✅ Proxied by Next.js
 ```
-http://localhost:8082/api/v1/protection-flows
+
+**Next.js Proxy Setup (already configured in next.config.ts):**
+```typescript
+async rewrites() {
+  return [
+    {
+      source: '/api/v1/:path*',
+      destination: 'http://localhost:8082/api/v1/:path*',
+    },
+  ];
+}
 ```
 
 ---

@@ -31,10 +31,10 @@ export function EditFlowModal({ isOpen, onClose, flow, onUpdate }: EditFlowModal
     if (flow) {
       setFormData({
         name: flow.name,
-        type: flow.type,
+        type: flow.flow_type,
         source: flow.source || '',
         destination: flow.destination || '',
-        nextRun: flow.nextRun.split('T')[0] + 'T' + flow.nextRun.split('T')[1].slice(0, 5), // Format for datetime-local
+        nextRun: flow.nextRun?.split('T')[0] + 'T' + flow.nextRun?.split('T')[1]?.slice(0, 5) || '', // Format for datetime-local
         description: ''
       });
     }
@@ -48,7 +48,7 @@ export function EditFlowModal({ isOpen, onClose, flow, onUpdate }: EditFlowModal
     // Update the flow
     const updates: Partial<Flow> = {
       name: formData.name,
-      type: formData.type,
+      flow_type: formData.type,
       source: formData.source,
       destination: formData.destination,
       nextRun: formData.nextRun

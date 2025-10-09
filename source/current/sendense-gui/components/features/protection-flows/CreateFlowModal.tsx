@@ -31,10 +31,18 @@ export function CreateFlowModal({ isOpen, onClose, onCreate }: CreateFlowModalPr
     // Create a new flow object
     const newFlow: Omit<Flow, 'id' | 'status' | 'lastRun' | 'progress'> = {
       name: formData.name,
-      type: formData.type,
+      flow_type: formData.type,
+      target_type: 'vm',
+      target_id: formData.source || '',
       source: formData.source,
       destination: formData.destination,
-      nextRun: formData.nextRun || new Date().toISOString()
+      nextRun: formData.nextRun || new Date().toISOString(),
+      enabled: true,
+      execution_count: 0,
+      success_count: 0,
+      failure_count: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
     onCreate(newFlow);

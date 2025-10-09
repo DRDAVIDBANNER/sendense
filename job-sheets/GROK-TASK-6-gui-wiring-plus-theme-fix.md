@@ -143,17 +143,49 @@ Check and fix any hardcoded colors in table styling.
 ### Overview
 Replace all mock data with real API calls using React Query.
 
+### 🚨 CRITICAL: Next.js API Proxy Configuration
+
+**The GUI uses Next.js rewrites to proxy API calls to the SHA backend.**
+
+**Configuration:** `next.config.ts` lines 27-34:
+```typescript
+async rewrites() {
+  return [
+    {
+      source: '/api/v1/:path*',
+      destination: 'http://localhost:8082/api/v1/:path*',
+    },
+  ];
+}
+```
+
+**What this means:**
+- Browser calls: `/api/v1/protection-flows` (relative URL)
+- Next.js proxies to: `http://localhost:8082/api/v1/protection-flows`
+- No CORS issues, works in dev and production
+
+**DO NOT use `http://localhost:8082` directly in API calls!**
+
+✅ **CORRECT:** `axios.get('/api/v1/protection-flows')`  
+❌ **WRONG:** `axios.get('http://localhost:8082/api/v1/protection-flows')`
+
 ### API Service Layer Location
 `/source/current/sendense-gui/src/features/protection-flows/api/`
 
 ### Required API Methods
 
-Create `/source/current/sendense-gui/src/features/protection-flows/api/protectionFlowsApi.ts`:
+**CRITICAL: The API file already exists but has WRONG API_BASE configuration!**
 
+Edit `/source/current/sendense-gui/src/features/protection-flows/api/protectionFlowsApi.ts`:
+
+**Current (WRONG - bypasses Next.js proxy):**
 ```typescript
-import axios from 'axios';
-
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082';
+```
+
+**Fixed (CORRECT - uses Next.js proxy from next.config.ts):**
+```typescript
+const API_BASE = '';  // Empty string uses Next.js rewrites proxy
 
 export interface ProtectionFlow {
   id: string;

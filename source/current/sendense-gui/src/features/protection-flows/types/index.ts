@@ -4,10 +4,24 @@ export type FlowStatus = 'success' | 'running' | 'warning' | 'error' | 'pending'
 export interface Flow {
   id: string;
   name: string;
-  type: FlowType;
-  status: FlowStatus;
-  lastRun: string;
-  nextRun: string;
+  flow_type: 'backup' | 'replication';
+  target_type: 'vm' | 'group';
+  target_id: string;
+  repository_id?: string;
+  schedule_id?: string;
+  policy_id?: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  last_execution?: string;
+  next_execution?: string;
+  execution_count: number;
+  success_count: number;
+  failure_count: number;
+  // UI-specific fields (computed from API data)
+  status?: FlowStatus;
+  lastRun?: string;
+  nextRun?: string;
   source?: string;
   destination?: string;
   progress?: number;

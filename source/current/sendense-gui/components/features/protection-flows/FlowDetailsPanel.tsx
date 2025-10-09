@@ -28,6 +28,7 @@ import {
 import { format } from "date-fns";
 import { Flow } from "./types";
 import { RestoreWorkflowModal } from "./RestoreWorkflowModal";
+import { useFlowExecutions } from "@/src/features/protection-flows/hooks/useProtectionFlows";
 import {
   LineChart,
   Line,
@@ -200,10 +201,14 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
   const [activeTab, setActiveTab] = useState('machines');
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
 
+  // Real API data
+  const { data: executionsData } = useFlowExecutions(flow.id);
+  const executions = executionsData?.executions || [];
+
   if (!flow) return null;
 
   const flowMachines = mockMachines.filter(machine =>
-    flow.type === 'replication' ? ['vm1', 'vm2'].includes(machine.id) : true
+    flow.flow_type === 'replication' ? ['vm1', 'vm2'].includes(machine.id) : true
   );
 
   const getStatusIcon = (status: string) => {
@@ -212,7 +217,7 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
       case 'success': return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'error': return <XCircle className="h-4 w-4 text-red-500" />;
       case 'warning': return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-      default: return <Clock className="h-4 w-4 text-gray-500" />;
+      default: return <Clock className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
@@ -222,7 +227,7 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
       success: 'bg-green-500/10 text-green-400 border-green-500/20',
       error: 'bg-red-500/10 text-red-400 border-red-500/20',
       warning: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-      stopped: 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+      stopped: 'bg-muted text-muted-foreground border-muted-foreground/20'
     };
 
     return (
@@ -233,7 +238,7 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
   };
 
   const renderReplicationActions = () => {
-    if (flow.type !== 'replication') return null;
+    if (flow.flow_type !== 'replication') return null;
 
     const actions = [];
 
@@ -295,15 +300,15 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-900">
+    <div className="h-full flex flex-col bg-background">
       {/* Header with action buttons */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
         <div>
           <div className="flex items-center gap-3">
-            <h3 className="text-xl font-semibold text-white">{flow.name}</h3>
+            <h3 className="text-xl font-semibold text-foreground">{flow.name}</h3>
             {getStatusBadge(flow.status)}
           </div>
-          <p className="text-sm text-gray-400 mt-1">{flow.source} → {flow.destination}</p>
+          <p className="text-sm text-muted-foreground mt-1">{flow.source} → {flow.destination}</p>
         </div>
 
         <div className="flex gap-2">
@@ -325,11 +330,11 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
               <ScrollArea className="h-full">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-6 pb-4">
                   {flowMachines.map((machine) => (
-                    <Card key={machine.id} className="relative bg-gray-800 border-gray-700">
+                    <Card key={machine.id} className="relative">
                   <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
-                          <CardTitle className="text-base flex items-center gap-2 text-white">
-                            <Server className="h-4 w-4 text-blue-400" />
+                          <CardTitle className="text-base flex items-center gap-2 text-foreground">
+                            <Server className="h-4 w-4 text-primary" />
                             {machine.name}
                           </CardTitle>
                           {getStatusBadge(machine.status)}
@@ -338,38 +343,38 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
                   <CardContent className="space-y-3">
                         <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
-                            <span className="text-gray-400">Host:</span>
-                            <div className="font-medium text-white">{machine.host}</div>
+                            <span className="text-muted-foreground">Host:</span>
+                            <div className="font-medium text-foreground">{machine.host}</div>
                     </div>
                     <div>
-                            <span className="text-gray-400">OS:</span>
-                            <div className="font-medium text-white">{machine.os}</div>
+                            <span className="text-muted-foreground">OS:</span>
+                            <div className="font-medium text-foreground">{machine.os}</div>
                       </div>
                           <div>
-                            <span className="text-gray-400">CPU:</span>
-                            <div className="font-medium text-white">{machine.cpu} cores</div>
+                            <span className="text-muted-foreground">CPU:</span>
+                            <div className="font-medium text-foreground">{machine.cpu} cores</div>
                     </div>
                     <div>
-                            <span className="text-gray-400">Memory:</span>
-                            <div className="font-medium text-white">{machine.memory} GB</div>
+                            <span className="text-muted-foreground">Memory:</span>
+                            <div className="font-medium text-foreground">{machine.memory} GB</div>
                       </div>
                     </div>
 
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-400">CPU Usage</span>
-                            <span className="text-white">{machine.performance.cpuUsage}%</span>
+                            <span className="text-muted-foreground">CPU Usage</span>
+                            <span className="text-foreground">{machine.performance.cpuUsage}%</span>
                           </div>
                           <Progress value={machine.performance.cpuUsage} className="h-2" />
 
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-400">Memory Usage</span>
-                            <span className="text-white">{machine.performance.memoryUsage}%</span>
+                            <span className="text-muted-foreground">Memory Usage</span>
+                            <span className="text-foreground">{machine.performance.memoryUsage}%</span>
                           </div>
                           <Progress value={machine.performance.memoryUsage} className="h-2" />
                         </div>
 
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-muted-foreground">
                           Last activity: {format(new Date(machine.lastActivity), 'MMM dd, HH:mm')}
                         </div>
                   </CardContent>
@@ -383,65 +388,46 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
               <ScrollArea className="h-full">
                 <div className="space-y-6 px-6 pb-4">
                   {/* Active Jobs */}
-                  {mockActiveJobs.length > 0 && (
+                  {executions.filter(e => e.status === 'running').length > 0 && (
                     <div>
-                      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-white">
-                        <Activity className="h-5 w-5 text-blue-400" />
+                      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-foreground">
+                        <Activity className="h-5 w-5 text-primary" />
                         Active Jobs
                       </h3>
                       <div className="space-y-4">
-                        {mockActiveJobs.map((job) => (
-                          <Card key={job.id} className="bg-gray-800 border-gray-700">
+                        {executions.filter(e => e.status === 'running').map((execution) => (
+                          <Card key={execution.id}>
                             <CardHeader>
                               <div className="flex items-center justify-between">
-                                <CardTitle className="text-base capitalize text-white">
-                                  {job.type} Job #{job.id.slice(-4)}
+                                <CardTitle className="text-base capitalize text-foreground">
+                                  {flow.flow_type} Execution #{execution.id.slice(-4)}
                                 </CardTitle>
-                                {getStatusBadge(job.status)}
+                                {getStatusBadge(execution.status)}
                               </div>
                             </CardHeader>
                             <CardContent className="space-y-4">
                               <div>
                                 <div className="flex justify-between text-sm mb-2">
-                                  <span className="text-gray-400">Progress</span>
-                                  <span className="text-white">{job.progress}%</span>
+                                  <span className="text-muted-foreground">Status</span>
+                                  <span className="text-foreground">{execution.status}</span>
                                 </div>
-                                <Progress value={job.progress} className="h-3" />
                               </div>
 
                               <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
-                                  <span className="text-gray-400">Started:</span>
-                                  <div className="text-white">{format(new Date(job.startTime), 'HH:mm')}</div>
+                                  <span className="text-muted-foreground">Started:</span>
+                                  <div className="text-foreground">{format(new Date(execution.started_at), 'HH:mm')}</div>
                                 </div>
                                 <div>
-                                  <span className="text-gray-400">ETA:</span>
-                                  <div className="text-white">{format(new Date(job.estimatedCompletion), 'HH:mm')}</div>
+                                  <span className="text-muted-foreground">Duration:</span>
+                                  <div className="text-foreground">{execution.duration_seconds || 0}s</div>
                                 </div>
                                 <div>
-                                  <span className="text-gray-400">Phase:</span>
-                                  <div className="text-white">{job.currentPhase}</div>
-                    </div>
-                    <div>
-                                  <span className="text-gray-400">Throughput:</span>
-                                  <div className="text-white">{job.throughput} MB/s</div>
+                                  <span className="text-muted-foreground">Transferred:</span>
+                                  <div className="text-foreground">{(execution.bytes_transferred || 0) / (1024 * 1024)} MB</div>
                                 </div>
                               </div>
-
-                              <div>
-                                <span className="text-gray-400 text-sm">Machines:</span>
-                                <div className="flex gap-1 mt-1">
-                                  {job.machines.map(machineId => {
-                                    const machine = mockMachines.find(m => m.id === machineId);
-                                    return machine ? (
-                                      <Badge key={machineId} variant="outline" className="text-xs border-gray-600 text-gray-300">
-                                        {machine.name}
-                                      </Badge>
-                                    ) : null;
-                                  })}
-                                </div>
-                    </div>
-                  </CardContent>
+                            </CardContent>
                 </Card>
                         ))}
                       </div>
@@ -449,39 +435,57 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
                   )}
 
                   {/* Job History */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-white">
-                      <Clock className="h-5 w-5 text-blue-400" />
-                      Job History
-                    </h3>
-                    <div className="space-y-3">
-                      {mockJobHistory.map((job) => (
-                        <Card key={job.id} className="bg-gray-800 border-gray-700 hover:bg-gray-800/80 transition-colors">
-                          <CardContent className="pt-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                {getStatusIcon(job.status)}
+                  {executions.filter(e => e.status !== 'running').length > 0 && (
                     <div>
-                                  <div className="font-medium text-white capitalize">
-                                    {job.type} Job #{job.id.slice(-4)}
+                      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-foreground">
+                        <Clock className="h-5 w-5 text-muted-foreground" />
+                        Execution History
+                      </h3>
+                      <div className="space-y-4">
+                        {executions.filter(e => e.status !== 'running').slice(0, 5).map((execution) => (
+                          <Card key={execution.id}>
+                            <CardHeader>
+                              <div className="flex items-center justify-between">
+                                <CardTitle className="text-base capitalize text-foreground">
+                                  {flow.flow_type} Execution #{execution.id.slice(-4)}
+                                </CardTitle>
+                                {getStatusBadge(execution.status)}
+                              </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Started:</span>
+                                  <div className="text-foreground">{format(new Date(execution.started_at), 'MMM dd, HH:mm')}</div>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Completed:</span>
+                                  <div className="text-foreground">
+                                    {execution.completed_at ? format(new Date(execution.completed_at), 'MMM dd, HH:mm') : 'In Progress'}
                                   </div>
-                                  <div className="text-sm text-gray-400">
-                                    {format(new Date(job.startTime), 'MMM dd, yyyy HH:mm')} • {job.duration}
-                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Duration:</span>
+                                  <div className="text-foreground">{execution.duration_seconds || 0}s</div>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Transferred:</span>
+                                  <div className="text-foreground">{(execution.bytes_transferred || 0) / (1024 * 1024)} MB</div>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <div className="font-medium text-white">{job.size} GB</div>
-                                <div className="text-sm text-gray-400">
-                                  {job.machines.length} machines
+                              {execution.error_message && (
+                                <div className="text-sm">
+                                  <span className="text-muted-foreground">Error:</span>
+                                  <div className="text-destructive mt-1">{execution.error_message}</div>
                                 </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
                     </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                      ))}
-                    </div>
-              </div>
+                  )}
+
                 </div>
               </ScrollArea>
             </TabsContent>
@@ -489,10 +493,10 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
             <TabsContent value="performance" className="h-full mt-4">
               <ScrollArea className="h-full">
                 <div className="space-y-6 px-6 pb-4">
-                  <Card className="bg-gray-800 border-gray-700">
+                  <Card>
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-white">
-                        <BarChart3 className="h-5 w-5 text-blue-400" />
+                      <CardTitle className="flex items-center gap-2 text-foreground">
+                        <BarChart3 className="h-5 w-5 text-primary" />
                         Throughput Over Time
                       </CardTitle>
                     </CardHeader>
@@ -532,10 +536,10 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
                   </Card>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card className="bg-gray-800 border-gray-700">
+                    <Card>
                       <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-white">
-                          <Cpu className="h-5 w-5 text-green-400" />
+                        <CardTitle className="flex items-center gap-2 text-foreground">
+                          <Cpu className="h-5 w-5 text-primary" />
                           CPU Usage Trend
                         </CardTitle>
                       </CardHeader>
@@ -567,10 +571,10 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
                       </CardContent>
                     </Card>
 
-                    <Card className="bg-gray-800 border-gray-700">
+                    <Card>
                       <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-white">
-                          <HardDrive className="h-5 w-5 text-yellow-400" />
+                        <CardTitle className="flex items-center gap-2 text-foreground">
+                          <HardDrive className="h-5 w-5 text-primary" />
                           Memory Usage Trend
                         </CardTitle>
                       </CardHeader>

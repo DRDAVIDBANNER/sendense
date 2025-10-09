@@ -57,7 +57,7 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
             flow.status === 'running' ? 'bg-blue-500' :
             flow.status === 'warning' ? 'bg-yellow-500' :
             flow.status === 'error' ? 'bg-red-500' :
-            'bg-gray-400'
+            'bg-muted-foreground'
           }`} />
           <span className="capitalize text-sm">{flow.status}</span>
         </div>

@@ -7,68 +7,12 @@ import { Plus, ClipboardList } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { FlowsTable, FlowDetailsPanel, JobLogsDrawer, CreateFlowModal, EditFlowModal, DeleteConfirmModal } from "@/components/features/protection-flows";
 import { Flow } from "@/src/features/protection-flows/types";
-
-const mockFlows: Flow[] = [
-  {
-    id: '1',
-    name: 'Daily VM Backup - pgtest1',
-    type: 'backup',
-    status: 'success',
-    lastRun: '2025-10-06T10:00:00Z',
-    nextRun: '2025-10-07T10:00:00Z',
-    source: 'vCenter-ESXi-01',
-    destination: 'CloudStack-Primary',
-    progress: 100
-  },
-  {
-    id: '2',
-    name: 'Hourly Replication - web-servers',
-    type: 'replication',
-    status: 'running',
-    lastRun: '2025-10-06T09:00:00Z',
-    nextRun: '2025-10-06T10:00:00Z',
-    source: 'vCenter-ESXi-02',
-    destination: 'CloudStack-DR',
-    progress: 65
-  },
-  {
-    id: '3',
-    name: 'Weekly Archive - legacy-apps',
-    type: 'backup',
-    status: 'warning',
-    lastRun: '2025-10-03T08:00:00Z',
-    nextRun: '2025-10-10T08:00:00Z',
-    source: 'vCenter-ESXi-01',
-    destination: 'CloudStack-Archive',
-    progress: 0
-  },
-  {
-    id: '4',
-    name: 'Critical DB Backup',
-    type: 'backup',
-    status: 'error',
-    lastRun: '2025-10-06T02:00:00Z',
-    nextRun: '2025-10-06T14:00:00Z',
-    source: 'vCenter-ESXi-03',
-    destination: 'CloudStack-Primary',
-    progress: 0
-  },
-  {
-    id: '5',
-    name: 'Dev Environment Sync',
-    type: 'replication',
-    status: 'pending',
-    lastRun: '2025-10-05T16:00:00Z',
-    nextRun: '2025-10-06T12:00:00Z',
-    source: 'vCenter-ESXi-02',
-    destination: 'CloudStack-Dev',
-    progress: 0
-  }
-];
+import { useProtectionFlows, useCreateFlow, useUpdateFlow, useDeleteFlow, useExecuteFlow } from "@/src/features/protection-flows/hooks/useProtectionFlows";
 
 export default function ProtectionFlowsPage() {
   const [selectedFlowId, setSelectedFlowId] = useState<string>();
-  const [flows, setFlows] = useState<Flow[]>(mockFlows);
+  const { data: flowsData, isLoading, error } = useProtectionFlows();
+  const flows = flowsData?.flows || [];
 
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -104,6 +48,12 @@ export default function ProtectionFlowsPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // API mutations
+  const createFlowMutation = useCreateFlow();
+  const updateFlowMutation = useUpdateFlow();
+  const deleteFlowMutation = useDeleteFlow();
+  const executeFlowMutation = useExecuteFlow();
+
   const selectedFlow = flows.find(flow => flow.id === selectedFlowId);
 
   const handleCreateFlow = () => {
@@ -114,25 +64,24 @@ export default function ProtectionFlowsPage() {
     setSelectedFlowId(flow.id);
   };
 
-  const handleCreateFlowSubmit = (newFlowData: Omit<Flow, 'id' | 'status' | 'lastRun' | 'progress'>) => {
-    const newFlow: Flow = {
+  const handleCreateFlowSubmit = async (newFlowData: Omit<Flow, 'id' | 'status' | 'lastRun' | 'progress'>) => {
+    // Ensure required fields are provided
+    const flowData = {
       ...newFlowData,
-      id: Date.now().toString(),
-      status: 'pending',
-      lastRun: new Date().toISOString(),
-      progress: 0
+      repository_id: newFlowData.flow_type === 'backup' ? (newFlowData.repository_id || '') : undefined,
+      enabled: newFlowData.enabled ?? true,
+      target_type: newFlowData.target_type || 'vm',
     };
-    setFlows(prev => [...prev, newFlow]);
+    await createFlowMutation.mutateAsync(flowData);
+    setIsCreateModalOpen(false);
   };
 
   const handleEditFlow = (flow: Flow) => {
     setEditingFlow(flow);
   };
 
-  const handleUpdateFlow = (flowId: string, updates: Partial<Flow>) => {
-    setFlows(prev => prev.map(flow =>
-      flow.id === flowId ? { ...flow, ...updates } : flow
-    ));
+  const handleUpdateFlow = async (flowId: string, updates: Partial<Flow>) => {
+    await updateFlowMutation.mutateAsync({ id: flowId, flow: updates });
     setEditingFlow(null);
   };
 
@@ -140,32 +89,31 @@ export default function ProtectionFlowsPage() {
     setDeletingFlow(flow);
   };
 
-  const handleConfirmDelete = (flowId: string) => {
-    setFlows(prev => prev.filter(flow => flow.id !== flowId));
+  const handleConfirmDelete = async (flowId: string) => {
+    await deleteFlowMutation.mutateAsync(flowId);
     if (selectedFlowId === flowId) {
       setSelectedFlowId(undefined);
     }
     setDeletingFlow(null);
   };
 
-  const handleRunNow = (flow: Flow) => {
-    // TODO: Implement run now functionality
-    console.log('Run flow now:', flow.id);
+  const handleRunNow = async (flow: Flow) => {
+    await executeFlowMutation.mutateAsync(flow.id);
   };
 
   return (
-    <div className="h-screen bg-gray-900">
+    <div className="h-screen bg-background">
       <PanelGroup direction="vertical">
         {/* Top Panel: Flows Table */}
         <Panel defaultSize={50} minSize={30}>
-          <div className="flex flex-col h-full bg-gray-900">
+          <div className="flex flex-col h-full bg-background">
             {/* Compact header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
               <div>
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-foreground">
                   Backup & Replication Jobs
                 </h2>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   Manage and monitor your protection flows across all environments
                 </p>
               </div>
@@ -178,8 +126,8 @@ export default function ProtectionFlowsPage() {
                   onClick={() => setIsLogsOpen(!isLogsOpen)}
                   className={`p-2 rounded-lg transition-colors ${
                     isLogsOpen
-                      ? 'bg-blue-500/20 text-blue-400'
-                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                      ? 'bg-primary/20 text-primary'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
                   }`}
                   title="Job Logs (Ctrl+L)"
                 >
@@ -203,16 +151,16 @@ export default function ProtectionFlowsPage() {
         </Panel>
 
         {/* Resize Handle */}
-        <PanelResizeHandle className="h-1 bg-gray-700 hover:bg-blue-500 transition-colors cursor-ns-resize" />
+        <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors cursor-ns-resize" />
 
         {/* Lower Panel: Flow Details */}
         <Panel defaultSize={40} minSize={20}>
-          <div className="h-full bg-gray-900 border-t border-gray-700 overflow-auto">
+          <div className="h-full bg-background border-t border-border overflow-auto">
             {selectedFlow ? (
               <FlowDetailsPanel flow={selectedFlow} />
             ) : (
               <div className="flex items-center justify-center h-full">
-                <p className="text-gray-400 text-center">
+                <p className="text-muted-foreground text-center">
                   Select a flow to view details
                 </p>
               </div>
