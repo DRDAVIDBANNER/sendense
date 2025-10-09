@@ -4,6 +4,13 @@ import axios from 'axios';
 // next.config.ts proxies /api/v1/* to http://localhost:8082/api/v1/*
 const API_BASE = '';
 
+export interface ProtectionFlowStatus {
+  last_execution_status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  total_executions: number;
+  successful_executions: number;
+  failed_executions: number;
+}
+
 export interface ProtectionFlow {
   id: string;
   name: string;
@@ -14,13 +21,12 @@ export interface ProtectionFlow {
   schedule_id?: string;
   policy_id?: string;
   enabled: boolean;
+  status: ProtectionFlowStatus;
   created_at: string;
   updated_at: string;
+  created_by?: string;
   last_execution?: string;
   next_execution?: string;
-  execution_count: number;
-  success_count: number;
-  failure_count: number;
 }
 
 export interface FlowExecution {

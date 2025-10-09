@@ -26,7 +26,7 @@ import {
   Zap
 } from "lucide-react";
 import { format } from "date-fns";
-import { Flow } from "./types";
+import { Flow, getUIStatus } from "./types";
 import { RestoreWorkflowModal } from "./RestoreWorkflowModal";
 import { useFlowExecutions } from "@/src/features/protection-flows/hooks/useProtectionFlows";
 import {
@@ -241,8 +241,9 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
     if (flow.flow_type !== 'replication') return null;
 
     const actions = [];
+    const uiStatus = getUIStatus(flow);
 
-    if (flow.status === 'success' || flow.status === 'warning') {
+    if (uiStatus === 'success' || uiStatus === 'warning') {
       actions.push(
         <Button key="replicate-now" onClick={() => {}} className="gap-2">
           <Play className="h-4 w-4" />
@@ -251,7 +252,7 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
       );
     }
 
-    if (flow.status === 'running') {
+    if (uiStatus === 'running') {
       actions.push(
         <Button key="pause" variant="outline" onClick={() => {}} className="gap-2">
           <Square className="h-4 w-4" />
@@ -260,7 +261,7 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
       );
     }
 
-    if (flow.status === 'success' && flow.progress === 100) {
+    if (uiStatus === 'success' && flow.progress === 100) {
       actions.push(
         <Button key="failover" variant="destructive" onClick={() => {}} className="gap-2">
           <Zap className="h-4 w-4" />
@@ -277,7 +278,7 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
   };
 
   const renderBackupActions = () => {
-    if (flow.type !== 'backup') return null;
+    if (flow.flow_type !== 'backup') return null;
 
     return (
       <div className="flex gap-2">
@@ -306,7 +307,7 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
         <div>
           <div className="flex items-center gap-3">
             <h3 className="text-xl font-semibold text-foreground">{flow.name}</h3>
-            {getStatusBadge(flow.status)}
+            {getStatusBadge(getUIStatus(flow))}
           </div>
           <p className="text-sm text-muted-foreground mt-1">{flow.source} → {flow.destination}</p>
         </div>

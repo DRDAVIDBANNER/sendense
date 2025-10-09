@@ -11,13 +11,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FlowRowProps } from "./types";
+import { FlowRowProps, getUIStatus } from "./types";
 
 export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow }: FlowRowProps) {
   const handleEdit = () => onEdit?.(flow);
   const handleDelete = () => onDelete?.(flow);
   const handleRunNow = () => onRunNow?.(flow);
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'Never';
     try {
       return format(new Date(dateString), 'MMM dd, yyyy HH:mm');
     } catch {
@@ -47,19 +48,19 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
       </td>
       <td className="px-4 py-3">
         <Badge variant="outline" className="capitalize">
-          {flow.type}
+          {flow.flow_type}
         </Badge>
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${
-            flow.status === 'success' ? 'bg-green-500' :
-            flow.status === 'running' ? 'bg-blue-500' :
-            flow.status === 'warning' ? 'bg-yellow-500' :
-            flow.status === 'error' ? 'bg-red-500' :
+            getUIStatus(flow) === 'success' ? 'bg-green-500' :
+            getUIStatus(flow) === 'running' ? 'bg-blue-500' :
+            getUIStatus(flow) === 'warning' ? 'bg-yellow-500' :
+            getUIStatus(flow) === 'error' ? 'bg-red-500' :
             'bg-muted-foreground'
           }`} />
-          <span className="capitalize text-sm">{flow.status}</span>
+          <span className="capitalize text-sm">{getUIStatus(flow)}</span>
         </div>
       </td>
       <td className="px-4 py-3 text-sm text-muted-foreground">

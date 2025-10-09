@@ -29,23 +29,16 @@ export function CreateFlowModal({ isOpen, onClose, onCreate }: CreateFlowModalPr
     e.preventDefault();
 
     // Create a new flow object
-    const newFlow: Omit<Flow, 'id' | 'status' | 'lastRun' | 'progress'> = {
+    const newFlow = {
       name: formData.name,
-      flow_type: formData.type,
-      target_type: 'vm',
+      flow_type: formData.type as 'backup' | 'replication',
+      target_type: 'vm' as const,
       target_id: formData.source || '',
-      source: formData.source,
-      destination: formData.destination,
-      nextRun: formData.nextRun || new Date().toISOString(),
+      repository_id: formData.destination || '',
       enabled: true,
-      execution_count: 0,
-      success_count: 0,
-      failure_count: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
     };
 
-    onCreate(newFlow);
+    onCreate(newFlow as any);
 
     // Reset form and close modal
     setFormData({

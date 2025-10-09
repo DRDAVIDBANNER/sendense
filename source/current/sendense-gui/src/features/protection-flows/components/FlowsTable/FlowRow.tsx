@@ -14,7 +14,8 @@ import {
 import { FlowRowProps } from "../../types";
 
 export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow }: FlowRowProps) {
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'Never';
     try {
       return format(new Date(dateString), 'MMM dd, yyyy HH:mm');
     } catch {
@@ -44,7 +45,7 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
       </td>
       <td className="px-4 py-3">
         <Badge variant="outline" className="capitalize">
-          {flow.type}
+          {flow.flow_type}
         </Badge>
       </td>
       <td className="px-4 py-3">
