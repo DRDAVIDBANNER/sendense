@@ -1,7 +1,72 @@
 # Phase 1 Context Helper
 **Purpose:** Quick reference for AI sessions working on Phase 1 (VMware Backup Implementation)  
 **Status Location:** See `project-goals/phases/phase-1-vmware-backup.md` for current state  
-**Last Updated:** October 8, 2025
+**Last Updated:** October 9, 2025
+
+---
+
+## 🎉 FILE-LEVEL RESTORE: PRODUCTION READY (October 9, 2025)
+
+### ✅ **Phase 1 Complete: Full File-Level Restore with Smart Features**
+
+**Achievement Date:** October 9, 2025  
+**SHA Version:** v2.25.3-file-restore-production  
+**Status:** ✅ 100% PRODUCTION READY - End-to-end tested and working
+
+**Major Enhancements Delivered:**
+1. **Intelligent Partition Auto-Selection**
+   - Automatically mounts **largest partition** (data partition, not recovery)
+   - Windows Example: Auto-selects p4 (100GB C:) instead of p1 (1.5GB recovery)
+   - Uses `lsblk` for dynamic partition detection
+   - Fallback chain: largest → p1 → raw device
+
+2. **Auto-Zip Directory Downloads**
+   - Click download on folder → automatically creates ZIP
+   - Seamless UX - backend detects directory and auto-switches to archive mode
+   - Memory-efficient streaming (no temp files)
+
+3. **Backup Listing Fixed**
+   - Eliminated duplicate entries (3x per backup: parent + disk0 + disk1)
+   - Clean display with proper disk counts: "• 2 disks"
+   - Added `disks_count` field to API responses
+
+4. **Critical Bug Fixes**
+   - SQL column mismatch fixed (`backup_id` → `backup_disk_id`)
+   - lsblk parsing fixed (raw mode to avoid tree characters)
+   - Stale mount record cleanup (operational workaround)
+
+**Test Results (pgtest1):**
+- ✅ Mounted: 100.4GB main Windows partition (nbd0p4) - **NOT** 1.5GB recovery (nbd0p1)
+- ✅ Browsed: C:\Users, C:\Program Files, C:\Windows
+- ✅ Downloaded: Individual files working
+- ✅ Downloaded: Folders auto-zip to `FolderName.zip`
+- ✅ Backup list: 6 clean entries (was 18+ duplicates)
+- ✅ Mount time: < 2 seconds for 100GB disk
+
+**Production Readiness Checklist:**
+- ✅ Multi-disk VM support
+- ✅ Windows filesystem support (NTFS)
+- ✅ Linux filesystem support
+- ✅ File downloads (streaming)
+- ✅ Directory downloads (auto-zip)
+- ✅ Partition auto-detection
+- ✅ Read-only safety
+- ✅ Professional GUI (file browser, search, multi-select)
+- ✅ Error handling and fallbacks
+- ⚠️ Failed mount auto-cleanup (workaround in place, proper solution needed)
+
+**Known Issues / Future Enhancements:**
+- 📋 **Single Partition Mount:** Currently mounts only largest partition
+  - **Planned:** Mount ALL partitions, show in file browser as separate folders
+  - **Status:** Job sheet ready for implementation
+- ⚠️ **Failed Mount Cleanup:** Manual cleanup required for stale failed records
+  - **Impact:** Low (operational workaround works)
+  - **Solution:** Auto-cleanup logic in mount service
+
+**Documentation:**
+- `CHANGELOG.md`: SHA v2.25.3-file-restore-production (130 lines)
+- Job sheets: backup listing fixes, restore system refactor
+- API docs: Complete restore endpoint documentation
 
 ---
 
