@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -433,20 +434,112 @@ func (mm *MountManager) waitForNBDDevice(nbdDevice string) error {
 	}
 }
 
-// detectPartition detects the partition to mount (usually nbdXp1)
+// detectPartition detects the largest partition to mount (auto-selects data partition)
 func (mm *MountManager) detectPartition(nbdDevice string) string {
-	// Most common: first partition (nbdXp1)
-	partition := nbdDevice + "p1"
+	log.WithField("nbd_device", nbdDevice).Debug("🔍 Detecting largest partition for mount")
 	
-	// Check if partition exists
-	if _, err := os.Stat(partition); err == nil {
-		log.WithField("partition", partition).Debug("✅ Detected partition")
-		return partition
+	// Use lsblk to list all partitions with their sizes
+	// Format: NAME SIZE (e.g., "nbd0p1 1.5G", "nbd0p4 100.4G")
+	cmd := exec.Command("lsblk", "-no", "NAME,SIZE", nbdDevice)
+	output, err := cmd.Output()
+	if err != nil {
+		log.WithError(err).Warn("Failed to list partitions, falling back to p1")
+		return nbdDevice + "p1"
 	}
 
-	// Fallback: use the device itself (no partition table)
-	log.WithField("device", nbdDevice).Debug("ℹ️  No partition detected, using device directly")
+	// Parse output to find largest partition
+	var largestPartition string
+	var largestSize int64
+	
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		
+		name := fields[0]
+		sizeStr := fields[1]
+		
+		// Skip the base device (nbd0), only process partitions (nbd0p1, nbd0p2, etc.)
+		if !strings.Contains(name, "p") {
+			continue
+		}
+		
+		// Parse size (convert to bytes for comparison)
+		size := mm.parseSizeToBytes(sizeStr)
+		if size > largestSize {
+			largestSize = size
+			largestPartition = "/dev/" + name
+		}
+	}
+	
+	if largestPartition != "" {
+		log.WithFields(log.Fields{
+			"partition": largestPartition,
+			"size":      mm.formatBytes(largestSize),
+		}).Info("✅ Auto-selected largest partition (likely data partition)")
+		return largestPartition
+	}
+
+	// Fallback: use first partition
+	fallback := nbdDevice + "p1"
+	if _, err := os.Stat(fallback); err == nil {
+		log.WithField("partition", fallback).Debug("✅ Using fallback partition p1")
+		return fallback
+	}
+
+	// Last resort: use the device itself (no partition table)
+	log.WithField("device", nbdDevice).Debug("ℹ️  No partitions detected, using device directly")
 	return nbdDevice
+}
+
+// parseSizeToBytes converts size string (e.g., "1.5G", "100M") to bytes
+func (mm *MountManager) parseSizeToBytes(sizeStr string) int64 {
+	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
+	
+	// Extract numeric value and unit
+	var value float64
+	var unit string
+	
+	for i, c := range sizeStr {
+		if c < '0' || c > '9' {
+			if c != '.' {
+				value, _ = strconv.ParseFloat(sizeStr[:i], 64)
+				unit = sizeStr[i:]
+				break
+			}
+		}
+	}
+	
+	// Convert to bytes
+	multiplier := int64(1)
+	switch unit {
+	case "K", "KB":
+		multiplier = 1024
+	case "M", "MB":
+		multiplier = 1024 * 1024
+	case "G", "GB":
+		multiplier = 1024 * 1024 * 1024
+	case "T", "TB":
+		multiplier = 1024 * 1024 * 1024 * 1024
+	}
+	
+	return int64(value * float64(multiplier))
+}
+
+// formatBytes converts bytes to human-readable format
+func (mm *MountManager) formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGT"[exp])
 }
 
 // detectFilesystem detects the filesystem type
