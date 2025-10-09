@@ -95,7 +95,7 @@ window.open(url, '_blank'); // Browser handles download
 ```
 
 ### 4. Mount Limits
-- **Max 8 concurrent mounts** (NBD device limit)
+- **Max 8 concurrent mounts** (system resource limit)
 - **1 mount per disk** (can't mount same disk twice)
 - **1-hour auto-expiration** (show countdown timer)
 

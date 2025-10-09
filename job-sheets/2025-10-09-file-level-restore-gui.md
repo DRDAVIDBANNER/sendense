@@ -92,7 +92,7 @@ All endpoints tested and operational via `/home/oma_admin/sendense/HANDOVER-GUI-
 **Errors:**
 - `404`: Backup not found or disk_index invalid
 - `409`: Disk already mounted (limit: 1 mount per disk)
-- `503`: No NBD devices available (max 8 concurrent mounts)
+- `503`: No mount slots available (max 8 concurrent mounts)
 
 **Key Logic:**
 - Validates backup exists in `backup_jobs`
@@ -279,8 +279,8 @@ DELETE /api/v1/restore/e4805a6f-8ee7-4f3c-8309-2f12362c7398
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Active       │  │ Total        │  │ NBD Devices  │      │
-│  │ Mounts: 1    │  │ Restores: 47 │  │ Available: 7 │      │
+│  │ Active       │  │ Total        │  │ Available    │      │
+│  │ Mounts: 1    │  │ Restores: 47 │  │ Slots: 7     │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐ │
@@ -324,7 +324,7 @@ DELETE /api/v1/restore/e4805a6f-8ee7-4f3c-8309-2f12362c7398
 #### 1. `/app/restore/page.tsx`
 **Purpose:** Main restore page container  
 **Features:**
-- Statistics cards (Active Mounts, Total Restores, NBD Available)
+- Statistics cards (Active Mounts, Total Restores, Available Slots)
 - Three-step workflow: Select → Mount → Browse → Download
 - Active mounts panel at bottom
 - Responsive layout (stacks on mobile)
@@ -370,7 +370,7 @@ interface BackupSelectorProps {
 **Error Handling:**
 - 404: "Backup not found or disk invalid"
 - 409: "Disk already mounted. Unmount existing mount first."
-- 503: "No NBD devices available (max 8 concurrent mounts)"
+- 503: "Maximum concurrent mounts reached (limit: 8). Please unmount an existing backup first."
 
 ---
 
@@ -702,7 +702,7 @@ hover:bg-primary/90
 - [ ] 12. Verify mount removed from panel
 
 ### Edge Cases
-- [ ] 1. Mount when 8 NBD devices already in use (503 error)
+- [ ] 1. Mount when 8 slots already in use (503 error - show friendly message)
 - [ ] 2. Mount disk that's already mounted (409 error)
 - [ ] 3. Navigate to invalid path (404 error)
 - [ ] 4. Download file that no longer exists

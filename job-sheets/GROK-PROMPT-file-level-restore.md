@@ -165,7 +165,7 @@ const API_BASE = 'http://localhost:8082'; // Direct backend call
 ┌─────────────────────────────────────────────────────────┐
 │ File-Level Restore                                       │
 ├─────────────────────────────────────────────────────────┤
-│ [Active Mounts: 1] [Total Restores: 47] [NBD Free: 7]  │
+│ [Active Mounts: 1] [Total Restores: 47] [Free Slots: 7] │
 ├─────────────────────────────────────────────────────────┤
 │ Step 1: Select VM and Backup                            │
 │ VM: [pgtest1 ▼]  Backup: [Oct 9, 12:57 ▼]             │
