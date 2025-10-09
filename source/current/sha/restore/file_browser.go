@@ -107,17 +107,15 @@ func (fb *FileBrowser) ListFiles(ctx context.Context, req *ListFilesRequest) (*L
 		// ROOT PATH: Show partition folders as virtual directories
 		files = fb.listPartitionFolders(mount, partitionMetadata)
 	} else if len(partitionMetadata) > 0 && strings.HasPrefix(requestPath, "/Partition") {
-		// GUI sent display name like "/Partition 3 (100.4 GB)" - extract partition number
-		// and convert to actual filesystem path "/partition-3"
-		partitionNum := fb.extractPartitionNumber(requestPath)
-		if partitionNum > 0 {
-			actualPath := fmt.Sprintf("/partition-%d", partitionNum)
-			files, err = fb.listFilesInPartition(mount, actualPath, req.Recursive)
-			if err != nil {
-				return nil, fmt.Errorf("failed to list files in partition: %w", err)
-			}
-		} else {
+		// GUI sent display name like "/Partition 3 (100.4 GB)/PerfLogs/..."
+		// Extract partition number and convert to actual filesystem path
+		actualPath := fb.convertDisplayPathToFilesystemPath(requestPath)
+		if actualPath == "" {
 			return nil, fmt.Errorf("invalid partition path: %s", requestPath)
+		}
+		files, err = fb.listFilesInPartition(mount, actualPath, req.Recursive)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list files in partition: %w", err)
 		}
 	} else if strings.HasPrefix(requestPath, "/partition-") {
 		// Direct partition path (for API calls or correct GUI usage)
@@ -551,20 +549,50 @@ func (fb *FileBrowser) formatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGT"[exp])
 }
 
-// extractPartitionNumber extracts partition number from display name
-// Example: "/Partition 3 (100.4 GB)" -> 3
-// Example: "/Partition 1 - New Volume (1.5 GB)" -> 1
-func (fb *FileBrowser) extractPartitionNumber(displayPath string) int {
-	// Remove leading slash
-	displayPath = strings.TrimPrefix(displayPath, "/")
+// convertDisplayPathToFilesystemPath converts GUI display path to actual filesystem path
+// Example: "/Partition 3 (100.4 GB)/PerfLogs/file.txt" -> "/partition-3/PerfLogs/file.txt"
+// Example: "/Partition 1 - New Volume (1.5 GB)" -> "/partition-1"
+func (fb *FileBrowser) convertDisplayPathToFilesystemPath(displayPath string) string {
+	// Split path into segments
+	segments := strings.Split(strings.TrimPrefix(displayPath, "/"), "/")
+	if len(segments) == 0 {
+		return ""
+	}
 
+	// First segment should be the partition display name
+	firstSegment := segments[0]
+	if !strings.HasPrefix(firstSegment, "Partition ") {
+		return ""
+	}
+
+	// Extract partition number from first segment
+	partitionNum := fb.extractPartitionNumber(firstSegment)
+	if partitionNum == 0 {
+		return ""
+	}
+
+	// Build actual filesystem path: /partition-N/rest/of/path
+	actualPath := fmt.Sprintf("/partition-%d", partitionNum)
+	
+	// Append remaining path segments (subdirectories/files)
+	if len(segments) > 1 {
+		actualPath = actualPath + "/" + strings.Join(segments[1:], "/")
+	}
+
+	return actualPath
+}
+
+// extractPartitionNumber extracts partition number from display name
+// Example: "Partition 3 (100.4 GB)" -> 3
+// Example: "Partition 1 - New Volume (1.5 GB)" -> 1
+func (fb *FileBrowser) extractPartitionNumber(displayName string) int {
 	// Extract number after "Partition "
-	if !strings.HasPrefix(displayPath, "Partition ") {
+	if !strings.HasPrefix(displayName, "Partition ") {
 		return 0
 	}
 
 	// Remove "Partition " prefix
-	remaining := strings.TrimPrefix(displayPath, "Partition ")
+	remaining := strings.TrimPrefix(displayName, "Partition ")
 
 	// Extract first number
 	var numStr string
