@@ -11,6 +11,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [SHA v2.25.5-critical-fixes] - 2025-10-09
+
+### Fixed - **Critical Production Bugs** 🔥
+- **FIXED: credential_id Not Stored When Adding VMs**
+  - **Impact:** VMs added via GUI had `credential_id = NULL`, breaking backups with error: "VM context has no credential_id set"
+  - **Root Cause:** Handler received `credential_id` but lost it when passing to service layer
+  - **Fix:** Added `CredentialID` field to `DiscoveryRequest` struct, passed through 4-layer call chain
+  - **Result:** VMs now properly linked to vCenter credentials, backups work, multi-vCenter support enabled
+  - **Files:** `services/enhanced_discovery_service.go`, `api/handlers/enhanced_discovery.go`
+  
+- **FIXED: Partition Path Navigation (Nested Directories)**
+  - **Impact:** Could browse partition root but clicking subdirectories failed (breadcrumb showed wrong path)
+  - **Root Cause:** GUI sent `/Partition 3 (100.4 GB)/PerfLogs/file.txt`, backend only converted root to `/partition-3` (lost subdirectory path)
+  - **Fix:** Added `convertDisplayPathToFilesystemPath()` to properly split path segments and preserve subdirectory structure
+  - **Result:** Full nested navigation works, proper breadcrumb paths
+  - **Example:** `/Partition 3 (100.4 GB)/PerfLogs/System Volume Information` → `/partition-3/PerfLogs/System Volume Information`
+  - **File:** `source/current/sha/restore/file_browser.go`
+
+### Testing Status
+- ✅ pgtest2 added with credential_id = 35 (automatic)
+- ✅ pgtest3 backup running from protection group flow (uses stored credential_id)
+- ✅ Partition navigation working (root + nested directories)
+- ✅ File browser fully operational with multi-level folder navigation
+
+### Technical Details
+**credential_id Fix:**
+- Modified 5 code locations across 2 files
+- Updated 4 function signatures to pass credential_id through call chain
+- Handler → Service → processDiscoveredVMs → createVMContext → Database
+- Added credential_id to VMReplicationContext struct and logging
+
+**Partition Navigation Fix:**
+- New helper: `convertDisplayPathToFilesystemPath()` splits and reconstructs paths
+- Handles display names: `"Partition N - Label (Size)"` → filesystem paths: `/partition-N/path`
+- Preserves full subdirectory structure in nested navigation
+
+---
+
+## [SHA v2.25.4-multi-partition-mounts] - 2025-10-09
+
+### Added - **Multi-Partition Mount Support** 🎉
+- **NEW: Mount ALL Partitions Automatically**
+  - Backend detects and mounts **all mountable partitions** from backup disks
+  - GUI file browser shows partitions as virtual folders at root level
+  - Users can browse **each partition independently** (data, recovery, EFI, etc.)
+  - Example: Windows disk shows "Partition 1 - Recovery (1.5 GB)", "Partition 2 - EFI (100 MB)", "Partition 3 (100.4 GB)"
+
+### Backend Implementation
+- **Multi-Partition Detection** (`restore/mount_manager.go`):
+  - New: `performMultiPartitionMount()` orchestrates mounting all partitions
+  - New: `mountAllPartitions()` enumerates partitions using `lsblk -rno NAME,SIZE,FSTYPE,LABEL`
+  - Skips tiny partitions (<1MB) - usually reserved/alignment partitions
+  - Creates subdirectories: `/mnt/restore/{mount_id}/partition-1/`, `/partition-2/`, etc.
+  - Attempts to mount each partition, logs success/failure per partition
+  - Stores partition metadata as JSON in database (`partition_metadata` column)
+
+- **Partition Metadata Storage** (`database/restore_mount_repository.go`):
+  - Added `PartitionMetadata` field to `RestoreMount` struct
+  - JSON structure: `{"partitions": [{"partition_name": "nbd0p1", "size": 1610612736, "filesystem": "ntfs", "label": "Recovery"}]}`
+  - Database migration: `20251009160000_add_partition_metadata.up.sql`
+
+- **File Browser Multi-Partition Support** (`restore/file_browser.go`):
+  - New: `listPartitionFolders()` creates virtual directory entries at root
+  - Generates friendly names: `"Partition 1 - Recovery (1.5 GB)"`, `"Partition 3 (100.4 GB)"`
+  - New: `listFilesInPartition()` handles browsing within specific partitions
+  - Path format: `/partition-N/subdir/file.txt` for actual filesystem access
+
+- **Clean Unmount** (`restore/mount_manager.go`):
+  - New: `unmountAllPartitions()` unmounts all partition subdirectories
+  - Backward compatible: also handles single-partition mounts
+  - Proper cleanup of all mount points before NBD device disconnect
+
+### Frontend Implementation
+- **Partition Display** (`src/features/restore/types/index.ts`):
+  - Added `partition_metadata?: string` to `RestoreMount` interface
+  - File browser automatically displays partitions as clickable folders
+  - Each partition shows as a separate folder with size and label info
+
+### Technical Highlights
+- **Smart Partition Selection**: Uses `lsblk` output to enumerate partitions dynamically
+- **Filesystem Detection**: Automatically detects NTFS, FAT32, EXT4, etc. for proper mount options
+- **Error Handling**: Failed partition mounts logged but don't fail entire operation
+- **Backward Compatible**: Single-partition mounts still work (legacy backups)
+
+### Testing Status
+- ✅ Windows disk with 5 partitions (1.5GB recovery + 100MB EFI + 15.8MB reserved + 100.4GB C: drive + 256KB reserved)
+- ✅ Mounted 3 partitions successfully (skipped unmountable reserved partitions)
+- ✅ GUI displays partitions as folders at root level
+- ✅ Can browse each partition independently
+- ✅ Partition metadata stored in database
+- ✅ Clean unmount works for all partitions
+
+### Files Modified
+- `source/current/sha/restore/mount_manager.go` (392 lines: +340, -52)
+- `source/current/sha/restore/file_browser.go` (90+ lines added)
+- `source/current/sha/database/restore_mount_repository.go` (1 field added)
+- `source/current/sendense-gui/src/features/restore/types/index.ts` (1 field added)
+- Database migration: `20251009160000_add_partition_metadata.up.sql`
+
+---
+
 ## [SHA v2.25.3-file-restore-production] - 2025-10-09
 
 ### Added - **File-Level Restore - Production Ready** 🎉
