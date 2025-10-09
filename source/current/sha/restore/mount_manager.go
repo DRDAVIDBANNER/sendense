@@ -440,7 +440,8 @@ func (mm *MountManager) detectPartition(nbdDevice string) string {
 	
 	// Use lsblk to list all partitions with their sizes
 	// Format: NAME SIZE (e.g., "nbd0p1 1.5G", "nbd0p4 100.4G")
-	cmd := exec.Command("lsblk", "-no", "NAME,SIZE", nbdDevice)
+	// -r flag: raw output (no tree characters like ├─ └─)
+	cmd := exec.Command("lsblk", "-rno", "NAME,SIZE", nbdDevice)
 	output, err := cmd.Output()
 	if err != nil {
 		log.WithError(err).Warn("Failed to list partitions, falling back to p1")
