@@ -1,27 +1,9 @@
-# GUI Integration Handover: Backup & Restore Flows
+# Backend API Integration Guide: Backup & Restore
 
 **Date:** October 8, 2025  
 **Backend Status:** ✅ PRODUCTION READY  
-**Purpose:** Handover document for GUI integration of backup and restore functionality  
-**Target Session:** GUI Developer (Sonnet)  
+**Purpose:** Technical API reference for integrating backup and restore functionality  
 **Backend Binary:** sendense-hub-v2.24.0-restore-v2-refactor
-
----
-
-## 🎯 MISSION
-
-Integrate backup and restore functionality into the Sendense GUI (React/Vue/etc.). Backend APIs are production-ready and tested. Your job is to create intuitive UI flows for:
-
-1. **VM Backup Management**
-   - Create VM backups (full + incremental)
-   - View backup history and chains
-   - Monitor backup progress
-
-2. **File-Level Restore**
-   - Mount backup disks
-   - Browse files (Windows Explorer-style)
-   - Download individual files or folders
-   - Unmount backups
 
 ---
 
@@ -48,7 +30,7 @@ curl http://localhost:8082/api/v1/health
 
 ---
 
-## 📋 BACKEND ARCHITECTURE OVERVIEW
+## 📋 BACKEND ARCHITECTURE
 
 ### Multi-Disk Backup Architecture (v2.16.0+)
 
@@ -99,36 +81,49 @@ restore_mounts (file-level restore)
 
 ## 🔑 AUTHENTICATION
 
-```javascript
-// Login
-POST /api/v1/auth/login
+**Endpoint:** `POST /api/v1/auth/login`
+
+**Backend Logic:**
+- Handler: `api/handlers/auth_handlers.go:Login()`
+- Validates username/password against database
+- Generates JWT token with 24-hour expiration
+- Returns token for use in subsequent API calls
+
+**Request:**
+```json
 {
   "username": "admin",
   "password": "password"
 }
+```
 
-// Response:
+**Response:**
+```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "expires_at": "2025-10-09T00:00:00Z"
 }
+```
 
-// Use token in all subsequent requests:
-headers: {
-  'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-  'Content-Type': 'application/json'
-}
+**Usage:** Include token in all subsequent requests:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 ---
 
-## 💾 BACKUP API FLOW
+## 💾 BACKUP API ENDPOINTS
 
 ### 1. List VMs Available for Backup
 
-```bash
-GET /api/v1/vm-contexts
-```
+**Endpoint:** `GET /api/v1/vm-contexts`
+
+**Backend Logic:**
+- Handler: `api/handlers/vm_context_handlers.go:ListVMContexts()`
+- Queries: `vm_replication_contexts` table
+- Filters: Returns all VMs with auto_added=true
+- Joins: Includes group memberships
+- Returns: VM metadata (CPU, memory, OS, power state)
 
 **Response:**
 ```json
@@ -152,15 +147,17 @@ GET /api/v1/vm-contexts
 }
 ```
 
-**GUI Usage:** Display VM list in table/cards with backup button
-
 ---
 
-### 2. Get VM Disks (Optional - for info display)
+### 2. Get VM Disks
 
-```bash
-GET /api/v1/vm-contexts/{vm_name}/disks
-```
+**Endpoint:** `GET /api/v1/vm-contexts/{vm_name}/disks`
+
+**Backend Logic:**
+- Handler: `api/handlers/vm_context_handlers.go:GetVMDisks()`
+- Queries: `vm_disks` table
+- Filters: `WHERE vm_name = ?`
+- Returns: Disk metadata from VMware discovery
 
 **Response:**
 ```json
@@ -188,27 +185,40 @@ GET /api/v1/vm-contexts/{vm_name}/disks
 }
 ```
 
-**GUI Usage:** Show disk info before backup (optional)
-
 ---
 
 ### 3. Start VM Backup
 
-```bash
-POST /api/v1/backups
-Content-Type: application/json
+**Endpoint:** `POST /api/v1/backups`
 
+**Backend Logic:**
+- Handler: `api/handlers/backup_handlers.go:StartBackup()`
+- Service: `backup/backup_service.go:StartVMBackup()`
+- Process:
+  1. Validates VM exists in `vm_replication_contexts`
+  2. Queries `vm_disks` to get all disks for VM
+  3. Creates `backup_jobs` parent record
+  4. Creates `backup_disks` child records (one per disk)
+  5. For each disk:
+     - Creates QCOW2 file (full) or backing chain (incremental)
+     - Starts qemu-nbd process on unique port
+     - Records NBD port, export name, PID
+  6. Calls VMA to start VMware NBD export via SSH tunnel
+  7. Returns multi-disk job details
+
+**Database Writes:**
+- `backup_jobs` - Parent job record
+- `backup_disks` - Per-disk records with QCOW2 paths
+- `backup_chains` - Chain metadata (if first backup)
+
+**Request:**
+```json
 {
   "vm_name": "pgtest1",
   "repository_id": "1",
   "backup_type": "full"
 }
 ```
-
-**Request Fields:**
-- `vm_name` (required): VM to backup
-- `repository_id` (required): Where to store backup
-- `backup_type` (required): "full" or "incremental"
 
 **Response:**
 ```json
@@ -222,7 +232,9 @@ Content-Type: application/json
       "disk_index": 0,
       "vmware_disk_key": 2000,
       "nbd_port": 10104,
+      "nbd_export_name": "pgtest1-disk-2000",
       "qcow2_path": "/backup/repository/ctx-backup-pgtest1.../disk-0/backup-pgtest1-disk0-20251008-192431.qcow2",
+      "qemu_nbd_pid": 3956432,
       "status": "qemu_started"
     },
     {
@@ -230,29 +242,33 @@ Content-Type: application/json
       "disk_index": 1,
       "vmware_disk_key": 2001,
       "nbd_port": 10105,
+      "nbd_export_name": "pgtest1-disk-2001",
       "qcow2_path": "/backup/repository/ctx-backup-pgtest1.../disk-1/backup-pgtest1-disk1-20251008-192431.qcow2",
+      "qemu_nbd_pid": 3956438,
       "status": "qemu_started"
     }
   ],
+  "nbd_targets_string": "2000:nbd://127.0.0.1:10104/pgtest1-disk-2000,2001:nbd://127.0.0.1:10105/pgtest1-disk-2001",
   "backup_type": "full",
+  "repository_id": "1",
   "status": "started",
   "created_at": "2025-10-08T19:24:31+01:00"
 }
 ```
 
-**GUI Usage:** 
-- Show "Backup Started" notification
-- Store `backup_id` for progress monitoring
-- Display per-disk status
-
 ---
 
 ### 4. Monitor Backup Progress
 
-**Option A: Polling (Simple)**
-```bash
-GET /api/v1/backups/{backup_id}
-```
+**Endpoint:** `GET /api/v1/backups/{backup_id}`
+
+**Backend Logic:**
+- Handler: `api/handlers/backup_handlers.go:GetBackup()`
+- Queries:
+  1. `backup_jobs` - Parent job status
+  2. `backup_disks` - Per-disk status and progress
+- Aggregates: Total bytes transferred, progress percentage
+- Status Flow: `started` → `in_progress` → `completed` or `failed`
 
 **Response:**
 ```json
@@ -266,34 +282,84 @@ GET /api/v1/backups/{backup_id}
       "disk_index": 0,
       "status": "completed",
       "size_gb": 102,
-      "qcow2_path": "/backup/repository/.../disk-0/..."
+      "qcow2_path": "/backup/repository/.../disk-0/...",
+      "bytes_transferred": 109521666048,
+      "progress_percent": 100
     },
     {
       "disk_index": 1,
       "status": "in_progress",
-      "size_gb": 5
+      "size_gb": 5,
+      "bytes_transferred": 2684354560,
+      "progress_percent": 50
     }
   ],
-  "progress_percent": 50,
-  "bytes_transferred": 54760833024,
-  "total_bytes": 109521666048,
+  "progress_percent": 75,
+  "bytes_transferred": 112206020608,
+  "total_bytes": 114806120448,
   "created_at": "2025-10-08T19:24:31Z",
   "completed_at": null
 }
 ```
 
-**GUI Usage:**
-- Poll every 2-5 seconds
-- Show progress bar
-- Display per-disk status
-- Show "Completed" when status = "completed"
+**Polling Recommendation:** Poll every 2-5 seconds during backup
 
 ---
 
-### 5. List Backup History
+### 5. Complete Backup (Internal)
 
-```bash
-GET /api/v1/backups?vm_name=pgtest1
+**Endpoint:** `POST /api/v1/backups/{backup_id}/complete`
+
+**Backend Logic:**
+- Handler: `api/handlers/backup_handlers.go:CompleteBackup()`
+- Service: `backup/completion_service.go:CompleteBackup()`
+- Called by: VMA after VMware NBD export completes
+- Process:
+  1. Validates backup exists and is in_progress
+  2. Updates `backup_disks` status to "completed"
+  3. Records disk_change_id from VMware CBT
+  4. Stops qemu-nbd processes
+  5. Updates `backup_jobs` status to "completed"
+  6. Updates `backup_chains` total_backups count
+  7. Triggers cleanup of old backups (retention policy)
+
+**Database Writes:**
+- `backup_disks.status` = "completed"
+- `backup_disks.disk_change_id` = VMware CBT ID
+- `backup_jobs.status` = "completed"
+- `backup_chains.total_backups` incremented
+
+---
+
+### 6. List Backup History
+
+**Endpoint:** `GET /api/v1/backups?vm_name={vm_name}`
+
+**Backend Logic:**
+- Handler: `api/handlers/backup_handlers.go:ListBackups()`
+- Queries:
+  1. `backup_jobs` - Filter by VM name
+  2. `backup_disks` - Aggregate size per job
+- Joins: Counts disk_count per backup
+- Sorting: Newest first (ORDER BY created_at DESC)
+- Filtering: Optional status filter
+
+**Query:**
+```sql
+SELECT 
+  bj.id AS backup_id,
+  bj.vm_name,
+  bj.backup_type,
+  bj.status,
+  COUNT(bd.id) AS disk_count,
+  SUM(bd.size_gb) AS total_size_gb,
+  bj.created_at,
+  bj.completed_at
+FROM backup_jobs bj
+LEFT JOIN backup_disks bd ON bd.backup_job_id = bj.id
+WHERE bj.vm_name = ?
+GROUP BY bj.id
+ORDER BY bj.created_at DESC
 ```
 
 **Response:**
@@ -325,19 +391,20 @@ GET /api/v1/backups?vm_name=pgtest1
 }
 ```
 
-**GUI Usage:**
-- Display backup history table
-- Show backup type badges (Full/Incremental)
-- Show size and duration
-- Add "Restore" button per backup
-
 ---
 
-### 6. Get Backup Chain (Recovery Points)
+### 7. Get Backup Chain
 
-```bash
-GET /api/v1/backups/chain?vm_name=pgtest1&repository_id=1
-```
+**Endpoint:** `GET /api/v1/backups/chain?vm_name={vm_name}&repository_id={repository_id}`
+
+**Backend Logic:**
+- Handler: `api/handlers/backup_handlers.go:GetBackupChain()`
+- Queries:
+  1. `backup_chains` - Get chain metadata
+  2. `backup_jobs` - Get all backups in chain
+  3. `backup_disks` - Aggregate sizes
+- Returns: Ordered list from full → incrementals
+- Links: Parent-child relationships via parent_backup_id
 
 **Response:**
 ```json
@@ -351,6 +418,7 @@ GET /api/v1/backups/chain?vm_name=pgtest1&repository_id=1
       "sequence_number": 1,
       "created_at": "2025-10-08T19:24:31Z",
       "size_gb": 107,
+      "parent_backup_id": null,
       "is_restorable": true
     },
     {
@@ -368,32 +436,49 @@ GET /api/v1/backups/chain?vm_name=pgtest1&repository_id=1
 }
 ```
 
-**GUI Usage:**
-- Display recovery point timeline
-- Show full → incremental chain
-- Visual indicator of backup type
-
 ---
 
-## 🔄 FILE-LEVEL RESTORE API FLOW
+## 🔄 FILE-LEVEL RESTORE API ENDPOINTS
 
 ### 1. Mount Backup Disk
 
-```bash
-POST /api/v1/restore/mount
-Content-Type: application/json
+**Endpoint:** `POST /api/v1/restore/mount`
 
+**Backend Logic:**
+- Handler: `api/handlers/restore_handlers.go:MountBackup()`
+- Service: `restore/mount_manager.go:MountBackup()`
+- Process:
+  1. Validates backup_id exists in `backup_jobs`
+  2. Queries `backup_disks` for QCOW2 path:
+     ```sql
+     SELECT id, qcow2_path, status, disk_index
+     FROM backup_disks
+     WHERE backup_job_id = ? AND disk_index = ? AND status = 'completed'
+     ```
+  3. Checks for existing mount (one mount per disk)
+  4. Allocates NBD device from pool (/dev/nbd0-7)
+  5. Starts qemu-nbd with read-only flag:
+     ```bash
+     qemu-nbd --read-only --format=qcow2 --connect=/dev/nbd0 /path/to/backup.qcow2
+     ```
+  6. Detects filesystem type (ntfs, ext4, xfs, etc.)
+  7. Mounts filesystem read-only:
+     ```bash
+     mount -o ro /dev/nbd0p1 /mnt/sendense/restore/{mount_id}
+     ```
+  8. Creates `restore_mounts` record with 1-hour expiration
+  9. Returns mount details
+
+**Database Writes:**
+- `restore_mounts` - New record with FK to `backup_disks.id`
+
+**Request:**
+```json
 {
   "backup_id": "backup-pgtest1-1759947871",
   "disk_index": 0
 }
 ```
-
-**Request Fields:**
-- `backup_id` (required): Backup job ID from backup history
-- `disk_index` (required): Which disk to mount (0, 1, 2...)
-  - For single-disk VMs: always 0
-  - For multi-disk VMs: user selects which disk
 
 **Response:**
 ```json
@@ -411,86 +496,39 @@ Content-Type: application/json
 }
 ```
 
-**GUI Usage:**
-- Show "Mounting backup..." loader
-- Store `mount_id` for file browsing
-- Show expiration warning (1 hour auto-cleanup)
-- Display filesystem type
-
-**Error Handling:**
-```json
-{
-  "error": "disk not found: backup_id=backup-xxx, disk_index=5"
-}
-```
+**Error Cases:**
+- `404`: Backup not found or disk_index invalid
+- `409`: Disk already mounted
+- `503`: No NBD devices available (max 8 restore mounts)
 
 ---
 
-### 2. Browse Files (Root Directory)
+### 2. Browse Files
 
+**Endpoint:** `GET /api/v1/restore/{mount_id}/files?path={path}`
+
+**Backend Logic:**
+- Handler: `api/handlers/restore_handlers.go:ListFiles()`
+- Service: `restore/file_browser.go:ListFiles()`
+- Process:
+  1. Validates mount_id exists and is active
+  2. Validates path is within mount root (security)
+  3. Updates last_accessed_at timestamp
+  4. Reads directory using `ioutil.ReadDir()`
+  5. For each entry:
+     - Gets file info (size, modified time, mode)
+     - Determines type (file vs directory)
+     - Checks for symlinks
+  6. Returns sorted list (directories first)
+
+**Security:**
+- Path traversal protection (blocks ../ escapes)
+- Read-only access enforced
+- Validates all paths against mount root
+
+**Request:**
 ```bash
-GET /api/v1/restore/{mount_id}/files?path=/
-```
-
-**Response:**
-```json
-{
-  "mount_id": "e4805a6f-8ee7-4f3c-8309-2f12362c7398",
-  "path": "/",
-  "files": [
-    {
-      "name": "$RECYCLE.BIN",
-      "path": "/$RECYCLE.BIN",
-      "type": "directory",
-      "size": 0,
-      "mode": "0777",
-      "modified_time": "2024-01-29T11:49:24.0654245Z",
-      "is_symlink": false
-    },
-    {
-      "name": "Recovery",
-      "path": "/Recovery",
-      "type": "directory",
-      "size": 0,
-      "mode": "0777",
-      "modified_time": "2024-01-29T19:35:50.6318693Z",
-      "is_symlink": false
-    },
-    {
-      "name": "Windows",
-      "path": "/Windows",
-      "type": "directory",
-      "size": 0,
-      "mode": "0777",
-      "modified_time": "2025-09-02T06:21:20Z",
-      "is_symlink": false
-    }
-  ],
-  "total_count": 3
-}
-```
-
-**File Object Fields:**
-- `name`: Display name
-- `path`: Full path (use for navigation/download)
-- `type`: "file" or "directory" (for icon selection)
-- `size`: File size in bytes (0 for directories)
-- `modified_time`: ISO 8601 timestamp
-- `is_symlink`: Boolean
-
-**GUI Usage:**
-- Display as table or list
-- Show folder icon for type="directory"
-- Show file icon for type="file"
-- Click folder → Browse subdirectory
-- Click file → Download file
-
----
-
-### 3. Navigate into Subdirectory
-
-```bash
-GET /api/v1/restore/{mount_id}/files?path=/Recovery/WindowsRE
+GET /api/v1/restore/e4805a6f-8ee7-4f3c-8309-2f12362c7398/files?path=/Recovery/WindowsRE
 ```
 
 **Response:**
@@ -531,79 +569,80 @@ GET /api/v1/restore/{mount_id}/files?path=/Recovery/WindowsRE
 }
 ```
 
-**GUI Usage:**
-- Show breadcrumb navigation (/ → Recovery → WindowsRE)
-- Back button navigates to parent path
-- Double-click folder navigates deeper
-
 ---
 
-### 4. Download Individual File
+### 3. Download File
 
-```bash
-GET /api/v1/restore/{mount_id}/download?path=/Recovery/WindowsRE/ReAgent.xml
-```
+**Endpoint:** `GET /api/v1/restore/{mount_id}/download?path={path}`
 
-**Response:** File stream with headers
+**Backend Logic:**
+- Handler: `api/handlers/restore_handlers.go:DownloadFile()`
+- Service: `restore/file_downloader.go:DownloadFile()`
+- Process:
+  1. Validates mount_id and path
+  2. Verifies path points to file (not directory)
+  3. Updates last_accessed_at timestamp
+  4. Opens file for reading
+  5. Detects MIME type from extension
+  6. Sets response headers:
+     - Content-Type
+     - Content-Disposition: attachment
+     - Content-Length
+  7. Streams file to client (http.ServeContent)
+
+**Response Headers:**
 ```
 Content-Type: application/xml
 Content-Disposition: attachment; filename="ReAgent.xml"
 Content-Length: 1129
 ```
 
-**GUI Usage:**
-```javascript
-// JavaScript example
-const downloadFile = async (mountId, filePath, fileName) => {
-  const response = await fetch(
-    `/api/v1/restore/${mountId}/download?path=${encodeURIComponent(filePath)}`,
-    {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    }
-  );
-  
-  const blob = await response.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  window.URL.revokeObjectURL(url);
-};
-```
+**Response Body:** File stream
 
 ---
 
-### 5. Download Directory as Archive
+### 4. Download Directory
 
-```bash
-GET /api/v1/restore/{mount_id}/download-directory?path=/Recovery&format=zip
-```
+**Endpoint:** `GET /api/v1/restore/{mount_id}/download-directory?path={path}&format={format}`
+
+**Backend Logic:**
+- Handler: `api/handlers/restore_handlers.go:DownloadDirectory()`
+- Service: `restore/file_downloader.go:DownloadDirectory()`
+- Process:
+  1. Validates mount_id and path
+  2. Verifies path points to directory
+  3. Updates last_accessed_at timestamp
+  4. Creates archive (ZIP or TAR.GZ):
+     - ZIP: Uses `archive/zip` package
+     - TAR.GZ: Uses `archive/tar` + `compress/gzip`
+  5. Walks directory tree recursively
+  6. Adds each file/folder to archive
+  7. Streams archive to client
 
 **Query Params:**
 - `path` (required): Directory path
 - `format` (optional): "zip" or "tar.gz" (default: "zip")
 
-**Response:** ZIP/TAR.GZ archive stream
+**Response Headers:**
 ```
 Content-Type: application/zip
 Content-Disposition: attachment; filename="Recovery.zip"
+Transfer-Encoding: chunked
 ```
 
-**GUI Usage:**
-- Show "Download Folder" button on directories
-- Format selector (ZIP/TAR.GZ)
-- Progress indicator for large folders
+**Response Body:** Archive stream
 
 ---
 
-### 6. List Active Mounts
+### 5. List Active Mounts
 
-```bash
-GET /api/v1/restore/mounts
-```
+**Endpoint:** `GET /api/v1/restore/mounts`
+
+**Backend Logic:**
+- Handler: `api/handlers/restore_handlers.go:ListMounts()`
+- Service: `restore/mount_manager.go:ListMounts()`
+- Queries: `restore_mounts` WHERE status IN ('mounting', 'mounted')
+- Returns: All active mounts with expiration times
 
 **Response:**
 ```json
@@ -617,25 +656,36 @@ GET /api/v1/restore/mounts
       "filesystem_type": "ntfs",
       "status": "mounted",
       "created_at": "2025-10-08T21:19:37+01:00",
-      "expires_at": "2025-10-08T22:19:37+01:00"
+      "expires_at": "2025-10-08T22:19:37+01:00",
+      "last_accessed_at": "2025-10-08T21:25:12+01:00"
     }
   ],
   "count": 1
 }
 ```
 
-**GUI Usage:**
-- Show active mounts in sidebar
-- Display countdown timer to expiration
-- "Browse Files" button per mount
-
 ---
 
-### 7. Unmount Backup
+### 6. Unmount Backup
 
-```bash
-DELETE /api/v1/restore/{mount_id}
-```
+**Endpoint:** `DELETE /api/v1/restore/{mount_id}`
+
+**Backend Logic:**
+- Handler: `api/handlers/restore_handlers.go:UnmountBackup()`
+- Service: `restore/mount_manager.go:UnmountBackup()`
+- Process:
+  1. Validates mount_id exists
+  2. Unmounts filesystem:
+     ```bash
+     umount /mnt/sendense/restore/{mount_id}
+     ```
+  3. Disconnects qemu-nbd:
+     ```bash
+     qemu-nbd --disconnect /dev/nbd0
+     ```
+  4. Removes mount directory
+  5. Deletes `restore_mounts` record
+  6. Releases NBD device back to pool
 
 **Response:**
 ```json
@@ -645,134 +695,36 @@ DELETE /api/v1/restore/{mount_id}
 }
 ```
 
-**GUI Usage:**
-- "Close" button in file browser
-- Auto-unmount after user closes browser
-- Show "Unmounting..." loader
-
 ---
 
-## 🎨 GUI DESIGN RECOMMENDATIONS
+### 7. Automatic Cleanup (Background Service)
 
-### Backup Flow
+**Service:** `restore/cleanup_service.go`
 
-**1. VM List Page**
-```
-┌─────────────────────────────────────────┐
-│  Virtual Machines                       │
-├─────────────────────────────────────────┤
-│  Search: [__________] [+ Discover VMs]  │
-│                                          │
-│  ┌───────────────────────────────────┐  │
-│  │ 🖥️  pgtest1                        │  │
-│  │ Status: Ready                      │  │
-│  │ 2 CPU | 4GB RAM | 2 Disks         │  │
-│  │ Last Backup: 2 hours ago           │  │
-│  │ [Backup Now] [View Backups] [...]  │  │
-│  └───────────────────────────────────┘  │
-│                                          │
-│  ┌───────────────────────────────────┐  │
-│  │ 🖥️  web-server-01                  │  │
-│  │ Status: Ready                      │  │
-│  │ [Backup Now] [View Backups]        │  │
-│  └───────────────────────────────────┘  │
-└─────────────────────────────────────────┘
-```
+**Backend Logic:**
+- Runs every 5 minutes
+- Process:
+  1. Queries `restore_mounts` WHERE expires_at < NOW()
+  2. For each expired mount:
+     - Unmounts filesystem
+     - Disconnects qemu-nbd
+     - Deletes database record
+  3. Also cleans mounts idle > 1 hour (last_accessed_at)
+  4. Logs cleanup actions
 
-**2. Backup Wizard**
-```
-┌─────────────────────────────────────────┐
-│  Create Backup: pgtest1                 │
-├─────────────────────────────────────────┤
-│                                          │
-│  Backup Type:                            │
-│  ◉ Full Backup                           │
-│  ○ Incremental Backup                    │
-│                                          │
-│  Repository: [Dropdown: Repository 1 ▼] │
-│                                          │
-│  Disks to backup:                        │
-│  ☑ Disk 0 - Hard disk 1 (102 GB)        │
-│  ☑ Disk 1 - Hard disk 2 (5 GB)          │
-│                                          │
-│  Total Size: 107 GB                      │
-│                                          │
-│  [Cancel] [Start Backup]                 │
-└─────────────────────────────────────────┘
-```
+**Monitoring Endpoint:** `GET /api/v1/restore/cleanup-status`
 
-**3. Backup Progress**
-```
-┌─────────────────────────────────────────┐
-│  Backup in Progress: pgtest1            │
-├─────────────────────────────────────────┤
-│                                          │
-│  Overall Progress:                       │
-│  ████████████░░░░░░░░░░░░░░ 50%         │
-│  54 GB / 107 GB transferred              │
-│                                          │
-│  Disk 0 (102 GB): ████████████ Complete │
-│  Disk 1 (5 GB):   ████░░░░░░░░ 40%      │
-│                                          │
-│  Estimated Time: 5 minutes               │
-│                                          │
-│  [Cancel Backup]                         │
-└─────────────────────────────────────────┘
-```
-
-**4. Backup History**
-```
-┌─────────────────────────────────────────┐
-│  Backup History: pgtest1                │
-├─────────────────────────────────────────┤
-│  Date         Type    Size    Status    │
-│  ─────────────────────────────────────  │
-│  Oct 8 19:24  Full    107GB   ✓ [Restore]│
-│  Oct 8 06:33  Incr    55MB    ✓ [Restore]│
-│  Oct 7 12:15  Full    107GB   ✓ [Restore]│
-│  Oct 6 20:34  Full    107GB   ✓ [Restore]│
-│                                          │
-│  Total: 321 GB across 4 backups          │
-└─────────────────────────────────────────┘
-```
-
-### Restore Flow
-
-**1. Restore Options Modal**
-```
-┌─────────────────────────────────────────┐
-│  Restore Options                        │
-├─────────────────────────────────────────┤
-│                                          │
-│  Select disk to restore:                 │
-│  ◉ Disk 0 - Hard disk 1 (102 GB)        │
-│  ○ Disk 1 - Hard disk 2 (5 GB)          │
-│                                          │
-│  Restore type:                           │
-│  ◉ Browse & Download Files               │
-│  ○ Full VM Restore (future)              │
-│                                          │
-│  [Cancel] [Continue]                     │
-└─────────────────────────────────────────┘
-```
-
-**2. File Browser**
-```
-┌─────────────────────────────────────────┐
-│  File Browser - pgtest1 (Disk 0)       │
-│  Mounted: /dev/nbd0 | Expires: 52 min  │
-├─────────────────────────────────────────┤
-│  Path: / › Recovery › WindowsRE         │
-│  [⬆ Up] [🏠 Root] [⟲ Refresh] [✕ Close]│
-├─────────────────────────────────────────┤
-│  Name            Size      Modified     │
-│  ───────────────────────────────────── │
-│  📄 ReAgent.xml   1 KB     Sep 2 2025   │
-│  📄 boot.sdi      3 MB     May 8 2021   │
-│  📄 winre.wim     505 MB   Jan 29 2024  │
-│                                          │
-│  [Download Selected] [Download Folder]   │
-└─────────────────────────────────────────┘
+**Response:**
+```json
+{
+  "running": true,
+  "cleanup_interval": "5m",
+  "idle_timeout": "1h",
+  "active_mount_count": 1,
+  "expired_mount_count": 0,
+  "last_cleanup": "2025-10-08T21:20:00+01:00",
+  "total_cleanups": 15
+}
 ```
 
 ---
@@ -783,38 +735,44 @@ DELETE /api/v1/restore/{mount_id}
 - **VM Name:** pgtest1
 - **Disks:** 2 (102GB + 5GB)
 - **OS:** Windows Server 2022
-- **Last Backup:** backup-pgtest1-1759947871
+- **Backup IDs:**
+  - Full: `backup-pgtest1-1759947871`
+  - Incremental: `backup-pgtest1-1759901593`
 
-### Test Backup IDs
+### Quick Test Commands
+
 ```bash
-# Full backup (multi-disk)
-backup-pgtest1-1759947871
-
-# Incremental backup
-backup-pgtest1-1759901593
-```
-
-### Test API Calls
-```bash
-# List VMs
+# 1. List VMs
 curl http://localhost:8082/api/v1/vm-contexts
 
-# Start backup
+# 2. Start backup
 curl -X POST http://localhost:8082/api/v1/backups \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"vm_name":"pgtest1","repository_id":"1","backup_type":"full"}'
 
-# Mount for restore
+# 3. Check progress
+curl http://localhost:8082/api/v1/backups/backup-pgtest1-1759947871 \
+  -H "Authorization: Bearer $TOKEN"
+
+# 4. Mount for restore
 curl -X POST http://localhost:8082/api/v1/restore/mount \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"backup_id":"backup-pgtest1-1759947871","disk_index":0}'
 
-# Browse files
-curl "http://localhost:8082/api/v1/restore/{mount_id}/files?path=/"
+# 5. Browse files
+curl "http://localhost:8082/api/v1/restore/$MOUNT_ID/files?path=/" \
+  -H "Authorization: Bearer $TOKEN"
 
-# Download file
-curl "http://localhost:8082/api/v1/restore/{mount_id}/download?path=/Recovery/WindowsRE/ReAgent.xml" \
+# 6. Download file
+curl "http://localhost:8082/api/v1/restore/$MOUNT_ID/download?path=/Recovery/WindowsRE/ReAgent.xml" \
+  -H "Authorization: Bearer $TOKEN" \
   -o ReAgent.xml
+
+# 7. Unmount
+curl -X DELETE "http://localhost:8082/api/v1/restore/$MOUNT_ID" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
@@ -824,113 +782,92 @@ curl "http://localhost:8082/api/v1/restore/{mount_id}/download?path=/Recovery/Wi
 ### Multi-Disk Handling
 - **Backup:** Always backs up ALL disks together (VM-level consistency)
 - **Restore:** User selects which disk to mount (disk_index: 0, 1, 2...)
-- **GUI:** If VM has >1 disk, show disk selector before mounting
+- **Logic:** Query `vm_disks` to get disk count, show selector if >1 disk
 
 ### Automatic Cleanup
 - **Restore Mounts:** Auto-unmount after 1 hour idle
-- **GUI:** Show countdown timer, warn user before expiration
-- **Recommendation:** Implement activity tracking (keep mount alive while browsing)
+- **Recommendation:** Update `last_accessed_at` on every file browse/download
+- **Expiration:** Show countdown timer to user
 
 ### Error Handling
-- **Network Errors:** Show user-friendly message, retry button
-- **404 Not Found:** "Backup not found" message
-- **500 Server Error:** "Server error, please try again"
-- **Expired Mounts:** "Mount expired, please remount backup"
+- **404 Not Found:** Backup/mount doesn't exist
+- **409 Conflict:** Disk already mounted
+- **500 Server Error:** Internal error (qemu-nbd failure, filesystem issue)
+- **503 Service Unavailable:** No NBD devices available (max 8 concurrent mounts)
 
 ### Performance
-- **File Browsing:** Fast (local filesystem access)
-- **File Download:** Speed depends on file size, show progress bar
-- **Large Folders:** Warn user before downloading >1GB folders
+- **File Browsing:** Fast (local filesystem access via mount)
+- **File Download:** Speed = disk I/O speed
+- **Large Folders:** Warn user before downloading >1GB folders as archives
 
 ### Security
 - **Read-Only Mounts:** Users cannot modify backup files
 - **Path Traversal:** Backend validates all paths (no ../ escapes)
-- **Authentication:** Token required for all API calls
+- **Authentication:** Bearer token required for all operations
+- **Isolation:** Each mount gets unique directory
 
 ---
 
 ## 📚 ADDITIONAL RESOURCES
 
-### Documentation Files
+### Source Code Locations
 ```
-/home/oma_admin/sendense/source/current/api-documentation/
-├─ OMA.md                    # Complete API reference (restore: lines 287-545)
-├─ DB_SCHEMA.md              # Database schema
-└─ API_DB_MAPPING.md         # API-to-database mapping
+Backend Handlers:
+- api/handlers/backup_handlers.go       # Backup endpoints
+- api/handlers/restore_handlers.go      # Restore endpoints
+- api/handlers/vm_context_handlers.go   # VM listing
 
-/home/oma_admin/sendense/start_here/
-├─ PHASE_1_CONTEXT_HELPER.md # Backup architecture overview
-├─ CHANGELOG.md              # Recent changes (v2.16.0-v2.24.0)
-└─ PROJECT_RULES.md          # Development rules
+Business Logic:
+- backup/backup_service.go              # Backup orchestration
+- backup/completion_service.go          # Backup completion
+- restore/mount_manager.go              # Mount operations
+- restore/file_browser.go               # File browsing
+- restore/file_downloader.go            # File downloads
+- restore/cleanup_service.go            # Auto cleanup
 
-/home/oma_admin/sendense/job-sheets/
-├─ 2025-10-08-restore-system-v2-refactor.md  # Restore refactor details
-└─ 2025-10-08-restore-test-results.txt       # Test validation
+Database:
+- database/backup_repository.go         # Backup queries
+- database/restore_mount_repository.go  # Restore mount queries
+- database/migrations/20251008160000_add_restore_tables.up.sql
 ```
 
-### Database Tables (for reference)
+### Database Tables
 - `vm_backup_contexts` - VM backup master records
 - `backup_jobs` - Parent backup job tracking
-- `backup_disks` - Per-disk backup records (QCOW2 paths here)
-- `backup_chains` - Backup chain metadata (full → incremental links)
+- `backup_disks` - Per-disk backup records (QCOW2 paths)
+- `backup_chains` - Backup chain metadata
 - `restore_mounts` - Active restore mount tracking
+- `vm_disks` - VM disk metadata from VMware
 
 ### Key Concepts
 - **CBT (Changed Block Tracking):** VMware feature for incremental backups
 - **QCOW2:** Disk image format with backing file support
-- **NBD (Network Block Device):** Protocol for exporting QCOW2 as mountable device
+- **NBD (Network Block Device):** Protocol for mounting QCOW2 as block device
 - **Backing Chain:** Incremental backups point to parent full backup
 - **CASCADE DELETE:** Database constraint auto-cleaning related records
 
 ---
 
-## 🎯 SUCCESS CRITERIA
+## 🎯 INTEGRATION CHECKLIST
 
-Your GUI integration is complete when:
+Backend integration is complete when:
 
-1. ✅ User can start full backup from VM list
-2. ✅ User can start incremental backup from VM list
-3. ✅ User can monitor backup progress in real-time
-4. ✅ User can view backup history per VM
-5. ✅ User can mount backup for file browsing
-6. ✅ User can navigate folder hierarchy (Windows Explorer-style)
-7. ✅ User can download individual files
-8. ✅ User can download folders as ZIP
-9. ✅ User can unmount backup
-10. ✅ User sees expiration warnings for mounts
-11. ✅ All errors are handled gracefully
-12. ✅ UI is responsive and intuitive
-
----
-
-## 🚨 RULES & CONSTRAINTS
-
-Per `.cursorrules`:
-
-1. **DO NOT modify backend APIs** - They are production-ready and tested
-2. **DO NOT create mock APIs** - Use real backend endpoints
-3. **DO follow REST conventions** - Backend follows RESTful design
-4. **DO handle errors gracefully** - Show user-friendly messages
-5. **DO update documentation** - Document GUI components and flows
-6. **DO create job sheet** - Track your work in job-sheets/
-7. **DO test thoroughly** - Use pgtest1 test data
-8. **DO NOT commit without testing** - Verify all flows work
+1. ✅ Can call backup API to start full backup
+2. ✅ Can call backup API to start incremental backup
+3. ✅ Can poll backup progress endpoint
+4. ✅ Can list backup history per VM
+5. ✅ Can call restore mount API
+6. ✅ Can call file browse API with hierarchical paths
+7. ✅ Can download individual files
+8. ✅ Can download directories as archives
+9. ✅ Can unmount backups
+10. ✅ Handle all error responses gracefully
+11. ✅ Include Bearer token in all requests
+12. ✅ Understand multi-disk architecture
 
 ---
 
-## 🆘 GETTING HELP
-
-If you need clarification:
-
-1. **Read API docs:** `source/current/api-documentation/OMA.md` (lines 287-545 for restore)
-2. **Check CHANGELOG:** `start_here/CHANGELOG.md` (see v2.24.0 entry)
-3. **Review test results:** `job-sheets/2025-10-08-restore-test-results.txt`
-4. **Ask user:** If something is unclear or missing
-
----
-
-**Backend Status:** ✅ READY  
-**Your Mission:** Build intuitive GUI for backup & restore flows  
-**Expected Duration:** 4-8 hours  
-**Good Luck!** 🚀
-
+**Backend Status:** ✅ PRODUCTION READY  
+**Documentation:** Complete API reference with backend logic  
+**Testing:** All endpoints tested with pgtest1 VM  
+**Support:** See `/home/oma_admin/sendense/source/current/api-documentation/OMA.md` for full details
