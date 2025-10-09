@@ -342,11 +342,21 @@ func (s *ProtectionFlowService) ProcessBackupFlow(ctx context.Context, flow *dat
 			continue
 		}
 
+		// Determine backup type: check if full backup exists for this VM
+		backupType := "incremental"
+		var existingBackup database.BackupJob
+		if err := s.db.GetGormDB().Where("vm_name = ? AND repository_id = ? AND backup_type = ?", 
+			vmCtx.VMName, *flow.RepositoryID, "full").First(&existingBackup).Error; err != nil {
+			// No full backup exists, must do full backup first
+			backupType = "full"
+			logger.Info("No full backup found, will perform full backup", "vm_name", vmCtx.VMName)
+		}
+
 		// Call backup API
 		backupResp, err := s.startBackup(ctx, &BackupStartRequest{
 			VMName:       vmCtx.VMName,
 			RepositoryID: *flow.RepositoryID,
-			BackupType:   "auto", // Will auto-detect full vs incremental
+			BackupType:   backupType,
 			PolicyID:     stringPtrToString(flow.PolicyID),
 		})
 		if err != nil {
