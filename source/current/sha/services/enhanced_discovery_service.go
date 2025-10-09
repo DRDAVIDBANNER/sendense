@@ -36,11 +36,12 @@ func NewEnhancedDiscoveryService(vmContextRepo *database.VMReplicationContextRep
 
 // DiscoveryRequest represents a VM discovery request to SNA
 type DiscoveryRequest struct {
-	VCenter    string `json:"vcenter" binding:"required"`
-	Username   string `json:"username" binding:"required"`
-	Password   string `json:"password" binding:"required"`
-	Datacenter string `json:"datacenter" binding:"required"`
-	Filter     string `json:"filter,omitempty"` // Optional VM name filter
+	VCenter      string `json:"vcenter" binding:"required"`
+	Username     string `json:"username" binding:"required"`
+	Password     string `json:"password" binding:"required"`
+	Datacenter   string `json:"datacenter" binding:"required"`
+	Filter       string `json:"filter,omitempty"` // Optional VM name filter
+	CredentialID *int   `json:"credential_id,omitempty"` // Link to vmware_credentials table
 }
 
 // SNADiscoveryResponse represents the response from SNA discovery endpoint
@@ -219,7 +220,7 @@ func (eds *EnhancedDiscoveryService) AddVMsToOMAWithoutJobs(ctx context.Context,
 
 		// Step 2: Process discovered VMs
 		start = time.Now()
-		return eds.processDiscoveredVMs(ctx, snaResponse, selectedVMNames, result)
+		return eds.processDiscoveredVMs(ctx, snaResponse, selectedVMNames, result, discoveryRequest.CredentialID)
 	})
 
 	// End job tracking
@@ -243,7 +244,7 @@ func (eds *EnhancedDiscoveryService) AddVMsToOMAWithoutJobs(ctx context.Context,
 
 // processDiscoveredVMs processes VMs from SNA discovery and creates VM contexts
 func (eds *EnhancedDiscoveryService) processDiscoveredVMs(ctx context.Context, snaResponse *SNADiscoveryResponse,
-	selectedVMNames []string, result *BulkAddResult) error {
+	selectedVMNames []string, result *BulkAddResult, credentialID *int) error {
 
 	log := eds.tracker.Logger(ctx)
 	start := time.Now()
@@ -283,7 +284,7 @@ func (eds *EnhancedDiscoveryService) processDiscoveredVMs(ctx context.Context, s
 			Host:       snaResponse.VCenter.Host,
 			Datacenter: snaResponse.VCenter.Datacenter,
 		}
-		contextID, err := eds.createVMContext(ctx, vm, vcenterInfo)
+		contextID, err := eds.createVMContext(ctx, vm, vcenterInfo, credentialID)
 		if err != nil {
 			result.Failed++
 			result.FailedVMs = append(result.FailedVMs, VMFailureReason{
@@ -320,7 +321,7 @@ func (eds *EnhancedDiscoveryService) processDiscoveredVMs(ctx context.Context, s
 
 // createVMContext creates a new VM context from discovered VM information
 func (eds *EnhancedDiscoveryService) createVMContext(ctx context.Context, vm SNAVMInfo,
-	vcenter struct{ Host, Datacenter string }) (string, error) {
+	vcenter struct{ Host, Datacenter string }, credentialID *int) (string, error) {
 
 	log := eds.tracker.Logger(ctx)
 
@@ -348,6 +349,7 @@ func (eds *EnhancedDiscoveryService) createVMContext(ctx context.Context, vm SNA
 		VMPath:           vm.Path,
 		VCenterHost:      vcenter.Host,
 		Datacenter:       vcenter.Datacenter,
+		CredentialID:     credentialID, // Link to vmware_credentials table
 		CurrentStatus:    "discovered",
 		OSSEAConfigID:    &osseaConfigID, // 🆕 Auto-assign active config
 		CPUCount:         &vm.NumCPU,
@@ -372,6 +374,7 @@ func (eds *EnhancedDiscoveryService) createVMContext(ctx context.Context, vm SNA
 		"vm_name", vm.Name,
 		"vm_path", vm.Path,
 		"vcenter", vcenter.Host,
+		"credential_id", credentialID,
 		"auto_added", true,
 		"disk_count", len(vm.Disks))
 

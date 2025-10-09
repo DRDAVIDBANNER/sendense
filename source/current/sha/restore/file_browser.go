@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -105,8 +106,21 @@ func (fb *FileBrowser) ListFiles(ctx context.Context, req *ListFilesRequest) (*L
 	if len(partitionMetadata) > 0 && requestPath == "/" {
 		// ROOT PATH: Show partition folders as virtual directories
 		files = fb.listPartitionFolders(mount, partitionMetadata)
+	} else if len(partitionMetadata) > 0 && strings.HasPrefix(requestPath, "/Partition") {
+		// GUI sent display name like "/Partition 3 (100.4 GB)" - extract partition number
+		// and convert to actual filesystem path "/partition-3"
+		partitionNum := fb.extractPartitionNumber(requestPath)
+		if partitionNum > 0 {
+			actualPath := fmt.Sprintf("/partition-%d", partitionNum)
+			files, err = fb.listFilesInPartition(mount, actualPath, req.Recursive)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list files in partition: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("invalid partition path: %s", requestPath)
+		}
 	} else if strings.HasPrefix(requestPath, "/partition-") {
-		// PARTITION PATH: List files within partition
+		// Direct partition path (for API calls or correct GUI usage)
 		files, err = fb.listFilesInPartition(mount, requestPath, req.Recursive)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list files in partition: %w", err)
@@ -535,5 +549,42 @@ func (fb *FileBrowser) formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGT"[exp])
+}
+
+// extractPartitionNumber extracts partition number from display name
+// Example: "/Partition 3 (100.4 GB)" -> 3
+// Example: "/Partition 1 - New Volume (1.5 GB)" -> 1
+func (fb *FileBrowser) extractPartitionNumber(displayPath string) int {
+	// Remove leading slash
+	displayPath = strings.TrimPrefix(displayPath, "/")
+
+	// Extract number after "Partition "
+	if !strings.HasPrefix(displayPath, "Partition ") {
+		return 0
+	}
+
+	// Remove "Partition " prefix
+	remaining := strings.TrimPrefix(displayPath, "Partition ")
+
+	// Extract first number
+	var numStr string
+	for _, ch := range remaining {
+		if ch >= '0' && ch <= '9' {
+			numStr += string(ch)
+		} else {
+			break
+		}
+	}
+
+	if numStr == "" {
+		return 0
+	}
+
+	partitionNum, err := strconv.Atoi(numStr)
+	if err != nil {
+		return 0
+	}
+
+	return partitionNum
 }
 

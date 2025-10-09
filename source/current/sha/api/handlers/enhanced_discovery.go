@@ -216,11 +216,12 @@ func (h *EnhancedDiscoveryHandler) DiscoverVMs(w http.ResponseWriter, r *http.Re
 
 	// Discover VMs from SNA (using resolved credentials)
 	discoveryReq := services.DiscoveryRequest{
-		VCenter:    vcenter,
-		Username:   username,
-		Password:   password,
-		Datacenter: datacenter,
-		Filter:     request.Filter,
+		VCenter:      vcenter,
+		Username:     username,
+		Password:     password,
+		Datacenter:   datacenter,
+		Filter:       request.Filter,
+		CredentialID: request.CredentialID, // Pass credential_id to service
 	}
 
 	snaResponse, err := h.discoveryService.DiscoverVMsFromVMA(ctx, discoveryReq)
@@ -409,11 +410,12 @@ func (h *EnhancedDiscoveryHandler) AddVMs(w http.ResponseWriter, r *http.Request
 
 	// Convert to service request format for internal processing
 	discoveryRequest := services.DiscoveryRequest{
-		VCenter:    vcenter,
-		Username:   username,
-		Password:   password,
-		Datacenter: datacenter,
-		Filter:     "", // No filter for specific VM add
+		VCenter:      vcenter,
+		Username:     username,
+		Password:     password,
+		Datacenter:   datacenter,
+		Filter:       "", // No filter for specific VM add
+		CredentialID: request.CredentialID, // Pass credential_id to service
 	}
 
 	// Use existing service method
