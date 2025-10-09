@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -260,6 +261,44 @@ func (rh *RestoreHandlers) DownloadFile(w http.ResponseWriter, r *http.Request) 
 	// Prepare file for download
 	fileReader, downloadInfo, err := rh.fileDownloader.DownloadFile(r.Context(), req)
 	if err != nil {
+		// Check if error is because path is a directory
+		if strings.Contains(err.Error(), "path is a directory") {
+			log.Info("📦 Path is directory, automatically switching to directory download (auto-zip)")
+			
+			// Auto-redirect to directory download with ZIP format
+			dirReq := &restore.DirectoryDownloadRequest{
+				MountID:     mountID,
+				DirPath:     filePath,
+				ArchiveType: "zip",
+			}
+			
+			archiveReader, archiveInfo, dirErr := rh.fileDownloader.DownloadDirectory(r.Context(), dirReq)
+			if dirErr != nil {
+				log.WithError(dirErr).Error("Directory download failed")
+				rh.sendError(w, http.StatusInternalServerError, fmt.Sprintf("failed to prepare directory download: %v", dirErr))
+				return
+			}
+			defer archiveReader.Close()
+			
+			// Set headers for ZIP download
+			w.Header().Set("Content-Type", archiveInfo.ContentType)
+			w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, archiveInfo.FileName))
+			
+			// Stream archive to client
+			written, streamErr := copyWithContext(r.Context(), w, archiveReader)
+			if streamErr != nil {
+				log.WithError(streamErr).Error("Archive streaming failed")
+				return
+			}
+			
+			log.WithFields(log.Fields{
+				"archive_name":  archiveInfo.FileName,
+				"bytes_written": written,
+			}).Info("✅ Directory downloaded as ZIP successfully (auto-zip)")
+			return
+		}
+		
+		// Other errors - return as before
 		log.WithError(err).Error("File download failed")
 		rh.sendError(w, http.StatusInternalServerError, fmt.Sprintf("failed to prepare file download: %v", err))
 		return
