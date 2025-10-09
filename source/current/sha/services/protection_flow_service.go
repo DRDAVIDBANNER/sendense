@@ -178,7 +178,7 @@ func (s *ProtectionFlowService) ExecuteFlow(ctx context.Context, flowID string, 
 	// Start job tracking
 	owner := "system"
 	jobCtx, jobID, err := s.jobTracker.StartJob(ctx, joblog.JobStart{
-		JobType:   "backup",
+		JobType:   "scheduler",
 		Operation: fmt.Sprintf("execute_%s_flow", executionType),
 		Owner:     &owner,
 		Metadata:  map[string]interface{}{"flow_id": flowID},
