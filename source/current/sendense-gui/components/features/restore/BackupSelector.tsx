@@ -121,7 +121,7 @@ export function BackupSelector({ onMount }: BackupSelectorProps) {
                 {backups
                   .filter(backup => backup.status === 'completed')
                   .map((backup) => (
-                    <SelectItem key={backup.id} value={backup.backup_id}>
+                    <SelectItem key={backup.backup_id} value={backup.backup_id}>
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">
@@ -136,9 +136,9 @@ export function BackupSelector({ onMount }: BackupSelectorProps) {
                           </span>
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {formatDate(backup.completed_at || backup.started_at)}
+                          {formatDate(backup.completed_at || backup.started_at || "")}
                           {' • '}
-                          {formatSize(backup.total_size_bytes)}
+                          {formatSize(backup.total_bytes)}
                           {' • '}
                           {backup.disks_count} disk{backup.disks_count !== 1 ? 's' : ''}
                         </span>

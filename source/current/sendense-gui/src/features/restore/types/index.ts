@@ -62,17 +62,17 @@ export interface VMContext {
 
 // Backup Job (for backup history)
 export interface BackupJob {
-  id: string;
   backup_id: string;
   vm_name: string;
-  vm_context_id: string;
-  backup_type: 'full' | 'incremental';
-  status: 'running' | 'completed' | 'failed' | 'cancelled';
-  started_at: string;
-  completed_at?: string;
-  total_size_bytes: number;
-  disks_count: number;
+  backup_type: string;
+  status: string;
+  repository_id: string;
+  total_bytes: number;        // ✅ Correct field name
+  bytes_transferred: number;
   created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  disks_count: number;        // ✅ Already included
 }
 
 // Backup Disk (for disk selection)

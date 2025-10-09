@@ -93,6 +93,7 @@ type BackupResponse struct {
 	FilePath         string              `json:"file_path,omitempty"`       // Deprecated - use disk_results
 	BytesTransferred int64               `json:"bytes_transferred"`
 	TotalBytes       int64               `json:"total_bytes"`
+	DisksCount       int                 `json:"disks_count"`             // 🆕 NEW: Number of disks in this backup
 	ChangeID         string              `json:"change_id,omitempty"`
 	ErrorMessage     string              `json:"error_message,omitempty"`
 	CreatedAt        string              `json:"created_at"`
@@ -529,9 +530,18 @@ func (bh *BackupHandler) ListBackups(w http.ResponseWriter, r *http.Request) {
 	// Apply additional filters
 	filteredBackups := bh.filterBackups(backups, backupType, status)
 
-	// Convert to API responses
-	responses := make([]*BackupResponse, 0, len(filteredBackups))
+	// Filter out per-disk records (only show parent records)
+	parentBackups := make([]*database.BackupJob, 0, len(filteredBackups))
 	for _, backup := range filteredBackups {
+		// Skip per-disk records (they contain "-disk" in the ID)
+		if !strings.Contains(backup.ID, "-disk") {
+			parentBackups = append(parentBackups, backup)
+		}
+	}
+
+	// Convert to API responses
+	responses := make([]*BackupResponse, 0, len(parentBackups))
+	for _, backup := range parentBackups {
 		responses = append(responses, bh.convertToBackupResponse(backup))
 	}
 
@@ -882,6 +892,16 @@ func (bh *BackupHandler) convertToBackupResponse(job *database.BackupJob) *Backu
 		policyID = *job.PolicyID
 	}
 
+	// Count associated disks for this backup
+	var disksCount int64
+	err := bh.db.GetGormDB().Table("backup_disks").
+		Where("backup_job_id = ?", job.ID).
+		Count(&disksCount).Error
+	if err != nil {
+		log.WithError(err).Warn("Failed to count disks for backup")
+		disksCount = 1 // Default fallback
+	}
+
 	response := &BackupResponse{
 		BackupID:         job.ID,
 		VMContextID:      job.VMContextID,
@@ -893,6 +913,7 @@ func (bh *BackupHandler) convertToBackupResponse(job *database.BackupJob) *Backu
 		FilePath:         job.RepositoryPath,
 		BytesTransferred: job.BytesTransferred,
 		TotalBytes:       job.TotalBytes,
+		DisksCount:       int(disksCount), // 🆕 NEW: Count of disks in this backup
 		ChangeID:         job.ChangeID,
 		ErrorMessage:     job.ErrorMessage,
 		CreatedAt:        job.CreatedAt.Format("2006-01-02T15:04:05Z"),
