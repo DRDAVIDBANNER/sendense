@@ -38,6 +38,7 @@ type MountManager struct {
 	// Dependencies (repository pattern)
 	mountRepo         *database.RestoreMountRepository
 	repositoryManager *storage.RepositoryManager
+	db                database.Connection // v2.16.0+: Direct DB access for backup_disks queries
 
 	// Configuration
 	mountBaseDir string
@@ -49,56 +50,83 @@ type MountManager struct {
 func NewMountManager(
 	mountRepo *database.RestoreMountRepository,
 	repositoryManager *storage.RepositoryManager,
+	db database.Connection, // v2.16.0+: For backup_disks queries
 ) *MountManager {
 	return &MountManager{
 		mountRepo:         mountRepo,
 		repositoryManager: repositoryManager,
+		db:                db,
 		mountBaseDir:      RestoreMountBaseDir,
 		idleTimeout:       DefaultIdleTimeout,
 		maxMounts:         DefaultMaxMounts,
 	}
 }
 
-// MountRequest represents a request to mount a backup for browsing
+// MountRequest represents a request to mount a backup disk for browsing
+// v2.16.0+: Multi-disk support requires disk_index parameter
 type MountRequest struct {
-	BackupID string `json:"backup_id"` // Required: Backup job ID
+	BackupID  string `json:"backup_id"`            // Required: Parent backup job ID
+	DiskIndex int    `json:"disk_index,omitempty"` // Required: Which disk to mount (0, 1, 2...) - defaults to 0 for backward compat
 }
 
 // MountInfo contains information about an active mount
+// v2.16.0+: Includes disk_index for multi-disk VM support
 type MountInfo struct {
-	MountID        string    `json:"mount_id"`
-	BackupID       string    `json:"backup_id"`
-	MountPath      string    `json:"mount_path"`
-	NBDDevice      string    `json:"nbd_device"`
-	FilesystemType string    `json:"filesystem_type"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"created_at"`
+	MountID        string     `json:"mount_id"`
+	BackupID       string     `json:"backup_id"`
+	BackupDiskID   int64      `json:"backup_disk_id"`   // v2.16.0+: FK to backup_disks.id
+	DiskIndex      int        `json:"disk_index"`       // v2.16.0+: Which disk (0, 1, 2...)
+	MountPath      string     `json:"mount_path"`
+	NBDDevice      string     `json:"nbd_device"`
+	FilesystemType string     `json:"filesystem_type"`
+	Status         string     `json:"status"`
+	CreatedAt      time.Time  `json:"created_at"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 }
 
-// MountBackup mounts a QCOW2 backup file for file browsing
+// MountBackup mounts a QCOW2 backup disk for file browsing
+// v2.16.0+: Multi-disk support - mounts specific disk from multi-disk backups
 // This is the main entry point for mounting backups
 func (mm *MountManager) MountBackup(ctx context.Context, req *MountRequest) (*MountInfo, error) {
-	log.WithField("backup_id", req.BackupID).Info("🔗 Starting QCOW2 backup mount operation")
+	log.WithFields(log.Fields{
+		"backup_id":  req.BackupID,
+		"disk_index": req.DiskIndex,
+	}).Info("🔗 Starting QCOW2 backup mount operation (v2.16.0+ multi-disk support)")
 
-	// Check if mount already exists for this backup (reuse existing mount)
-	existingMounts, err := mm.mountRepo.GetByBackupID(ctx, req.BackupID)
+	// v2.16.0+: Find the specific backup disk in the new schema
+	backupDiskID, backupFile, err := mm.findBackupDiskFile(ctx, req.BackupID, req.DiskIndex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find backup disk file: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"backup_disk_id": backupDiskID,
+		"qcow2_path":     backupFile,
+		"disk_index":     req.DiskIndex,
+	}).Info("📁 Located backup disk file from backup_disks table")
+
+	// v2.16.0+: Check if mount already exists for this specific disk
+	existingMounts, err := mm.mountRepo.GetByBackupDiskID(ctx, backupDiskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing mounts: %w", err)
 	}
 	if len(existingMounts) > 0 {
 		existing := existingMounts[0]
 		log.WithFields(log.Fields{
-			"mount_id":   existing.ID,
-			"mount_path": existing.MountPath,
-		}).Info("♻️  Reusing existing mount for backup")
+			"mount_id":       existing.ID,
+			"mount_path":     existing.MountPath,
+			"backup_disk_id": backupDiskID,
+			"disk_index":     req.DiskIndex,
+		}).Info("♻️  Reusing existing mount for backup disk")
 
 		// Update last accessed time
 		mm.mountRepo.UpdateLastAccessed(ctx, existing.ID)
 
 		return &MountInfo{
 			MountID:        existing.ID,
-			BackupID:       existing.BackupID,
+			BackupID:       req.BackupID,
+			BackupDiskID:   backupDiskID,
+			DiskIndex:      req.DiskIndex,
 			MountPath:      existing.MountPath,
 			NBDDevice:      existing.NBDDevice,
 			FilesystemType: existing.FilesystemType,
@@ -117,14 +145,6 @@ func (mm *MountManager) MountBackup(ctx context.Context, req *MountRequest) (*Mo
 		return nil, fmt.Errorf("maximum concurrent mounts reached (%d/%d) - please wait for cleanup or unmount unused backups", activeCount, mm.maxMounts)
 	}
 
-	// Find backup file in repository
-	backupFile, err := mm.findBackupFile(ctx, req.BackupID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find backup file: %w", err)
-	}
-
-	log.WithField("backup_file", backupFile).Info("📁 Located backup file")
-
 	// Allocate NBD device
 	nbdDevice, err := mm.allocateNBDDevice(ctx)
 	if err != nil {
@@ -137,12 +157,12 @@ func (mm *MountManager) MountBackup(ctx context.Context, req *MountRequest) (*Mo
 	mountID := uuid.New().String()
 	mountPath := filepath.Join(mm.mountBaseDir, mountID)
 
-	// Create mount record (status: mounting)
+	// v2.16.0+: Create mount record with backup_disk_id FK
 	now := time.Now()
 	expiresAt := now.Add(mm.idleTimeout)
 	mount := &database.RestoreMount{
 		ID:             mountID,
-		BackupID:       req.BackupID,
+		BackupDiskID:   backupDiskID, // v2.16.0+: FK to backup_disks.id
 		MountPath:      mountPath,
 		NBDDevice:      nbdDevice,
 		FilesystemType: "", // Will be detected
@@ -186,11 +206,15 @@ func (mm *MountManager) MountBackup(ctx context.Context, req *MountRequest) (*Mo
 		"mount_path":      mountPath,
 		"nbd_device":      nbdDevice,
 		"filesystem_type": filesystemType,
-	}).Info("✅ QCOW2 backup mounted successfully")
+		"backup_disk_id":  backupDiskID,
+		"disk_index":      req.DiskIndex,
+	}).Info("✅ QCOW2 backup disk mounted successfully (v2.16.0+ multi-disk support)")
 
 	return &MountInfo{
 		MountID:        mountID,
 		BackupID:       req.BackupID,
+		BackupDiskID:   backupDiskID,
+		DiskIndex:      req.DiskIndex,
 		MountPath:      mountPath,
 		NBDDevice:      nbdDevice,
 		FilesystemType: filesystemType,
@@ -240,7 +264,9 @@ func (mm *MountManager) ListMounts(ctx context.Context) ([]*MountInfo, error) {
 	for i, mount := range mounts {
 		result[i] = &MountInfo{
 			MountID:        mount.ID,
-			BackupID:       mount.BackupID,
+			BackupID:       "", // v2.16.0+: Parent backup_id not stored, only backup_disk_id
+			BackupDiskID:   mount.BackupDiskID,
+			DiskIndex:      0, // TODO: Could query backup_disks to get disk_index
 			MountPath:      mount.MountPath,
 			NBDDevice:      mount.NBDDevice,
 			FilesystemType: mount.FilesystemType,
@@ -253,22 +279,45 @@ func (mm *MountManager) ListMounts(ctx context.Context) ([]*MountInfo, error) {
 	return result, nil
 }
 
-// findBackupFile locates the QCOW2 backup file path (Task 1 integration)
-func (mm *MountManager) findBackupFile(ctx context.Context, backupID string) (string, error) {
-	log.WithField("backup_id", backupID).Debug("🔍 Searching for backup file across repositories")
+// findBackupDiskFile locates the QCOW2 file for a specific disk (v2.16.0+ schema)
+// Returns: (backup_disk_id, qcow2_path, error)
+func (mm *MountManager) findBackupDiskFile(ctx context.Context, backupID string, diskIndex int) (int64, string, error) {
+	log.WithFields(log.Fields{
+		"backup_id":  backupID,
+		"disk_index": diskIndex,
+	}).Debug("🔍 Querying backup_disks table for QCOW2 file")
 
-	// Use RepositoryManager to find backup (Task 1 integration)
-	backup, err := mm.repositoryManager.GetBackupFromAnyRepository(ctx, backupID)
+	// v2.16.0+: Query backup_disks table directly
+	// The new architecture stores QCOW2 paths in backup_disks, not backup_jobs
+	var disk struct {
+		ID         int64  `gorm:"column:id"`
+		QCOW2Path  string `gorm:"column:qcow2_path"`
+		Status     string `gorm:"column:status"`
+		DiskIndex  int    `gorm:"column:disk_index"`
+	}
+
+	err := mm.db.GetGormDB().WithContext(ctx).
+		Table("backup_disks").
+		Select("id, qcow2_path, status, disk_index").
+		Where("backup_job_id = ? AND disk_index = ? AND status = ?", backupID, diskIndex, "completed").
+		First(&disk).Error
+
 	if err != nil {
-		return "", fmt.Errorf("backup not found in any repository: %w", err)
+		return 0, "", fmt.Errorf("disk not found: backup_id=%s, disk_index=%d: %w", backupID, diskIndex, err)
 	}
 
-	// Validate file exists
-	if _, err := os.Stat(backup.FilePath); os.IsNotExist(err) {
-		return "", fmt.Errorf("backup file does not exist: %s", backup.FilePath)
+	log.WithFields(log.Fields{
+		"backup_disk_id": disk.ID,
+		"qcow2_path":     disk.QCOW2Path,
+		"disk_index":     disk.DiskIndex,
+	}).Debug("✅ Found QCOW2 file in backup_disks table")
+
+	// Validate file exists on filesystem
+	if _, err := os.Stat(disk.QCOW2Path); os.IsNotExist(err) {
+		return 0, "", fmt.Errorf("QCOW2 file does not exist: %s", disk.QCOW2Path)
 	}
 
-	return backup.FilePath, nil
+	return disk.ID, disk.QCOW2Path, nil
 }
 
 // allocateNBDDevice finds an available NBD device from the restore pool (/dev/nbd0-7)

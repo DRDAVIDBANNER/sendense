@@ -1,286 +1,139 @@
-# Current Active Work - Sendense Project
+# Current Active Work - File-Level Restore v2.16.0+ Refactor
 
-**Last Updated:** 2025-10-06  
-**Current Phase:** Phase 1 - VMware Backups + GUI Integration (Week 5-6)  
-**Active Job Sheets:** 1 (VMware backup GUI integration)  
-**PROJECT OVERSEER:** Active - ensuring governance compliance  
-**CRITICAL BLOCKER:** Preprod GUI deployment/cache issues preventing discovery workflow
+**Date:** October 8, 2025  
+**Status:** ✅ **CODE COMPLETE** - Ready for Testing  
+**Session:** Restore System Refactor
 
 ---
 
-## 🔴 ACTIVE JOB SHEETS
+## 🎉 WHAT WAS ACCOMPLISHED
 
-### **Job 1: Repository Interface & Configuration** ✅ COMPLETED
-**File:** `job-sheets/2025-10-04-repository-interface.md`  
-**Status:** ✅ **COMPLETED** (2025-10-05)  
-**Duration:** 3-4 days  
-**Owner:** Backend Engineering Team  
-**Priority:** Critical (Foundation)
+### ✅ **Phase 1 & 2: Core Refactor COMPLETE**
 
-**Description:** Implement core repository interface and QCOW2 backend for backup storage
+Successfully refactored the file-level restore system to work with v2.16.0+ backup architecture:
 
-**Progress:**
-- [x] Day 1-2: Repository interface and metadata structures ✅
-- [x] Day 2-3: QCOW2Manager and LocalRepository implementation ✅
-- [x] Day 3-4: ChainManager and testing ✅
-- [x] Day 4: Documentation updates ✅
+**Database:**
+- ✅ Created `restore_mounts` table with proper CASCADE DELETE FK chain
+- ✅ FK points to `backup_disks.id` (not `backup_jobs.id`)
+- ✅ Integrated with: `vm_backup_contexts → backup_jobs → backup_disks → restore_mounts`
 
-**Completion:** All repository pattern work finished (commits 7dc4f92, b8f8148, f56f131)
+**Code Refactor:**
+- ✅ Updated `MountRequest` - added `disk_index` for multi-disk support
+- ✅ Rewrote `findBackupDiskFile()` - queries `backup_disks` table directly
+- ✅ Updated all database models to use `backup_disk_id`
+- ✅ Fixed API handlers to pass DB connection
+- ✅ Updated cleanup service logging
 
----
+**Binary:**
+- ✅ Compiled successfully: `sendense-hub-v2.24.0-restore-v2-refactor` (34MB)
+- ✅ Zero linter errors
 
-### **Job 2: Storage Monitoring & Multi-Backend Support** ✅ COMPLETED
-**File:** `job-sheets/2025-10-04-storage-monitoring.md`  
-**Status:** ✅ **COMPLETED** (2025-10-05)  
-**Duration:** 3-4 days  
-**Owner:** Backend Engineering Team  
-**Priority:** High
-
-**Description:** Add NFS/CIFS repository support with capacity monitoring
-
-**Progress:**
-- [x] MountManager implementation (Day 1) ✅
-- [x] NFSRepository & CIFSRepository (Day 2-3) ✅
-- [x] API endpoints (Day 4) ✅
-- [x] Documentation updates ✅
-
-**Completion:** All multi-backend support finished (commits e3640aa, 9154d11)
+**Documentation:**
+- ✅ Job sheet created and completed
+- ✅ CHANGELOG.md updated with v2.24.0 entry
+- ✅ Comprehensive implementation notes
 
 ---
 
-### **Job 4: File-Level Restore** ✅ COMPLETED
-**File:** `job-sheets/2025-10-05-file-level-restore.md`  
-**Status:** ✅ **COMPLETED** (2025-10-05)  
-**Duration:** 1 day (accelerated implementation)  
-**Owner:** Backend Engineering Team  
-**Priority:** Critical (Customer file recovery)
+## 🔄 WHAT'S NEXT (Future Session)
 
-**Description:** Mount QCOW2 backups and extract individual files via REST API
+### Phase 3: Disk Discovery API
+- [ ] Add `GET /api/v1/backups/{backup_id}/disks` endpoint
+- [ ] List all available disks for a backup
+- [ ] Show disk metadata (size, status, qcow2_path)
 
-**Dependencies:** ✅ Tasks 1, 2, 3 complete - foundation used
+### Phase 4: Integration Testing
+- [ ] Test with pgtest1 multi-disk backup (2 disks available)
+- [ ] Mount disk 0: `{"backup_id": "backup-pgtest1-1759947871", "disk_index": 0}`
+- [ ] Mount disk 1: `{"backup_id": "backup-pgtest1-1759947871", "disk_index": 1}`
+- [ ] Test browse/download/unmount flow
+- [ ] Verify CASCADE DELETE cleanup
 
-**Progress:**
-- [x] Phase 1: QCOW2 mount management (mount_manager.go - 495 lines) ✅
-- [x] Phase 2: File browser API (file_browser.go - 422 lines) ✅
-- [x] Phase 3: File download & extraction (file_downloader.go - 390 lines) ✅
-- [x] Phase 4: Safety & cleanup (cleanup_service.go - 376 lines) ✅
-- [x] Phase 5: API integration (restore_handlers.go - 415 lines) ✅
+### Phase 5: Documentation
+- [ ] Update `API_REFERENCE.md` with new endpoints
+- [ ] Update `restore/README.md` with v2.16.0+ architecture
+- [ ] Add multi-disk examples
 
-**Deployed:** v2.8.0 binary operational on preprod (10.245.246.136)
+### Phase 6: VM-Level Restore (Future)
+- [ ] Design VMware restore workflow
+- [ ] Implement QCOW2 → VMDK conversion
+- [ ] Implement VM deployment to vCenter
 
 ---
 
-## 📊 TASK 1 OVERALL PROGRESS
+## 📝 KEY FILES MODIFIED
 
-**Phase 1, Task 1: Backup Repository Abstraction**
+1. `database/migrations/20251008160000_add_restore_tables.up.sql` - Schema
+2. `restore/mount_manager.go` - Core mount logic (~200 lines)
+3. `database/restore_mount_repository.go` - Database operations
+4. `api/handlers/restore_handlers.go` - API handlers
+5. `restore/cleanup_service.go` - Logging updates
 
-**Overall Status:** 🟡 NEARLY COMPLETE (Week 1-2)
+---
 
-**Completion Breakdown:**
-```
-Job 1: Repository Interface        [██████████] 100% (3-4 days) ✅ COMPLETE
-Job 2: Storage Monitoring          [██████████] 100% (3-4 days) ✅ COMPLETE  
-Job 3: Backup Copy Engine          [▱▱▱▱▱▱▱▱▱▱]   0% (4-5 days) 🔴 ACTIVE
+## 🧪 TESTING DATA AVAILABLE
 
-Task 1 Total: [██████▱▱▱▱] 67% (~10-12 days total)
+**pgtest1 Multi-Disk Backup:**
+```sql
+SELECT * FROM backup_jobs WHERE id = 'backup-pgtest1-1759947871';
+-- Status: completed
+
+SELECT * FROM backup_disks WHERE backup_job_id = 'backup-pgtest1-1759947871';
+-- disk_index=0, qcow2_path=.../disk-0/backup-pgtest1-disk0-20251008-192431.qcow2, size_gb=102
+-- disk_index=1, qcow2_path=.../disk-1/backup-pgtest1-disk1-20251008-192431.qcow2, size_gb=5
 ```
 
-**Estimated Completion:** 2025-10-09 to 2025-10-11 (final job in progress)
+**Test Commands:**
+```bash
+# List available disks (TODO: implement endpoint)
+curl http://localhost:8082/api/v1/backups/backup-pgtest1-1759947871/disks
 
----
+# Mount disk 0
+curl -X POST http://localhost:8082/api/v1/restore/mount \
+  -H "Content-Type: application/json" \
+  -d '{"backup_id": "backup-pgtest1-1759947871", "disk_index": 0}'
 
-## 🎯 CURRENT FOCUS
-
-**This Week:** Task 4 Complete! Ready for Task 5
-
-**✅ JUST COMPLETED:** Task 4 - File-Level Restore (100%)
-- 2,382 lines across 6 core files  
-- 9 REST API endpoints for complete file recovery workflow
-- Deployed and operational on preprod (10.245.246.136)
-- qemu-nbd integration, automatic cleanup, security features
-
-**🟢 COMPLETED:** Task 5 - Backup API Endpoints (FINISHED TODAY)
-- ✅ **Implementation:** 5 REST endpoints exposing BackupEngine via API
-- ✅ **File:** `source/current/oma/api/handlers/backup_handlers.go` (512 lines)
-- ✅ **Testing:** All endpoints tested on preprod (10.245.246.136)
-- ✅ **Binary:** sendense-hub-v2.9.0-backup-api deployed and operational
-- ✅ **Duration:** Completed in 1 day (planned 1 week)
-
----
-
-## 🚨 ACTIVE JOB (October 6, 2025)
-
-### **Repository Management GUI Integration** 🔴 IN PROGRESS
-**File:** `GROK-COMPREHENSIVE-REPOSITORY-INTEGRATION.md`  
-**Status:** 🟢 Ready for Grok Implementation  
-**Priority:** HIGH  
-**Blocker:** None - Job sheet complete, ready for Grok session
-
-**Progress:**
-- [x] Context refresh and project rules reloaded ✅
-- [x] Backend API investigation (5 endpoints + 1 refresh endpoint) ✅
-- [x] GUI component analysis (page.tsx, RepositoryCard, AddRepositoryModal) ✅
-- [x] Data transformation mapping (bytes→GB, enabled→status) ✅
-- [x] Comprehensive Grok job sheet created with 7 implementation tasks ✅
-- [x] Changelog and git commit completed ✅
-- [ ] Grok implementation of GUI API integration (NEXT STEP) ⏳
-
-**Scope:** Wire up Repositories page to backend API
-- Replace all mock data with real API calls
-- Transform backend response structure to GUI format
-- Implement test connection, create, delete, refresh operations
-- Add loading states, error handling, success toasts
-- 30+ test scenarios documented
-
-**Next Step:** Hand off GROK-COMPREHENSIVE-REPOSITORY-INTEGRATION.md to Grok for implementation
-
----
-
-### **VMware Backup GUI Integration** ✅ COMPLETED
-**File:** `job-sheets/2025-10-06-vmware-backup-gui-integration.md`  
-**Status:** ✅ 100% Complete - Protection Groups fully operational  
-**Completed:** October 6, 2025
-
-**Final Status:**
-- [x] GROK implementation: Protection Groups + Add VMs button, VMDiscoveryModal, real API integration ✅
-- [x] Multi-group VM membership support with compact display ✅
-- [x] All modal fixes (CreateGroupModal, EditGroupModal, ManageVMsModal) ✅
-- [x] API documentation and changelog updates ✅
-- [x] Binary: sendense-hub-v2.10.0-vm-multi-group deployed ✅
-
----
-
-## 🚨 BLOCKERS & ISSUES
-
-**Current Status:** Phase 1 (71%), Phase 3 GUI (100%), GUI Integration (95%)
-
-**Success Status:**
-- ✅ **Phase 1 Backup Infrastructure:** Tasks 1-5 complete, full backup platform operational
-- ✅ **Phase 3 Professional GUI:** ALL 8 phases complete, production-ready interface ✨
-- ✅ **Binary Management:** v2.9.0 backend + professional GUI frontend
-- ✅ **Documentation Complete:** API docs, GUI deployment guides, troubleshooting docs
-- ✅ **Customer-Ready Platform:** Complete backup management with professional interface
-
-**Major Achievement:** COMPLETE OPERATIONAL PLATFORM 🎉
-- ✅ **Enterprise Interface:** Makes Veeam look outdated with superior capabilities
-- ✅ **Production Ready:** Builds successfully, optimized bundles (15/15 pages)
-- ✅ **All Features:** Dashboard, Protection Flows, Groups, Reports, Settings, Users, Support, Appliances, Repositories
-- ✅ **Operational Control:** Flow management, appliance fleet, repository management
-- ✅ **Complete Self-Service:** Customers manage entire backup infrastructure via GUI
-- ✅ **Deployment Ready:** Complete with deployment guides and troubleshooting docs
-
----
-
-## ✅ RECENT COMPLETIONS
-
-**Repository Infrastructure (2025-10-05):**
-- [x] **Task 1: Repository Abstraction** - 100% COMPLETE ✅
-  - Job 1: Repository Interface & Configuration (2,098 lines)
-  - Job 2: Storage Monitoring & Multi-Backend Support  
-  - Job 3: Backup Copy Engine & Immutable Storage
-  - Enterprise 3-2-1 backup rule with ransomware protection
-  - Local, NFS, CIFS repository support with API endpoints
-
-**NBD & Workflow Infrastructure (2025-10-05):**
-- [x] **Task 2: NBD File Export** - 100% COMPLETE ✅
-  - Config.d + SIGHUP pattern (512 lines nbd_config_manager.go)
-  - QCOW2 file export support (232 lines backup_export_helpers.go)  
-  - Comprehensive testing (286 lines unit tests + integration tests)
-  - Production validated on 10.245.246.136
-  - Total: 1,414 lines with testing validation
-- [x] **Task 3: Backup Workflow** - 100% COMPLETE ✅
-  - BackupEngine orchestration (460 lines workflows/backup.go)
-  - BackupJobRepository (262 lines database/backup_job_repository.go)
-  - Full and incremental backup workflows
-  - Task 1+2 integration, VMA API integration, CBT change tracking
-  - Total: 722 lines of workflow automation
-- [x] **Task 4: File-Level Restore** - 100% COMPLETE ✅
-  - MountManager with qemu-nbd integration (495 lines)
-  - FileBrowser with security validation (422 lines)
-  - FileDownloader with streaming + archives (390 lines)
-  - CleanupService with automatic timeout (376 lines)
-  - RestoreHandlers with 9 REST endpoints (415 lines)
-  - Database repository with migration files (286 lines)
-  - Total: 2,382 lines + migrations + deployment
-
-**Project Setup (2025-10-04):**
-- [x] Created project governance framework
-- [x] Established start_here/ documentation
-- [x] Created job sheet system
-- [x] Defined Phase 1 project goals
-- [x] Created 3 focused job sheets for Task 1
-
----
-
-## 📅 UPCOMING WORK (After Task 1)
-
-**Task 2: NBD File Export** (Week 2)
-- Modify NBD server to export QCOW2 files
-- Support file-based exports in addition to block devices
-
-**Task 3: Backup Workflow** (Week 2-3)
-- Implement full backup workflow
-- Implement incremental backup workflow
-- Database integration
-
-**Task 4: File-Level Restore** (Week 3-4)
-- Mount backups via qemu-nbd
-- File browser API
-- File extraction
-
----
-
-## 🎯 PHASE 1 OVERALL PROGRESS
-
-**Phase 1: VMware Backups** (6 weeks)
-
-```
-Task 1: Repository Abstraction     [██████████] 100% (Week 1-2) ✅ COMPLETE
-Task 2: NBD File Export            [██████████] 100% (Week 1-2) ✅ COMPLETE
-Task 3: Backup Workflow            [██████████] 100% (Week 2-3) ✅ COMPLETE  
-Task 4: File-Level Restore         [██████████] 100% (Week 3-4) ✅ COMPLETE
-Task 5: API Endpoints              [██████████] 100% (Week 4)   ✅ COMPLETE
-Task 6: CLI Tools                  [▱▱▱▱▱▱▱▱▱▱]   0% (Week 4)   ⏸️ DEFERRED
-Task 7: Testing & Validation       [▱▱▱▱▱▱▱▱▱▱]   0% (Week 5-6) ⏸️ Waiting
-
-Phase 1 Total: [███████▱▱▱] 71% complete (5 of 7 tasks done - AHEAD OF SCHEDULE)
+# Mount disk 1
+curl -X POST http://localhost:8082/api/v1/restore/mount \
+  -H "Content-Type: application/json" \
+  -d '{"backup_id": "backup-pgtest1-1759947871", "disk_index": 1}'
 ```
 
-**Recent Completions:**
-- Task 2 (NBD File Export) - 100% complete with production testing ✅
-- Task 3 (Backup Workflow) - Full orchestration engine operational ✅  
-- Task 4 (File-Level Restore) - Complete file recovery system deployed ✅
-- Task 5 (Backup API Endpoints) - REST API operational, 5 endpoints, tested ✅
+---
+
+## 📚 DOCUMENTATION
+
+**Job Sheets:**
+- `job-sheets/2025-10-08-restore-system-v2-refactor.md` - Complete refactor details
+- `job-sheets/2025-10-08-restore-refactor-v2-backup-arch.md` - Initial assessment
+
+**Changelog:**
+- `start_here/CHANGELOG.md` - v2.24.0 entry added
+
+**Related Docs:**
+- `start_here/PHASE_1_CONTEXT_HELPER.md` - Backup architecture
+- `project-goals/modules/04-restore-engine.md` - Module 04 context
+- `project-goals/phases/phase-1-vmware-backup.md` - Phase 1 status
 
 ---
 
-## 📋 GOVERNANCE COMPLIANCE
+## ⚠️ BLOCKERS
 
-**Project Rules Compliance:** ✅ All job sheets follow template  
-**Project Goals Linkage:** ✅ All work linked to phase-1-vmware-backup.md  
-**Documentation Currency:** ✅ Start_here/ docs up to date  
-**Job Sheet System:** ✅ Active job tracking operational
-
-**No Rule Violations Detected** ✅
+**None** - Code complete and ready for testing
 
 ---
 
-## 🔗 QUICK LINKS
+## 🚀 NEXT SESSION PRIORITIES
 
-**Project Goals:** `/sendense/project-goals/phases/phase-1-vmware-backup.md`  
-**Project Rules:** `/sendense/start_here/PROJECT_RULES.md`  
-**AI Prompt:** `/sendense/start_here/MASTER_AI_PROMPT.md`  
-**DB Schema:** `/sendense/source/current/api-documentation/DB_SCHEMA.md`  
-**API Docs:** `/sendense/source/current/api-documentation/API_REFERENCE.md`
-
----
-
-**THIS FILE TRACKS ALL ACTIVE WORK AND ENSURES NOTHING IS LOST BETWEEN SESSIONS**
-
-**UPDATED DAILY AS WORK PROGRESSES**
+1. **Deploy binary for testing** (if ready to test now)
+2. **Implement disk discovery endpoint** (1 hour)
+3. **Run integration tests** (pgtest1 multi-disk backup)
+4. **Update documentation** (API_REFERENCE.md)
+5. **Mark Phase 1 Task 4 complete** (if tests pass)
 
 ---
 
-**Document Owner:** Project Management  
-**Update Frequency:** Daily during active development  
-**Next Review:** 2025-10-05 (end of day)
+**Session Complete:** October 8, 2025  
+**Time Spent:** ~3 hours  
+**Code Quality:** ✅ Production-ready (pending tests)  
+**Follow-up:** Integration testing + disk discovery API

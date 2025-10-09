@@ -139,9 +139,9 @@ func (cs *CleanupService) performCleanup() {
 	for _, mount := range expiredMounts {
 		if err := cs.cleanupMount(ctx, mount); err != nil {
 			log.WithError(err).WithFields(log.Fields{
-				"mount_id":   mount.ID,
-				"backup_id":  mount.BackupID,
-				"mount_path": mount.MountPath,
+				"mount_id":       mount.ID,
+				"backup_disk_id": mount.BackupDiskID, // v2.16.0+: Using backup_disk_id FK
+				"mount_path":     mount.MountPath,
 			}).Error("Failed to cleanup mount")
 			failedCount++
 		} else {
@@ -160,7 +160,7 @@ func (cs *CleanupService) performCleanup() {
 func (cs *CleanupService) cleanupMount(ctx context.Context, mount *database.RestoreMount) error {
 	log.WithFields(log.Fields{
 		"mount_id":        mount.ID,
-		"backup_id":       mount.BackupID,
+		"backup_disk_id":  mount.BackupDiskID, // v2.16.0+: Using backup_disk_id FK
 		"mount_path":      mount.MountPath,
 		"nbd_device":      mount.NBDDevice,
 		"last_accessed":   mount.LastAccessedAt,

@@ -29,6 +29,7 @@ type RestoreHandlers struct {
 }
 
 // NewRestoreHandlers creates a new restore handlers instance
+// v2.16.0+: Passes DB connection to MountManager for backup_disks queries
 func NewRestoreHandlers(
 	db database.Connection,
 	repositoryManager *storage.RepositoryManager,
@@ -37,7 +38,8 @@ func NewRestoreHandlers(
 	mountRepo := database.NewRestoreMountRepository(db)
 
 	// Initialize services
-	mountManager := restore.NewMountManager(mountRepo, repositoryManager)
+	// v2.16.0+: Pass DB connection for backup_disks table queries
+	mountManager := restore.NewMountManager(mountRepo, repositoryManager, db)
 	fileBrowser := restore.NewFileBrowser(mountRepo)
 	fileDownloader := restore.NewFileDownloader(fileBrowser)
 	cleanupService := restore.NewCleanupService(mountRepo, mountManager)
@@ -83,10 +85,11 @@ func (rh *RestoreHandlers) RegisterRoutes(r *mux.Router) {
 	log.Info("✅ File-level restore API routes registered")
 }
 
-// MountBackup mounts a QCOW2 backup for file browsing
+// MountBackup mounts a QCOW2 backup disk for file browsing
+// v2.16.0+: Multi-disk support - specify disk_index to mount specific disk
 // POST /api/v1/restore/mount
 func (rh *RestoreHandlers) MountBackup(w http.ResponseWriter, r *http.Request) {
-	log.Info("📥 Received mount backup request")
+	log.Info("📥 Received mount backup request (v2.16.0+ multi-disk support)")
 
 	// Parse request
 	var req restore.MountRequest
@@ -100,6 +103,17 @@ func (rh *RestoreHandlers) MountBackup(w http.ResponseWriter, r *http.Request) {
 		rh.sendError(w, http.StatusBadRequest, "backup_id is required")
 		return
 	}
+
+	// v2.16.0+: disk_index defaults to 0 for backward compatibility
+	if req.DiskIndex < 0 {
+		rh.sendError(w, http.StatusBadRequest, "disk_index must be >= 0")
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"backup_id":  req.BackupID,
+		"disk_index": req.DiskIndex,
+	}).Info("Mounting backup disk with multi-disk support")
 
 	// Mount backup
 	mountInfo, err := rh.mountManager.MountBackup(r.Context(), &req)

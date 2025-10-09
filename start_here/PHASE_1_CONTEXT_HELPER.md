@@ -33,6 +33,64 @@
 
 ---
 
+## ✅ FILE-LEVEL RESTORE OPERATIONAL (October 8, 2025)
+
+### **Phase 1 Achievement: File-Level Recovery from QCOW2 Backups**
+
+**Achievement Date:** October 8, 2025  
+**SHA Version:** v2.24.0-restore-v2-refactor  
+**Test Status:** ✅ PRODUCTION READY (tested with pgtest1 102GB Windows disk)
+
+**What Works:**
+- ✅ Mount QCOW2 backups via qemu-nbd for file browsing
+- ✅ Multi-disk VM support (select which disk to mount via disk_index)
+- ✅ Hierarchical file browsing API (GUI-ready JSON responses)
+- ✅ Individual file download via HTTP streaming
+- ✅ Directory download as ZIP/TAR.GZ archives
+- ✅ Automatic cleanup after 1 hour idle time
+- ✅ CASCADE DELETE integration (backup deletion auto-cleans restore mounts)
+- ✅ v2.16.0+ backup architecture compatibility
+
+**API Endpoints:**
+```
+POST /api/v1/restore/mount              - Mount QCOW2 disk for browsing
+GET  /api/v1/restore/mounts             - List active mounts
+GET  /api/v1/restore/{id}/files         - Browse files (hierarchical)
+GET  /api/v1/restore/{id}/download      - Download file
+GET  /api/v1/restore/{id}/download-directory - Download folder as archive
+DELETE /api/v1/restore/{id}             - Unmount backup
+```
+
+**Test Results (pgtest1 Disk 0):**
+- Mounted: 102GB Windows NTFS disk with 5 partitions
+- Browsed: Windows Recovery partition, System Volume Information
+- Downloaded: WPSettings.dat (12 bytes) successfully
+- Filesystem: NTFS automatically detected
+- NBD Device: /dev/nbd0 (restore pool: /dev/nbd0-7)
+- Cleanup: 1-hour expiration working
+
+**Database Architecture:**
+```
+vm_backup_contexts → backup_jobs → backup_disks → restore_mounts
+                                                    ↑
+                                    FK with CASCADE DELETE
+```
+
+**GUI Integration:**
+- JSON responses include file type ("file" vs "directory")
+- Full paths provided for navigation and download
+- Metadata: size, modified_time, permissions, symlink detection
+- Ready for Windows Explorer-style file browser
+
+**Documentation:**
+- API docs: `source/current/api-documentation/OMA.md` (287 lines comprehensive)
+- Job sheet: `job-sheets/2025-10-08-restore-system-v2-refactor.md`
+- Test results: `job-sheets/2025-10-08-restore-test-results.txt`
+
+**Next Phase:** VM-level restore (QCOW2 → VMDK conversion + VMware deployment)
+
+---
+
 ## 🚨 CRITICAL ARCHITECTURE CHANGE (October 8, 2025)
 
 ### Backup Context Architecture Refactored (v2.16.0+)

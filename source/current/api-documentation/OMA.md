@@ -284,54 +284,265 @@ Backup Policy Management (Backup Copy Engine Day 5 - Implemented 2025-10-05)
   - Database: backup_policies, backup_copy_rules, backup_copies tables
   - Enterprise Features: Multi-repository copies, immutable storage support, automatic replication
 
-File-Level Restore (Task 4 - Implemented 2025-10-05)
+File-Level Restore (Task 4 - Implemented 2025-10-05, v2.16.0+ Refactored 2025-10-08)
 - POST /restore/mount → `handlers.Restore.MountBackup`
-  - Description: Mount QCOW2 backup for file browsing via qemu-nbd
-  - Request: { backup_id: string }
-  - Response: { mount_id: string, mount_path: string, nbd_device: string, filesystem_type: string, status: string, expires_at: timestamp }
+  - Description: Mount QCOW2 backup disk for file browsing via qemu-nbd (v2.16.0+ multi-disk support)
+  - Request: 
+    ```json
+    {
+      "backup_id": "backup-pgtest1-1759947871",
+      "disk_index": 0
+    }
+    ```
+  - Request Fields:
+    - backup_id (string, required): Parent backup job ID from backup_jobs table
+    - disk_index (int, required): Which disk to mount (0, 1, 2...) from multi-disk VM backup
+  - Response: 
+    ```json
+    {
+      "mount_id": "e4805a6f-8ee7-4f3c-8309-2f12362c7398",
+      "backup_id": "backup-pgtest1-1759947871",
+      "backup_disk_id": 44,
+      "disk_index": 0,
+      "mount_path": "/mnt/sendense/restore/e4805a6f-8ee7-4f3c-8309-2f12362c7398",
+      "nbd_device": "/dev/nbd0",
+      "filesystem_type": "ntfs",
+      "status": "mounted",
+      "created_at": "2025-10-08T21:19:37+01:00",
+      "expires_at": "2025-10-08T22:19:37+01:00"
+    }
+    ```
+  - Response Fields:
+    - mount_id: UUID for this mount session
+    - backup_disk_id: Foreign key to backup_disks.id (v2.16.0+ architecture)
+    - disk_index: Which disk was mounted (0-based)
+    - mount_path: Filesystem mount point for browsing
+    - nbd_device: NBD device used (/dev/nbd0-7 pool for restore)
+    - filesystem_type: Detected filesystem (ntfs, ext4, xfs, etc.)
+    - status: "mounting" or "mounted"
+    - expires_at: Automatic cleanup time (1 hour from mount)
   - Classification: Key (customer file recovery)
   - Security: Read-only mounts, automatic cleanup after 1 hour idle
+  - Architecture Changes (v2.16.0+):
+    - Queries backup_disks table directly (replaces RepositoryManager)
+    - FK to backup_disks.id ensures CASCADE DELETE integration
+    - Supports multi-disk VM backups (select specific disk by index)
+    - Unique constraint on backup_disk_id (one mount per disk)
+  - Handler: `api/handlers/restore_handlers.go:MountBackup`
+  - Service: `restore/mount_manager.go:MountBackup`
+  - Database: restore_mounts table with backup_disk_id FK → backup_disks.id
+
 - DELETE /restore/{mount_id} → `handlers.Restore.UnmountBackup`
   - Description: Unmount backup and release NBD device
   - Response: { message: "backup unmounted successfully" }
   - Classification: Key
+  - Handler: `api/handlers/restore_handlers.go:UnmountBackup`
+  - Service: `restore/mount_manager.go:UnmountBackup`
+
 - GET /restore/mounts → `handlers.Restore.ListMounts`
   - Description: List all active restore mounts
-  - Response: { mounts: [], count: number }
+  - Response: 
+    ```json
+    {
+      "mounts": [
+        {
+          "mount_id": "e4805a6f-8ee7-4f3c-8309-2f12362c7398",
+          "backup_disk_id": 44,
+          "mount_path": "/mnt/sendense/restore/...",
+          "nbd_device": "/dev/nbd0",
+          "status": "mounted",
+          "created_at": "2025-10-08T21:19:37+01:00",
+          "expires_at": "2025-10-08T22:19:37+01:00"
+        }
+      ],
+      "count": 1
+    }
+    ```
   - Classification: Key
+  - Handler: `api/handlers/restore_handlers.go:ListMounts`
+  - Service: `restore/mount_manager.go:ListMounts`
+
 - GET /restore/{mount_id}/files → `handlers.Restore.ListFiles`
-  - Description: Browse files and directories within mounted backup
-  - Query Params: path (default: "/"), recursive (boolean)
-  - Response: { files: [], total_count: number }
+  - Description: Browse files and directories within mounted backup (hierarchical navigation for GUI)
+  - Query Params: 
+    - path (string, default: "/"): Directory path to list
+    - recursive (boolean, optional): Recursive listing (not recommended for large dirs)
+  - Response: 
+    ```json
+    {
+      "mount_id": "e4805a6f-8ee7-4f3c-8309-2f12362c7398",
+      "path": "/Recovery/WindowsRE",
+      "files": [
+        {
+          "name": "ReAgent.xml",
+          "path": "/Recovery/WindowsRE/ReAgent.xml",
+          "type": "file",
+          "size": 1129,
+          "mode": "0777",
+          "modified_time": "2025-09-02T06:21:20.1985298+01:00",
+          "is_symlink": false
+        },
+        {
+          "name": "winre.wim",
+          "path": "/Recovery/WindowsRE/winre.wim",
+          "type": "file",
+          "size": 505453500,
+          "mode": "0777",
+          "modified_time": "2024-01-29T12:59:01.5190276Z",
+          "is_symlink": false
+        }
+      ],
+      "total_count": 2
+    }
+    ```
+  - Response Fields:
+    - mount_id: UUID for this mount session
+    - path: Current directory path being listed
+    - files: Array of file/directory entries
+      - name: Filename or directory name
+      - path: Full path (use for download or navigation)
+      - type: "file" or "directory" (GUI uses for icon selection)
+      - size: File size in bytes (0 for directories)
+      - mode: Unix file mode (permissions)
+      - modified_time: ISO 8601 timestamp
+      - is_symlink: Boolean indicating symbolic link
+    - total_count: Number of items in current directory
   - Security: Path traversal protection, validates all paths against mount root
   - Classification: Key (file browsing)
+  - GUI Usage: 
+    - Display files with type-based icons (folder/file)
+    - Click folder → request files?path={item.path}
+    - Click file → download?path={item.path}
+    - Show file metadata (size, modified_time)
+  - Handler: `api/handlers/restore_handlers.go:ListFiles`
+  - Service: `restore/file_browser.go:ListFiles`
+
 - GET /restore/{mount_id}/file-info → `handlers.Restore.GetFileInfo`
   - Description: Get detailed file metadata (size, permissions, modified time)
   - Query Params: path (required)
   - Response: FileInfo object with complete metadata
   - Classification: Auxiliary
+  - Handler: `api/handlers/restore_handlers.go:GetFileInfo`
+  - Service: `restore/file_browser.go:GetFileInfo`
+
 - GET /restore/{mount_id}/download → `handlers.Restore.DownloadFile`
   - Description: Download individual file via HTTP streaming
-  - Query Params: path (required)
-  - Response: File stream with appropriate Content-Type
+  - Query Params: path (required) - Full file path from files API response
+  - Response: File stream with appropriate Content-Type header
+  - Example: `GET /restore/e4805a6f-8ee7-4f3c-8309-2f12362c7398/download?path=/Recovery/WindowsRE/ReAgent.xml`
   - Classification: Key (file recovery)
+  - Handler: `api/handlers/restore_handlers.go:DownloadFile`
+  - Service: `restore/file_downloader.go:DownloadFile`
+
 - GET /restore/{mount_id}/download-directory → `handlers.Restore.DownloadDirectory`
-  - Description: Download directory as ZIP or TAR.GZ archive
-  - Query Params: path (required), format ("zip" or "tar.gz", default: "zip")
-  - Response: Archive stream
+  - Description: Download directory as ZIP or TAR.GZ archive (bulk file recovery)
+  - Query Params: 
+    - path (required): Directory path to download
+    - format ("zip" or "tar.gz", default: "zip"): Archive format
+  - Response: Archive stream with appropriate Content-Type
   - Classification: Key (bulk recovery)
+  - Handler: `api/handlers/restore_handlers.go:DownloadDirectory`
+  - Service: `restore/file_downloader.go:DownloadDirectory`
+
 - GET /restore/resources → `handlers.Restore.GetResourceStatus`
   - Description: Monitor restore resource utilization (NBD devices, mount slots)
-  - Response: { active_mounts, max_mounts, available_slots, allocated_devices, device_utilization }
+  - Response: 
+    ```json
+    {
+      "active_mounts": 1,
+      "max_mounts": 8,
+      "available_slots": 7,
+      "allocated_devices": ["/dev/nbd0"],
+      "device_utilization": "12.5%"
+    }
+    ```
   - Classification: Auxiliary (monitoring)
+  - Handler: `api/handlers/restore_handlers.go:GetResourceStatus`
+
 - GET /restore/cleanup-status → `handlers.Restore.GetCleanupStatus`
   - Description: Cleanup service status and statistics
-  - Response: { running, cleanup_interval, idle_timeout, active_mount_count, expired_mount_count }
+  - Response: 
+    ```json
+    {
+      "running": true,
+      "cleanup_interval": "5m",
+      "idle_timeout": "1h",
+      "active_mount_count": 1,
+      "expired_mount_count": 0,
+      "last_cleanup": "2025-10-08T21:20:00+01:00"
+    }
+    ```
   - Classification: Auxiliary (monitoring)
-  - Handler: `handlers.Restore.*`
-  - Architecture: qemu-nbd on /dev/nbd0-7, automatic cleanup service, path traversal protection
-  - Database: restore_mounts table with mount tracking
-  - Customer Value: Individual file recovery without full VM restore
+  - Handler: `api/handlers/restore_handlers.go:GetCleanupStatus`
+  - Service: `restore/cleanup_service.go`
+
+**Architecture Notes (v2.16.0+ Restore System):**
+- **Handler:** `api/handlers/restore_handlers.go`
+- **Services:** `restore/mount_manager.go`, `restore/file_browser.go`, `restore/file_downloader.go`, `restore/cleanup_service.go`
+- **Database:** restore_mounts table with FK to backup_disks.id (CASCADE DELETE chain)
+- **NBD Devices:** /dev/nbd0-7 pool dedicated to restore operations (separate from backup pool)
+- **Security:** Read-only mounts, path traversal protection, automatic cleanup after 1 hour idle
+- **Multi-Disk Support:** Select specific disk from multi-disk VM backup via disk_index parameter
+- **Filesystem Detection:** Automatic detection of ntfs, ext4, xfs, btrfs, etc.
+- **Cleanup Service:** Automatic unmount and NBD release after 1 hour idle time
+- **CASCADE DELETE:** Deleting backup_disks record automatically unmounts and cleans up restore mounts
+- **Customer Value:** Individual file recovery without full VM restore, competitive advantage vs Veeam
+- **GUI Integration:** JSON responses optimized for file browser UI (type field, full paths, metadata)
+
+**Database Schema (v2.16.0+):**
+```sql
+CREATE TABLE restore_mounts (
+  id VARCHAR(64) PRIMARY KEY,
+  backup_disk_id BIGINT NOT NULL,
+  mount_path VARCHAR(512),
+  nbd_device VARCHAR(32),
+  filesystem_type VARCHAR(32),
+  status ENUM('mounting', 'mounted', 'unmounting', 'failed'),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_accessed_at TIMESTAMP,
+  expires_at TIMESTAMP,
+  error_message TEXT,
+  INDEX idx_backup_disk (backup_disk_id),
+  UNIQUE KEY uk_backup_disk (backup_disk_id),
+  UNIQUE KEY uk_nbd_device (nbd_device),
+  CONSTRAINT fk_restore_mount_disk 
+    FOREIGN KEY (backup_disk_id) REFERENCES backup_disks(id) 
+    ON DELETE CASCADE
+);
+```
+
+**Callsites:**
+- GUI File Browser (planned): Uses mount → files → download workflow
+- Customer Support: Manual file recovery via API
+- Automatic Cleanup Service: Monitors last_accessed_at for expired mounts
+
+**Example Workflow:**
+```bash
+# 1. Mount disk 0 from multi-disk backup
+curl -X POST http://sha:8082/api/v1/restore/mount \
+  -H "Content-Type: application/json" \
+  -d '{"backup_id":"backup-pgtest1-1759947871","disk_index":0}'
+# → Returns mount_id
+
+# 2. Browse root directory
+curl "http://sha:8082/api/v1/restore/{mount_id}/files?path=/"
+# → Returns list of files/folders with types
+
+# 3. Navigate into folder
+curl "http://sha:8082/api/v1/restore/{mount_id}/files?path=/Recovery/WindowsRE"
+# → Returns files in subdirectory
+
+# 4. Download specific file
+curl "http://sha:8082/api/v1/restore/{mount_id}/download?path=/Recovery/WindowsRE/ReAgent.xml" \
+  -o ReAgent.xml
+# → Downloads file
+
+# 5. Unmount (or wait for automatic cleanup after 1 hour)
+curl -X DELETE "http://sha:8082/api/v1/restore/{mount_id}"
+# → Cleanup completed
+```
+
+**Testing Status:** ✅ PRODUCTION READY (tested 2025-10-08 with pgtest1 102GB Windows disk)
 
 Backup API Endpoints (Multi-Disk VM-Level Backups - Implemented October 2025)
 - POST /api/v1/backups → `handlers.BackupHandler.StartBackup`
