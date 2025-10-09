@@ -26,7 +26,8 @@ import {
   Zap
 } from "lucide-react";
 import { format } from "date-fns";
-import { Flow, getUIStatus } from "./types";
+import { Flow } from "./types";
+import { getUIStatus } from "@/src/features/protection-flows/types";
 import { RestoreWorkflowModal } from "./RestoreWorkflowModal";
 import { useFlowExecutions } from "@/src/features/protection-flows/hooks/useProtectionFlows";
 import {

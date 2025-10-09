@@ -11,7 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FlowRowProps, getUIStatus } from "./types";
+import { FlowRowProps } from "./types";
+import { getUIStatus } from "@/src/features/protection-flows/types";
 
 export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow }: FlowRowProps) {
   const handleEdit = () => onEdit?.(flow);
