@@ -29,11 +29,11 @@ export const useVMContexts = () => {
 };
 
 // Fetch backups for a specific VM
-export const useVMBackups = (vmContextId: string) => {
+export const useVMBackups = (vmName: string) => {
   return useQuery({
-    queryKey: ['vm-backups', vmContextId],
-    queryFn: () => restoreApi.getVMBackups(vmContextId),
-    enabled: !!vmContextId,
+    queryKey: ['vm-backups', vmName],
+    queryFn: () => restoreApi.getVMBackups(vmName),
+    enabled: !!vmName,
     staleTime: 30000, // Backup history refreshes moderately
   });
 };

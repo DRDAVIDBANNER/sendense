@@ -76,8 +76,8 @@ export const listVMContexts = async (): Promise<{ vm_contexts: VMContext[] }> =>
 };
 
 // 8. Get backups for a specific VM
-export const getVMBackups = async (vmContextId: string): Promise<VMBackupsResponse> => {
-  const response = await axios.get(`${API_BASE}/api/v1/vm-contexts/${vmContextId}/backups`);
+export const getVMBackups = async (vmName: string): Promise<VMBackupsResponse> => {
+  const response = await axios.get(`${API_BASE}/api/v1/backups?vm_name=${encodeURIComponent(vmName)}&status=completed`);
 
   if (response.status !== 200) {
     throw new Error('Failed to get VM backups');

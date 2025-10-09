@@ -14,12 +14,12 @@ interface BackupSelectorProps {
 }
 
 export function BackupSelector({ onMount }: BackupSelectorProps) {
-  const [selectedVM, setSelectedVM] = useState<string>("");
+  const [selectedVMName, setSelectedVMName] = useState<string>("");
   const [selectedBackup, setSelectedBackup] = useState<string>("");
   const [selectedDisk, setSelectedDisk] = useState<number>(0);
 
   const { data: vmsData, isLoading: loadingVMs } = useVMContexts();
-  const { data: backupsData, isLoading: loadingBackups } = useVMBackups(selectedVM);
+  const { data: backupsData, isLoading: loadingBackups } = useVMBackups(selectedVMName);
   const mountMutation = useMountBackup();
 
   const vms = vmsData?.vm_contexts || [];
@@ -69,8 +69,8 @@ export function BackupSelector({ onMount }: BackupSelectorProps) {
         {/* VM Selection */}
         <div className="space-y-2">
           <Label htmlFor="vm">Virtual Machine</Label>
-          <Select value={selectedVM} onValueChange={(value) => {
-            setSelectedVM(value);
+          <Select value={selectedVMName} onValueChange={(value) => {
+            setSelectedVMName(value);
             setSelectedBackup("");
             setSelectedDisk(0);
           }}>
@@ -81,7 +81,7 @@ export function BackupSelector({ onMount }: BackupSelectorProps) {
             </SelectTrigger>
             <SelectContent>
               {vms.map((vm) => (
-                <SelectItem key={vm.context_id} value={vm.context_id}>
+                <SelectItem key={vm.context_id} value={vm.vm_name}>
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${
@@ -101,7 +101,7 @@ export function BackupSelector({ onMount }: BackupSelectorProps) {
         </div>
 
         {/* Backup Selection */}
-        {selectedVM && (
+        {selectedVMName && (
           <div className="space-y-2">
             <Label htmlFor="backup">Backup</Label>
             <Select

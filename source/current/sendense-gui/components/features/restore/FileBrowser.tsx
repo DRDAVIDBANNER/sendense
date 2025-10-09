@@ -132,7 +132,6 @@ export function FileBrowser({ mountId, currentPath, onNavigate }: FileBrowserPro
           <div className="flex items-center px-4 py-3 border-b bg-muted/50">
             <Checkbox
               checked={filteredFiles.length > 0 && selectedFiles.size === filteredFiles.length}
-              indeterminate={selectedFiles.size > 0 && selectedFiles.size < filteredFiles.length}
               onCheckedChange={handleSelectAll}
               className="mr-3"
             />
