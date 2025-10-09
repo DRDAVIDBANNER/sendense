@@ -707,6 +707,115 @@ NBD Port Management (Task 7 - Planned for Implementation 2025-10-07)
   - Investigation: 10+ hours, 12+ tests, job sheet `2025-10-07-qemu-nbd-tunnel-investigation.md`
   - Solution Verified: October 7, 2025 - SSH tunnel + direct TCP both work with --shared flag configured
 
+Protection Flows Engine (v2.25.2+ - October 9, 2025)
+- POST /api/v1/protection-flows → `handlers.ProtectionFlow.CreateFlow`
+  - Description: Create new backup or replication flow for VM or group
+  - Request: { name, description?, flow_type: "backup"|"replication", target_type: "vm"|"group", target_id, repository_id, schedule_id?, policy_id?, enabled: boolean }
+  - Response: ProtectionFlow object with auto-generated ID and status fields
+  - Classification: **Key** (flow orchestration)
+  - Handler: `sha/api/handlers/protection_flow_handlers.go`
+  - Database: Writes protection_flows table
+  - Purpose: Create scheduled backup/replication flows for automated protection
+
+- GET /api/v1/protection-flows → `handlers.ProtectionFlow.ListFlows`
+  - Description: List all protection flows with status information
+  - Query Params: flow_type?, target_type?, enabled?
+  - Response: { flows: [ProtectionFlow], count }
+  - Classification: **Key** (GUI flow management)
+
+- GET /api/v1/protection-flows/summary → `handlers.ProtectionFlow.GetFlowsSummary`
+  - Description: Get summary statistics for all flows
+  - Response: { total_flows, active_flows, total_executions, successful_executions, failed_executions }
+  - Classification: **Key** (dashboard statistics)
+
+- GET /api/v1/protection-flows/{id} → `handlers.ProtectionFlow.GetFlow`
+  - Description: Get single flow with full status
+  - Response: ProtectionFlow with nested status object
+  - Classification: **Key** (flow details)
+
+- PUT /api/v1/protection-flows/{id} → `handlers.ProtectionFlow.UpdateFlow`
+  - Description: Update flow configuration (name, schedule, enabled state)
+  - Request: Partial ProtectionFlow fields
+  - Response: Updated ProtectionFlow
+  - Classification: **Key** (flow management)
+
+- DELETE /api/v1/protection-flows/{id} → `handlers.ProtectionFlow.DeleteFlow`
+  - Description: Delete protection flow (CASCADE deletes executions)
+  - Response: { message, deleted_flow_id }
+  - Classification: **Key** (flow management)
+
+- POST /api/v1/protection-flows/{id}/execute → `handlers.ProtectionFlow.ExecuteFlow`
+  - Description: Manual execution of protection flow (backup or replication)
+  - Response: ProtectionFlowExecution with created job IDs
+  - Classification: **Critical** (manual "Run Now" trigger)
+  - Purpose: Executes backup for target VM/group, auto-detects full vs incremental
+  - Database: Creates protection_flow_executions record, triggers backup via existing backup API
+  - Job Tracking: Uses job_type="scheduler" for compatibility
+
+- POST /api/v1/protection-flows/bulk-execute → `handlers.ProtectionFlow.BulkExecuteFlows`
+  - Description: Execute multiple flows simultaneously
+  - Request: { flow_ids: [string] }
+  - Response: { results: [ExecutionResult], total, succeeded, failed }
+  - Classification: **Key** (bulk operations)
+
+- GET /api/v1/protection-flows/{id}/executions → `handlers.ProtectionFlow.ListExecutions`
+  - Description: Get execution history for flow
+  - Query Params: limit?, offset?
+  - Response: { executions: [ProtectionFlowExecution], count }
+  - Classification: **Key** (execution history)
+
+- GET /api/v1/protection-flows/{id}/status → `handlers.ProtectionFlow.GetFlowStatus`
+  - Description: Get real-time flow status with last execution details
+  - Response: FlowStatus with execution statistics
+  - Classification: **Key** (status monitoring)
+
+- POST /api/v1/protection-flows/bulk-enable → `handlers.ProtectionFlow.BulkEnableFlows`
+  - Description: Enable multiple flows
+  - Request: { flow_ids: [string] }
+  - Response: { updated_count }
+  - Classification: **Auxiliary** (bulk management)
+
+- POST /api/v1/protection-flows/bulk-disable → `handlers.ProtectionFlow.BulkDisableFlows`
+  - Description: Disable multiple flows
+  - Request: { flow_ids: [string] }
+  - Response: { updated_count }
+  - Classification: **Auxiliary** (bulk management)
+
+- POST /api/v1/protection-flows/bulk-delete → `handlers.ProtectionFlow.BulkDeleteFlows`
+  - Description: Delete multiple flows (CASCADE)
+  - Request: { flow_ids: [string] }
+  - Response: { deleted_count }
+  - Classification: **Auxiliary** (bulk management)
+
+- Architecture Notes:
+  - Protection Flows Engine integrates with existing scheduler service (SchedulerService.RegisterFlowSchedule)
+  - Backup flows call existing POST /api/v1/backups endpoint with intelligent full/incremental detection
+  - Replication flows planned for Phase 5 (currently returns "not implemented" error)
+  - Database CASCADE DELETE: Deleting flow auto-removes all execution records
+  - Job tracking uses "scheduler" job_type for compatibility with existing job_tracking ENUM
+  - First execution per VM/repository always performs full backup, subsequent executions are incremental
+  - Multi-disk VMs: backup API handles all disks automatically, GUI shows aggregated status
+
+- Testing Status: October 9, 2025
+  - ✅ Flow creation working (GUI + API)
+  - ✅ Manual execution working (backup flows)
+  - ✅ Incremental backup detection working (checks backup_jobs table for existing full backup)
+  - ✅ Multi-disk VM support working (pgtest1: disk 0 + disk 1)
+  - ✅ Flow status tracking working (nested status object)
+  - ✅ GUI wiring complete (Protection Flows page functional)
+
+- Database Tables:
+  - protection_flows: Flow definitions with configuration
+  - protection_flow_executions: Execution history with CASCADE DELETE FK
+  - Foreign Keys: schedule_id → replication_schedules.id (deferred due to collation mismatch)
+
+- Implementation: October 9, 2025
+  - Backend: Grok (Tasks 1-5 complete)
+  - GUI: Grok (wiring + theme fixes complete)
+  - Job Sheet: `job-sheets/2025-10-09-protection-flows-engine.md`
+  - Binary: sendense-hub-v2.25.2-backup-type-fix
+  - Commits: Multiple (schema, service, API, GUI integration, bug fixes)
+
 Legacy/Potentially Legacy Notes
 - Original failover handlers exist alongside enhanced; enhanced/unified are primary. The `RegisterFailoverRoutes` exports classic paths; prefer enhanced/unified.
 - `vma_simple.go` defines simple enrollment handlers but is not wired in `handlers.NewHandlers`; Classification: Legacy (unused).

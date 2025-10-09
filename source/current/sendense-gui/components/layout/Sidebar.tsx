@@ -9,6 +9,7 @@ import {
   FileText,
   Home,
   Moon,
+  RotateCcw,
   Server,
   Settings,
   Shield,
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils";
 const menuItems = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Protection Flows", href: "/protection-flows", icon: Shield },
+  { name: "Restore", href: "/restore", icon: RotateCcw },
   { name: "Protection Groups", href: "/protection-groups", icon: Database },
   { name: "Appliances", href: "/appliances", icon: Server },
   { name: "Repositories", href: "/repositories", icon: Database },

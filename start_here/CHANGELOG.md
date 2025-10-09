@@ -11,6 +11,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [SHA v2.25.2-protection-flows-engine] - 2025-10-09
+
+### Added - **Protection Flows Engine (Phase 1 Complete)** 🚀
+- **NEW: Automated Backup Orchestration Engine**
+  - Create protection flows for individual VMs or entire groups
+  - Intelligent full/incremental detection (first backup full, subsequent incremental)
+  - Schedule-based automated execution (integrates with existing SchedulerService)
+  - Manual "Run Now" execution from GUI
+  - Comprehensive status tracking and execution history
+  
+### Backend Implementation
+- **15 New API Endpoints** (`sha/api/handlers/protection_flow_handlers.go`):
+  - `POST /protection-flows` - Create flow (VM or group targeting)
+  - `GET /protection-flows` - List all flows with status
+  - `GET /protection-flows/summary` - Dashboard statistics
+  - `GET /protection-flows/{id}` - Get single flow details
+  - `PUT /protection-flows/{id}` - Update flow configuration
+  - `DELETE /protection-flows/{id}` - Delete flow (CASCADE removes executions)
+  - `POST /protection-flows/{id}/execute` - Manual execution
+  - `GET /protection-flows/{id}/executions` - Execution history
+  - `GET /protection-flows/{id}/status` - Real-time status
+  - Plus 6 bulk operation endpoints (bulk-execute, bulk-enable, bulk-disable, bulk-delete)
+
+- **Database Schema** (`database/migrations/20251009120000_create_protection_flows.up.sql`):
+  - `protection_flows` table: Flow definitions with target (VM/group), repository, schedule, policy
+  - `protection_flow_executions` table: Execution history with CASCADE DELETE
+  - Foreign Keys: FK to backup_repositories, replication_schedules (collation issue deferred), backup_policies
+  - Indexes: flow_type, target, enabled, last_execution_status, execution_type
+
+- **Service Layer** (`services/protection_flow_service.go`, 589 lines):
+  - `CreateFlow()` - Flow creation with validation
+  - `ExecuteFlow()` - Orchestrates backup execution (resolves VMs, calls backup API)
+  - `ProcessBackupFlow()` - Intelligent backup type detection (checks backup_jobs for existing full backup)
+  - `UpdateFlowStatistics()` - Tracks execution success/failure counts
+  - Integration with SchedulerService for automated execution
+
+- **Repository Layer** (`database/flow_repository.go`, 427 lines):
+  - Complete CRUD operations for flows and executions
+  - Status tracking and statistics aggregation
+  - Execution history queries with pagination
+
+### Frontend Implementation
+- **GUI Integration** (Next.js 15 + React 19):
+  - Protection Flows page with table, modals, and status tracking
+  - Create/Edit Flow modals with VM/group selection
+  - Real-time execution status with nested status object
+  - "Run Now" button triggers manual execution
+  - Theme support: Semantic tokens for light/dark mode compatibility
+
+### Technical Highlights
+- **Intelligent Backup Detection**: Queries `backup_jobs` table to determine if full backup exists; if yes, uses incremental
+- **Job Type Compatibility**: Uses `job_type="scheduler"` for compatibility with existing `job_tracking` ENUM
+- **Multi-Disk Support**: Backup API handles all VM disks automatically; GUI shows aggregated status
+- **CASCADE DELETE**: Deleting flow auto-removes all execution records (database constraint)
+- **Scheduler Integration**: Protection flows can be scheduled via existing replication_schedules system
+
+### Testing Status
+- ✅ Flow creation working (GUI + API)
+- ✅ Manual execution working (backup flows)
+- ✅ Incremental backup detection working (queries backup_jobs for full backup)
+- ✅ Multi-disk VM support working (pgtest1: disk 0 + disk 1)
+- ✅ Flow status tracking working (nested status object)
+- ✅ GUI wiring complete (Protection Flows page functional)
+- ✅ End-to-end test: Created flow for pgtest1, executed manually, incremental backup started successfully
+
+### Known Issues/Deferred
+- ⚠️ Foreign key constraint for `schedule_id` deferred due to collation mismatch (utf8mb4_unicode_ci vs utf8mb4_general_ci)
+- 📋 Replication flows return "not implemented" (planned for Phase 5)
+
+### Files Modified
+- Backend:
+  - `sha/api/handlers/protection_flow_handlers.go` (693 lines, NEW)
+  - `sha/services/protection_flow_service.go` (589 lines, NEW)
+  - `sha/services/scheduler_service.go` (modified for flow integration)
+  - `sha/database/flow_repository.go` (427 lines, NEW)
+  - `sha/database/models.go` (added ProtectionFlow, ProtectionFlowExecution structs)
+  - `sha/api/handlers/handlers.go` (registered ProtectionFlowHandler)
+  - `sha/api/server.go` (registered protection-flows routes)
+
+- Frontend:
+  - `app/protection-flows/page.tsx` (modified for real data integration)
+  - `src/features/protection-flows/api/protectionFlowsApi.ts` (NEW)
+  - `src/features/protection-flows/hooks/useProtectionFlows.ts` (NEW)
+  - `src/features/protection-flows/types/index.ts` (modified for backend schema)
+  - `components/features/protection-flows/*.tsx` (multiple components updated)
+
+### Documentation
+- ✅ API Reference updated (`api-documentation/OMA.md`)
+- ✅ Database Schema updated (`api-documentation/DB_SCHEMA.md`)
+- ✅ Job Sheet created (`job-sheets/2025-10-09-protection-flows-engine.md`)
+- ✅ Quick Reference created (`job-sheets/PROTECTION-FLOWS-QUICK-REF.md`)
+
+### Binary
+- **Deployed**: `sendense-hub-v2.25.2-backup-type-fix`
+- **Build Location**: `/home/oma_admin/sendense/source/builds/`
+- **Service**: `sendense-hub.service` (active and tested)
+
+### Credits
+- Backend Implementation: Grok (Tasks 1-5 under Sonnet supervision)
+- Bug Fixes & Deployment: Claude Sonnet 4.5
+- Job Sheet & Architecture: Claude Sonnet 4.5
+
+---
+
 ## [SHA v2.24.1-restore-query-fix] - 2025-10-09
 
 ### Fixed

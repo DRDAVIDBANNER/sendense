@@ -174,4 +174,30 @@ File-Level Restore System (Task 4 - Added 2025-10-05, Updated 2025-10-09 v2.16.0
   - CASCADE DELETE Chain: vm_backup_contexts → backup_jobs → backup_disks → restore_mounts
   - Purpose: Track active QCOW2 backup mounts for file-level browsing and recovery (v2.16.0+ supports multi-disk VMs)
 
+Protection Flows Engine (Phase 1 - Added 2025-10-09 v2.25.2)
+- protection_flows
+  - PK: id (varchar 64) - UUID flow ID
+  - Fields: name (varchar 255), description TEXT, flow_type ENUM('backup','replication'), target_type ENUM('vm','group'), target_id (varchar 255), enabled BOOLEAN DEFAULT true
+  - Configuration: repository_id → backup_repositories(id) (for backup flows), schedule_id → replication_schedules(id) (for scheduled execution), policy_id → backup_policies(id) (for retention policies)
+  - Destination: destination_type ENUM('local','cluster','cloud') (for replication flows), destination_id (varchar 255) (for replication flows), destination_host (varchar 255) (for replication flows)
+  - Status Tracking: last_execution_id (varchar 64), last_execution_status ENUM('pending','running','success','warning','error','cancelled'), last_execution_time DATETIME
+  - Statistics: total_executions INT DEFAULT 0, successful_executions INT DEFAULT 0, failed_executions INT DEFAULT 0
+  - Timestamps: created_at, updated_at
+  - Indexes: idx_flow_type, idx_target, idx_enabled, idx_last_execution_status
+  - Foreign Keys (deferred): schedule_id → replication_schedules(id) (blocked by collation mismatch utf8mb4_unicode_ci vs utf8mb4_general_ci)
+  - Purpose: Define scheduled or manual backup/replication flows for VMs or groups with intelligent full/incremental detection
+
+- protection_flow_executions
+  - PK: id (varchar 64) - UUID execution ID
+  - FK: flow_id → protection_flows(id) ON DELETE CASCADE
+  - Fields: status ENUM('pending','running','success','warning','error','cancelled'), execution_type ENUM('manual','scheduled')
+  - Job Tracking: created_job_ids TEXT (JSON array of backup_jobs.id or replication_jobs.id), jobs_created INT, jobs_completed INT, jobs_failed INT, jobs_skipped INT
+  - VM Processing: vms_processed INT, bytes_transferred BIGINT
+  - Timing: started_at DATETIME, completed_at DATETIME, execution_time_seconds INT
+  - Audit: triggered_by (varchar 255), error_message TEXT
+  - Timestamps: created_at, updated_at
+  - Indexes: idx_flow_id, idx_status, idx_execution_type, idx_started_at
+  - CASCADE DELETE: Deleting protection_flow auto-removes all execution records
+  - Purpose: Track execution history for each protection flow with detailed job and VM processing statistics
+
 
