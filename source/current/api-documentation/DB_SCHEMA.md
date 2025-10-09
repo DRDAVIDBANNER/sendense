@@ -164,13 +164,14 @@ Backup Repository System (Phase 1 - Added 2025-10-04)
   - Index: idx_vm_context
   - Purpose: Tracks backup chain metadata (full + incrementals) per disk
 
-File-Level Restore System (Task 4 - Added 2025-10-05)
+File-Level Restore System (Task 4 - Added 2025-10-05, Updated 2025-10-09 v2.16.0+)
 - restore_mounts
-  - PK: id (varchar 64)
-  - FK: backup_id → backup_jobs(id) CASCADE
-  - Fields: mount_path (varchar 512), nbd_device (varchar 32), filesystem_type (varchar 32), mount_mode ENUM('read-only'), status ENUM('mounting','mounted','unmounting','failed'), created_at, last_accessed_at, expires_at
-  - Indexes: idx_backup_id, idx_expires_at, idx_status, idx_nbd_device
-  - Unique Constraints: nbd_device (WHERE status IN ('mounting','mounted')), mount_path (WHERE status IN ('mounting','mounted'))
-  - Purpose: Track active QCOW2 backup mounts for file browsing and recovery
+  - PK: id (varchar 64) - Mount UUID
+  - FK: backup_disk_id → backup_disks(id) CASCADE (v2.16.0+: Changed from backup_id to support per-disk mounting)
+  - Fields: mount_path (varchar 512), nbd_device (varchar 32), filesystem_type (varchar 32), mount_mode ENUM('read-only','read-write'), status ENUM('mounting','mounted','unmounting','failed','unmounted'), error_message TEXT, created_at, last_accessed_at, expires_at, unmounted_at
+  - Indexes: idx_backup_disk, idx_status, idx_nbd_device, idx_expires, idx_last_accessed
+  - Unique Constraints: uk_nbd_device (nbd_device), uk_backup_disk (backup_disk_id)
+  - CASCADE DELETE Chain: vm_backup_contexts → backup_jobs → backup_disks → restore_mounts
+  - Purpose: Track active QCOW2 backup mounts for file-level browsing and recovery (v2.16.0+ supports multi-disk VMs)
 
 

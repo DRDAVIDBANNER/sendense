@@ -157,7 +157,7 @@ func (r *RestoreMountRepository) ListExpired(ctx context.Context) ([]*RestoreMou
 	log.Debug("Listing expired restore mounts")
 
 	query := `
-		SELECT id, backup_id, mount_path, nbd_device, filesystem_type,
+		SELECT id, backup_disk_id, mount_path, nbd_device, filesystem_type,
 		       mount_mode, status, created_at, last_accessed_at, expires_at
 		FROM restore_mounts
 		WHERE status IN ('mounting', 'mounted')

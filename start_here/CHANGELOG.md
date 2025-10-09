@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [SHA v2.24.1-restore-query-fix] - 2025-10-09
+
+### Fixed
+- **Database Query Fix**: Corrected stale RAW SQL query in `restore_mount_repository.go` ListExpired() method
+  - Changed `SELECT backup_id` to `SELECT backup_disk_id` to match actual table schema
+  - Eliminated "Unknown column 'backup_id' in 'SELECT'" error at SHA startup
+  - Cleanup service now runs without errors
+  - Root cause: Table schema was already correct (backup_disk_id), but one raw SQL query was using old field name
+  - File: `source/current/sha/database/restore_mount_repository.go:160`
+  - Binary: `/home/oma_admin/sendense/source/builds/sendense-hub-v2.24.1-restore-query-fix`
+
+### Changed
+- **Documentation**: Updated `DB_SCHEMA.md` with complete restore_mounts table specification
+  - Added v2.16.0+ architecture notes (backup_disk_id FK to backup_disks.id)
+  - Documented CASCADE DELETE chain: vm_backup_contexts → backup_jobs → backup_disks → restore_mounts
+  - Added all field names, indexes, and unique constraints
+
+---
+
 ## [SHA v2.24.0-restore-v2-refactor] - 2025-10-08
 
 ### Fixed
