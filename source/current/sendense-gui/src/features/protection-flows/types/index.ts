@@ -2,7 +2,7 @@ export type FlowType = 'backup' | 'replication';
 export type FlowStatus = 'success' | 'running' | 'warning' | 'error' | 'pending';
 
 export interface FlowStatusData {
-  last_execution_status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  last_execution_status: 'pending' | 'running' | 'completed' | 'success' | 'failed' | 'cancelled';  // ✅ FIX: Add 'success' type
   total_executions: number;
   successful_executions: number;
   failed_executions: number;
@@ -39,7 +39,7 @@ export function getUIStatus(flow: Flow): FlowStatus {
   const status = flow.status?.last_execution_status;
   if (!status || status === 'pending') return 'pending';
   if (status === 'running') return 'running';
-  if (status === 'completed') return 'success';
+  if (status === 'completed' || status === 'success') return 'success';  // ✅ FIX: API returns 'success' not 'completed'
   if (status === 'failed') return 'error';
   if (status === 'cancelled') return 'warning';
   return 'pending';

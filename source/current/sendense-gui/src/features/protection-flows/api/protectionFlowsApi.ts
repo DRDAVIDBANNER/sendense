@@ -6,7 +6,7 @@ const API_BASE = '';
 
 export interface ProtectionFlowStatus {
   last_execution_id?: string;
-  last_execution_status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  last_execution_status: 'pending' | 'running' | 'completed' | 'success' | 'failed' | 'cancelled';  // ✅ FIX: Add 'success'
   last_execution_time?: string;
   next_execution_time?: string;
   total_executions: number;
@@ -61,6 +61,9 @@ export interface FlowSummary {
 function transformFlowResponse(apiFlow: any): ProtectionFlow {
   return {
     ...apiFlow,
+    // ✅ FIX: Map status times to UI fields
+    lastRun: apiFlow.status?.last_execution_time,
+    nextRun: apiFlow.status?.next_execution_time || calculateNextRun(apiFlow),
     status: {
       ...apiFlow.status,
       // Ensure the status fields are properly mapped
