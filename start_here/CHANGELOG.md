@@ -37,12 +37,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Estimated Time:** 6-8 hours total
 - **Dependencies:** Requires telemetry framework (already complete)
 
-### 📋 TODO - **Protection Flows Table Wiring** (2025-10-10)
+### 📋 TODO - **Flows Table Immediate Feedback** (2025-10-10) 🔥 CRITICAL UX
+- **Issue:** When "Run Now" clicked, NO immediate feedback - looks like silent failure
+- **User Quote:** "If I didn't know better I'd think it was a silent failure"
+- **Problem:** Status stays "Success", no progress bar, no indication anything happened until first poll (2-5s later)
+- **Impact:** Users don't know if button worked, may click multiple times, poor UX perception
+- **Job Sheet:** `/home/oma_admin/sendense/job-sheets/GROK-PROMPT-flows-table-immediate-feedback.md`
+- **Solution:** Multi-layered instant feedback
+  1. Optimistic UI: Status → "Starting" (blue pulse), progress bar at 0%, button disabled
+  2. Toast notification: "Starting backup for {name}..."
+  3. Immediate poll: Trigger progress fetch right after API success
+  4. Real-time updates: Continue normal polling every 2s
+- **Files:** FlowsTable/index.tsx, FlowRow.tsx, useFlowProgress.ts, layout.tsx
+- **Time:** 1.5-2 hours
+- **Priority:** HIGH - Critical UX issue making product feel unresponsive
+
+### 📋 DONE - **Protection Flows Table Wiring** (2025-10-10) ✅
 - **Issue:** Flows table shows incorrect/missing data (status stuck on "Pending", Last Run = "Never", Next Run = "Never", no progress bar)
-- **Root Cause:** Data transformation missing between backend API and frontend display
-- **Backend Data:** API correctly provides `status.last_execution_time`, `status.next_execution_time`, execution progress
-- **Frontend Issue:** Not mapping backend fields to expected frontend fields (`lastRun`, `nextRun`, `progress`)
+- **Status:** ✅ FIXED by Claude (Grok's implementation had 3 bugs)
+- **Bugs Found:**
+  1. Status logic checked for 'completed' but API returns 'success'
+  2. transformFlowResponse() created but didn't map lastRun/nextRun fields
+  3. TypeScript types missing 'success' variant
+- **Fixes Applied:**
+  - Updated getUIStatus() to accept 'completed' OR 'success'
+  - Added lastRun/nextRun mapping in transformation function
+  - Updated TypeScript types to include 'success'
+- **Result:** Status now shows "Success" (green), timestamps display correctly
 - **Job Sheet:** `/home/oma_admin/sendense/job-sheets/GROK-PROMPT-flows-table-wiring.md`
+- **Fix Report:** `/home/oma_admin/sendense/FLOWS-TABLE-FIX-REPORT.md`
 - **Tasks:**
   1. Add data transformation layer to map API fields
   2. Implement progress calculation from running executions
