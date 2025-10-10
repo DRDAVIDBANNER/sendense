@@ -234,51 +234,72 @@ func (s *ProtectionFlowService) ExecuteFlow(ctx context.Context, flowID string, 
 	}
 
 	// 4. Update execution status
-	finalStatus := "success"
+	// ✅ FIX: If no error, jobs are RUNNING (not completed!)
+	// Execution stays in "running" status until background monitor updates it
 	if execErr != nil {
-		finalStatus = "error"
+		// Only mark as error/failed if job creation failed
+		finalStatus := "error"
 		errorMsg := execErr.Error()
 		execution.ErrorMessage = &errorMsg
-		logger.Error("Flow execution failed", "error", execErr)
-	} else if execution.JobsFailed > 0 {
-		finalStatus = "warning"
-		logger.Warn("Flow execution completed with warnings", "failed_jobs", execution.JobsFailed)
-	}
+		execution.Status = finalStatus
+		completedAt := time.Now()
+		execution.CompletedAt = &completedAt
+		execution.ExecutionTimeSeconds = int(completedAt.Sub(*execution.StartedAt).Seconds())
 
-	execution.Status = finalStatus
-	completedAt := time.Now()
-	execution.CompletedAt = &completedAt
-	execution.ExecutionTimeSeconds = int(completedAt.Sub(*execution.StartedAt).Seconds())
+		logger.Error("Flow execution failed to start", "error", execErr)
 
-	updateErr := s.flowRepo.UpdateExecutionStatus(jobCtx, execution.ID, finalStatus, map[string]interface{}{
-		"completed_at":            execution.CompletedAt,
-		"execution_time_seconds": execution.ExecutionTimeSeconds,
-		"error_message":          execution.ErrorMessage,
-		"jobs_created":           execution.JobsCreated,
-		"jobs_completed":         execution.JobsCompleted,
-		"jobs_failed":            execution.JobsFailed,
-		"jobs_skipped":           execution.JobsSkipped,
-		"vms_processed":          execution.VMsProcessed,
-		"bytes_transferred":      execution.BytesTransferred,
-	})
-	if updateErr != nil {
-		logger.Error("Failed to update execution status", "error", updateErr)
+		updateErr := s.flowRepo.UpdateExecutionStatus(jobCtx, execution.ID, finalStatus, map[string]interface{}{
+			"completed_at":            execution.CompletedAt,
+			"execution_time_seconds": execution.ExecutionTimeSeconds,
+			"error_message":          execution.ErrorMessage,
+			"jobs_created":           execution.JobsCreated,
+			"jobs_completed":         execution.JobsCompleted,
+			"jobs_failed":            execution.JobsFailed,
+			"jobs_skipped":           execution.JobsSkipped,
+			"vms_processed":          execution.VMsProcessed,
+			"bytes_transferred":      execution.BytesTransferred,
+		})
+		if updateErr != nil {
+			logger.Error("Failed to update execution status", "error", updateErr)
+		}
+	} else {
+		// ✅ FIX: Jobs started successfully - keep status="running"
+		// Don't set completed_at or mark as success yet!
+		// Background monitor will update when jobs actually complete
+		updateErr := s.flowRepo.UpdateExecutionStatus(jobCtx, execution.ID, "running", map[string]interface{}{
+			"jobs_created":      execution.JobsCreated,
+			"jobs_completed":    execution.JobsCompleted,
+			"jobs_failed":       execution.JobsFailed,
+			"jobs_skipped":      execution.JobsSkipped,
+			"vms_processed":     execution.VMsProcessed,
+			"created_job_ids":   execution.CreatedJobIDs,
+		})
+		if updateErr != nil {
+			logger.Error("Failed to update execution status", "error", updateErr)
+		}
+
+		logger.Info("Flow execution started successfully - jobs running in background",
+			"execution_id", execution.ID,
+			"jobs_created", execution.JobsCreated,
+			"status", "running")
 	}
 
 	// 5. Update flow statistics
+	// ✅ FIX: Only update success/failed counts when execution actually completes
+	// For running executions, just update last_execution_id and status
 	statsErr := s.flowRepo.UpdateFlowStatistics(jobCtx, flowID, database.FlowStatistics{
 		LastExecutionID:     &execution.ID,
-		LastExecutionStatus: finalStatus,
-		LastExecutionTime:   execution.CompletedAt,
+		LastExecutionStatus: execution.Status,  // Use execution.Status (not finalStatus)
+		LastExecutionTime:   execution.CompletedAt,  // Will be nil for running executions
 		TotalExecutions:     flow.TotalExecutions + 1,
 		SuccessfulExecutions: flow.SuccessfulExecutions + func() int {
-			if finalStatus == "success" {
+			if execution.Status == "success" {
 				return 1
 			}
 			return 0
 		}(),
 		FailedExecutions: flow.FailedExecutions + func() int {
-			if finalStatus == "error" {
+			if execution.Status == "error" {
 				return 1
 			}
 			return 0
@@ -288,9 +309,9 @@ func (s *ProtectionFlowService) ExecuteFlow(ctx context.Context, flowID string, 
 		logger.Error("Failed to update flow statistics", "error", statsErr)
 	}
 
-	logger.Info("Flow execution completed",
+	logger.Info("Flow execution API call completed",
 		"execution_id", execution.ID,
-		"status", finalStatus,
+		"status", execution.Status,  // ✅ FIX: Use execution.Status
 		"jobs_created", execution.JobsCreated,
 		"vms_processed", execution.VMsProcessed)
 
@@ -330,7 +351,7 @@ func (s *ProtectionFlowService) ProcessBackupFlow(ctx context.Context, flow *dat
 
 	// 2. Execute backup for each VM
 	var createdJobIDs []string
-	var jobsCompleted, jobsFailed, jobsSkipped int
+	var jobsFailed, jobsSkipped int  // ✅ FIX: Removed jobsCompleted (not used - jobs run in background)
 	var totalBytes int64
 
 	for _, contextID := range vmContexts {
@@ -367,7 +388,7 @@ func (s *ProtectionFlowService) ProcessBackupFlow(ctx context.Context, flow *dat
 		}
 
 		createdJobIDs = append(createdJobIDs, backupResp.BackupID)
-		jobsCompleted++
+		// ❌ REMOVED: jobsCompleted++ (backup just STARTED, not completed!)
 		totalBytes += backupResp.TotalBytes
 
 		logger.Info("Backup started successfully",
@@ -378,11 +399,13 @@ func (s *ProtectionFlowService) ProcessBackupFlow(ctx context.Context, flow *dat
 
 	// 3. Update execution with results
 	execution.JobsCreated = len(createdJobIDs)
-	execution.JobsCompleted = jobsCompleted
+	// ✅ FIX: Don't set jobsCompleted here - jobs are still running!
+	// Jobs will be counted as completed by background monitor
+	execution.JobsCompleted = 0  // No jobs completed yet
 	execution.JobsFailed = jobsFailed
 	execution.JobsSkipped = jobsSkipped
 	execution.VMsProcessed = len(vmContexts)
-	execution.BytesTransferred = totalBytes
+	execution.BytesTransferred = 0  // Will be updated when jobs complete
 
 	// Store created job IDs as JSON
 	if len(createdJobIDs) > 0 {
@@ -392,14 +415,15 @@ func (s *ProtectionFlowService) ProcessBackupFlow(ctx context.Context, flow *dat
 	}
 
 	if jobsFailed > 0 {
-		return fmt.Errorf("%d of %d backups failed", jobsFailed, len(vmContexts))
+		return fmt.Errorf("%d of %d backups failed to start", jobsFailed, len(vmContexts))
 	}
 
-	logger.Info("Backup flow processing completed",
+	logger.Info("Backup flow jobs created (running in background)",
 		"jobs_created", execution.JobsCreated,
-		"jobs_completed", execution.JobsCompleted,
-		"jobs_failed", execution.JobsFailed)
+		"jobs_running", len(createdJobIDs))
 
+	// ✅ FIX: Return nil to indicate jobs started successfully (not completed!)
+	// Background monitor will update execution status when jobs actually complete
 	return nil
 }
 
