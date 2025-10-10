@@ -37,20 +37,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Estimated Time:** 6-8 hours total
 - **Dependencies:** Requires telemetry framework (already complete)
 
-### 📋 TODO - **Flows Table Immediate Feedback** (2025-10-10) 🔥 CRITICAL UX
+### 📋 DONE - **Flows Table Immediate Feedback** (2025-10-10) ✅ DEPLOYED
 - **Issue:** When "Run Now" clicked, NO immediate feedback - looks like silent failure
 - **User Quote:** "If I didn't know better I'd think it was a silent failure"
-- **Problem:** Status stays "Success", no progress bar, no indication anything happened until first poll (2-5s later)
-- **Impact:** Users don't know if button worked, may click multiple times, poor UX perception
-- **Job Sheet:** `/home/oma_admin/sendense/job-sheets/GROK-PROMPT-flows-table-immediate-feedback.md`
-- **Solution:** Multi-layered instant feedback
+- **Status:** ✅ IMPLEMENTED by Grok, DEPLOYED by Claude
+- **Implementation:** Multi-layered instant feedback system
   1. Optimistic UI: Status → "Starting" (blue pulse), progress bar at 0%, button disabled
-  2. Toast notification: "Starting backup for {name}..."
+  2. Toast notification: "Starting backup for {name}..." (sonner library)
   3. Immediate poll: Trigger progress fetch right after API success
   4. Real-time updates: Continue normal polling every 2s
-- **Files:** FlowsTable/index.tsx, FlowRow.tsx, useFlowProgress.ts, layout.tsx
-- **Time:** 1.5-2 hours
-- **Priority:** HIGH - Critical UX issue making product feel unresponsive
+- **Files Modified:**
+  - FlowsTable/index.tsx (optimistic state + toast)
+  - FlowRow.tsx (UI feedback display)
+  - useFlowProgress.ts (enhanced polling)
+  - layout.tsx (Toaster component)
+  - package.json (sonner dependency)
+- **Result:** User sees instant feedback within 100ms of clicking "Run Now"
+- **Note:** Initial deployment issue - GUI wasn't rebuilt, fixed by Claude
+- **Commit:** 274a975
+- **Deployment Report:** `/home/oma_admin/sendense/FLOWS-IMMEDIATE-FEEDBACK-DEPLOYED.md`
 
 ### 📋 DONE - **Protection Flows Table Wiring** (2025-10-10) ✅
 - **Issue:** Flows table shows incorrect/missing data (status stuck on "Pending", Last Run = "Never", Next Run = "Never", no progress bar)
