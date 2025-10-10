@@ -52,6 +52,9 @@ export interface FlowsTableProps {
   onSort?: (column: string, direction: 'asc' | 'desc') => void;
   sortColumn?: string;
   sortDirection?: 'asc' | 'desc';
+  onEdit?: (flow: Flow) => void;      // Optional: for opening edit modal
+  onDelete?: (flow: Flow) => void;    // Optional: for opening delete modal
+  // Note: onRunNow is NOT here - FlowsTable uses its own with optimistic UI
 }
 
 export interface FlowRowProps {

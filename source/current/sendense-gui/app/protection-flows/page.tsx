@@ -97,9 +97,7 @@ export default function ProtectionFlowsPage() {
     setDeletingFlow(null);
   };
 
-  const handleRunNow = async (flow: Flow) => {
-    await executeFlowMutation.mutateAsync(flow.id);
-  };
+  // ❌ REMOVED: handleRunNow from page - FlowsTable has its own with optimistic UI
 
   return (
     <div className="h-screen bg-background">
@@ -137,6 +135,7 @@ export default function ProtectionFlowsPage() {
             </div>
 
             {/* Table (no extra container) */}
+            {/* FlowsTable uses page handlers for edit/delete (modals) but its own handleRunNow (optimistic UI) */}
             <div className="flex-1 overflow-auto">
               <FlowsTable
                 flows={flows}
@@ -144,7 +143,6 @@ export default function ProtectionFlowsPage() {
                 onSelectFlow={handleSelectFlow}
                 onEdit={handleEditFlow}
                 onDelete={handleDeleteFlow}
-                onRunNow={handleRunNow}
               />
             </div>
           </div>

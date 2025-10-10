@@ -11,7 +11,7 @@ import { useExecuteFlow } from "../../hooks/useProtectionFlows";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-export function FlowsTable({ flows, onSelectFlow, selectedFlowId }: FlowsTableProps) {
+export function FlowsTable({ flows, onSelectFlow, selectedFlowId, onEdit, onDelete }: FlowsTableProps) {
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
@@ -57,18 +57,26 @@ export function FlowsTable({ flows, onSelectFlow, selectedFlowId }: FlowsTablePr
   };
 
   const handleEdit = (flow: Flow) => {
-    // TODO: Open edit modal
-    console.log('Edit flow:', flow.id);
+    if (onEdit) {
+      onEdit(flow);  // Use parent handler if provided
+    } else {
+      console.log('Edit flow:', flow.id);  // Fallback
+    }
   };
 
   const handleDelete = (flow: Flow) => {
-    // TODO: Open delete confirmation modal
-    console.log('Delete flow:', flow.id);
+    if (onDelete) {
+      onDelete(flow);  // Use parent handler if provided
+    } else {
+      console.log('Delete flow:', flow.id);  // Fallback
+    }
   };
 
   const handleRunNow = async (flow: Flow) => {
+    console.log('🔥 RunNow clicked for flow:', flow.id, flow.name);
     // 1. Optimistic UI update - immediate feedback
     setOptimisticRunning(prev => new Set(prev).add(flow.id));
+    console.log('✅ Optimistic state set for flow:', flow.id);
 
     try {
       // 2. Execute the flow
@@ -80,11 +88,13 @@ export function FlowsTable({ flows, onSelectFlow, selectedFlowId }: FlowsTablePr
         duration: 3000,
       });
 
-      // 4. Immediate poll for progress - don't wait for normal interval
-      queryClient.invalidateQueries({ queryKey: ['all-flows-progress'] });
-      queryClient.invalidateQueries({ queryKey: ['protection-flows'] });
+      // 4. DELAYED poll for progress - give user time to see optimistic state first
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['all-flows-progress'] });
+        queryClient.invalidateQueries({ queryKey: ['protection-flows'] });
+      }, 1500); // Wait 1.5 seconds so user can see optimistic state
 
-      // 5. Remove optimistic state after short delay (let real data take over)
+      // 5. Remove optimistic state after delay (let real data take over)
       setTimeout(() => {
         setOptimisticRunning(prev => {
           const next = new Set(prev);
@@ -171,13 +181,23 @@ export function FlowsTable({ flows, onSelectFlow, selectedFlowId }: FlowsTablePr
           ) : (
             sortedFlows.map((flow) => {
               const flowProgress = progressData?.[flow.id];
+              const isOptRunning = optimisticRunning.has(flow.id);
+
+              if (flow.name.includes('pgtest')) {
+                console.log('🎯 Rendering FlowRow for:', flow.name, {
+                  progress: flowProgress?.progress,
+                  isOptimisticallyRunning: isOptRunning,
+                  optimisticRunningSet: Array.from(optimisticRunning)
+                });
+              }
+
               return (
                 <FlowRow
                   key={flow.id}
                   flow={{
                     ...flow,
                     progress: flowProgress?.progress, // Add progress to flow object
-                    isOptimisticallyRunning: optimisticRunning.has(flow.id) // Add optimistic state
+                    isOptimisticallyRunning: isOptRunning // Add optimistic state
                   }}
                   isSelected={selectedFlowId === flow.id}
                   onSelect={onSelectFlow}

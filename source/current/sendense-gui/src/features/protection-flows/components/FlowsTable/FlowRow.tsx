@@ -24,15 +24,31 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
     }
   };
 
-  const uiStatus = getUIStatus(flow);
-
-  // Check for optimistic running state
+  // Check for optimistic running state FIRST (takes precedence)
   const isOptimisticallyRunning = flow.isOptimisticallyRunning || false;
+
+  // Use optimistic status if set, otherwise use real status
+  const realUIStatus = getUIStatus(flow);
+  const uiStatus = isOptimisticallyRunning ? 'pending' : realUIStatus; // Use 'pending' as base when optimistic
+
   const isRunning = uiStatus === 'running' || isOptimisticallyRunning;
   const hasProgress = flow.progress !== undefined && flow.progress >= 0; // Changed to >= 0 to show 0%
 
   // Show 0% progress if optimistically running
   const displayProgress = isOptimisticallyRunning ? 0 : (flow.progress || 0);
+
+  // Debug logging
+  if (flow.name.includes('pgtest')) {
+    console.log('🐛 FlowRow render:', {
+      flowName: flow.name,
+      isOptimisticallyRunning,
+      realUIStatus,
+      uiStatus,
+      isRunning,
+      progress: flow.progress,
+      displayProgress
+    });
+  }
 
   return (
     <tr
