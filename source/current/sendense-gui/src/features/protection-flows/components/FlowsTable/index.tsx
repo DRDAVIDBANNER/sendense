@@ -15,9 +15,16 @@ export function FlowsTable({ flows, onSelectFlow, selectedFlowId }: FlowsTablePr
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
+  // Optimistic UI state for immediate feedback
+  const [optimisticRunning, setOptimisticRunning] = useState<Set<string>>(new Set());
+
   // Get progress data for all flows
   const flowIds = flows.map(f => f.id);
   const { data: progressData } = useAllFlowsProgress(flowIds, flows.length > 0);
+
+  // Mutations and query client
+  const executeFlowMutation = useExecuteFlow();
+  const queryClient = useQueryClient();
 
   const sortedFlows = useMemo(() => {
     return [...flows].sort((a, b) => {
@@ -59,9 +66,46 @@ export function FlowsTable({ flows, onSelectFlow, selectedFlowId }: FlowsTablePr
     console.log('Delete flow:', flow.id);
   };
 
-  const handleRunNow = (flow: Flow) => {
-    // TODO: Start flow execution
-    console.log('Run flow now:', flow.id);
+  const handleRunNow = async (flow: Flow) => {
+    // 1. Optimistic UI update - immediate feedback
+    setOptimisticRunning(prev => new Set(prev).add(flow.id));
+
+    try {
+      // 2. Execute the flow
+      await executeFlowMutation.mutateAsync(flow.id);
+
+      // 3. Show success toast
+      toast.success(`Starting backup for ${flow.name}`, {
+        description: "Backup execution has begun",
+        duration: 3000,
+      });
+
+      // 4. Immediate poll for progress - don't wait for normal interval
+      queryClient.invalidateQueries({ queryKey: ['all-flows-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['protection-flows'] });
+
+      // 5. Remove optimistic state after short delay (let real data take over)
+      setTimeout(() => {
+        setOptimisticRunning(prev => {
+          const next = new Set(prev);
+          next.delete(flow.id);
+          return next;
+        });
+      }, 3000);
+
+    } catch (error: any) {
+      // On error, remove optimistic state and show error
+      setOptimisticRunning(prev => {
+        const next = new Set(prev);
+        next.delete(flow.id);
+        return next;
+      });
+
+      toast.error(`Failed to start backup for ${flow.name}`, {
+        description: error?.message || "An unexpected error occurred",
+        duration: 5000,
+      });
+    }
   };
 
   return (
@@ -132,7 +176,8 @@ export function FlowsTable({ flows, onSelectFlow, selectedFlowId }: FlowsTablePr
                   key={flow.id}
                   flow={{
                     ...flow,
-                    progress: flowProgress?.progress // Add progress to flow object
+                    progress: flowProgress?.progress, // Add progress to flow object
+                    isOptimisticallyRunning: optimisticRunning.has(flow.id) // Add optimistic state
                   }}
                   isSelected={selectedFlowId === flow.id}
                   onSelect={onSelectFlow}

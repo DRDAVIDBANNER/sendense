@@ -89,6 +89,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **API:** New `useMachineBackups` hook fetching from `GET /api/v1/backups?vm_name={name}&repository_id={repo}`
 - **Accessibility:** Hover styles, keyboard navigation, responsive design
 
+### 🚀 ENHANCED - **Protection Flows Table Immediate Feedback UX** (2025-10-10)
+- **Instant Visual Feedback:** "Run Now" click shows immediate UI changes (< 100ms)
+- **Optimistic UI Updates:** Status changes to "Starting" with blue pulsing dot and progress bar at 0%
+- **Toast Notifications:** Success/error toasts appear instantly with descriptive messages
+- **Immediate Polling:** Progress data fetched immediately after API success (no 2-5s delay)
+- **Button States:** "Run Now" becomes "Running..." and disabled during execution
+- **Menu Protection:** All actions (Edit/Delete) disabled during execution to prevent conflicts
+- **Progress Animation:** Starting state shows pulsing progress bar with shimmer effect
+- **Error Handling:** Optimistic state removed on API failure with error toast
+- **Graceful Transitions:** Optimistic state automatically replaced by real data after 3 seconds
+- **Toast System:** Added Sonner toast library with top-right positioning and auto-dismiss
+
 ### 🔧 FIXED - **Protection Flows Table Complete Wiring** (2025-10-10)
 - **Status Display:** Fixed flows showing "Pending" - now correctly displays Success/Error/Running/Warning
 - **Last Run:** Fixed "Never" display - now shows actual `last_execution_time` from backend

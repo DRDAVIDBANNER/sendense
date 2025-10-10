@@ -25,8 +25,14 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
   };
 
   const uiStatus = getUIStatus(flow);
-  const isRunning = uiStatus === 'running';
-  const hasProgress = flow.progress !== undefined && flow.progress > 0;
+
+  // Check for optimistic running state
+  const isOptimisticallyRunning = flow.isOptimisticallyRunning || false;
+  const isRunning = uiStatus === 'running' || isOptimisticallyRunning;
+  const hasProgress = flow.progress !== undefined && flow.progress >= 0; // Changed to >= 0 to show 0%
+
+  // Show 0% progress if optimistically running
+  const displayProgress = isOptimisticallyRunning ? 0 : (flow.progress || 0);
 
   return (
     <tr
@@ -45,12 +51,15 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
                 {flow.source} → {flow.destination}
               </div>
             )}
-            {/* Progress bar for running flows */}
-            {isRunning && hasProgress && (
+            {/* Progress bar for running OR optimistically running flows */}
+            {isRunning && (
               <div className="mt-2 flex items-center gap-2">
-                <Progress value={flow.progress} className="h-1.5 flex-1" />
+                <Progress
+                  value={displayProgress}
+                  className={`h-1.5 flex-1 ${isOptimisticallyRunning ? 'animate-pulse' : ''}`}
+                />
                 <span className="text-xs text-muted-foreground min-w-[3ch]">
-                  {flow.progress}%
+                  {isOptimisticallyRunning ? '0%' : `${displayProgress}%`}
                 </span>
               </div>
             )}
@@ -65,13 +74,16 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${
+            isOptimisticallyRunning ? 'bg-blue-500 animate-pulse' :  // Blue pulse for starting
             uiStatus === 'success' ? 'bg-green-500' :
-            uiStatus === 'running' ? 'bg-blue-500 animate-pulse' :  // ✅ Add pulse for running
+            uiStatus === 'running' ? 'bg-blue-500 animate-pulse' :
             uiStatus === 'warning' ? 'bg-yellow-500' :
             uiStatus === 'error' ? 'bg-red-500' :
             'bg-muted-foreground'
           }`} />
-          <span className="capitalize text-sm">{uiStatus}</span>
+          <span className="capitalize text-sm">
+            {isOptimisticallyRunning ? 'Starting' : uiStatus}
+          </span>
         </div>
       </td>
       <td className="px-4 py-3 text-sm text-muted-foreground">
@@ -93,16 +105,23 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit?.(flow); }}>
+            <DropdownMenuItem
+              onClick={(e) => { e.stopPropagation(); onEdit?.(flow); }}
+              disabled={isOptimisticallyRunning || uiStatus === 'running'}
+            >
               Edit Flow
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRunNow?.(flow); }}>
-              Run Now
+            <DropdownMenuItem
+              onClick={(e) => { e.stopPropagation(); onRunNow?.(flow); }}
+              disabled={isOptimisticallyRunning || uiStatus === 'running'}
+            >
+              {isOptimisticallyRunning || uiStatus === 'running' ? 'Running...' : 'Run Now'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={(e) => { e.stopPropagation(); onDelete?.(flow); }}
               className="text-destructive focus:text-destructive"
+              disabled={isOptimisticallyRunning || uiStatus === 'running'}
             >
               Delete Flow
             </DropdownMenuItem>

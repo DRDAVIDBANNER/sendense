@@ -122,6 +122,8 @@ export function useAllFlowsProgress(flowIds: string[], enabled: boolean = true) 
     },
     enabled: enabled && flowIds.length > 0,
     refetchInterval: 2000, // Poll every 2 seconds for real-time updates
+    refetchOnMount: 'always',  // Always refetch on mount for immediate updates
+    refetchOnWindowFocus: true,  // Refetch when window focused
     staleTime: 1000, // Consider data fresh for 1 second
   });
 }

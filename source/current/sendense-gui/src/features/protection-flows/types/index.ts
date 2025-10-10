@@ -55,7 +55,7 @@ export interface FlowsTableProps {
 }
 
 export interface FlowRowProps {
-  flow: Flow;
+  flow: Flow & { isOptimisticallyRunning?: boolean };
   isSelected: boolean;
   onSelect: (flow: Flow) => void;
   onViewDetails?: (flow: Flow) => void;
