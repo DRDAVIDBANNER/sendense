@@ -620,12 +620,40 @@ func (be *BackupEngine) CompleteBackup(ctx context.Context, backupID string, dis
 	
 	// If all disks completed, mark parent backup_jobs record as completed
 	if totalDisks > 0 && totalDisks == completedDisks {
+		// Get current job to check if telemetry already set bytes_transferred
+		var currentJob database.BackupJob
+		be.db.GetGormDB().Where("id = ?", backupID).First(&currentJob)
+		
+		// Preserve telemetry data if present, otherwise aggregate from disks
+		var finalBytesTransferred int64
+		if currentJob.BytesTransferred > 0 {
+			// Telemetry already set this - keep it!
+			finalBytesTransferred = currentJob.BytesTransferred
+			log.WithFields(log.Fields{
+				"backup_id":              backupID,
+				"bytes_from_telemetry":   finalBytesTransferred,
+			}).Info("✅ Using bytes_transferred from telemetry (real-time SBC data)")
+		} else {
+			// No telemetry - aggregate from disks as fallback
+			be.db.GetGormDB().
+				Model(&database.BackupDisk{}).
+				Select("SUM(IFNULL(bytes_transferred, 0))").
+				Where("backup_job_id = ?", backupID).
+				Scan(&finalBytesTransferred)
+			
+			log.WithFields(log.Fields{
+				"backup_id":              backupID,
+				"bytes_from_disks":       finalBytesTransferred,
+			}).Debug("Aggregated bytes_transferred from disks (fallback)")
+		}
+		
 		result = be.db.GetGormDB().
 			Model(&database.BackupJob{}).
 			Where("id = ?", backupID).
 			Updates(map[string]interface{}{
-				"status":       "completed",
-				"completed_at": now,
+				"status":            "completed",
+				"bytes_transferred": finalBytesTransferred,
+				"completed_at":      now,
 			})
 		
 		if result.Error != nil {

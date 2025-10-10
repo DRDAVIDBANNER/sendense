@@ -5,9 +5,10 @@ import type { FlowMachineInfo } from "@/src/features/protection-flows/types";
 
 interface FlowMachinesTableProps {
   machines: FlowMachineInfo[];
+  onMachineClick?: (machine: FlowMachineInfo) => void;
 }
 
-export function FlowMachinesTable({ machines }: FlowMachinesTableProps) {
+export function FlowMachinesTable({ machines, onMachineClick }: FlowMachinesTableProps) {
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '—';
     const k = 1024;
@@ -46,7 +47,11 @@ export function FlowMachinesTable({ machines }: FlowMachinesTableProps) {
         </TableHeader>
         <TableBody>
           {machines.map((machine) => (
-            <TableRow key={machine.context_id}>
+            <TableRow
+              key={machine.context_id}
+              className={onMachineClick ? "cursor-pointer hover:bg-accent/50 transition-colors" : ""}
+              onClick={() => onMachineClick?.(machine)}
+            >
               <TableCell className="font-medium">
                 <div className="flex items-center gap-2">
                   <span

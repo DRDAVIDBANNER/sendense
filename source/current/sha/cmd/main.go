@@ -100,36 +100,15 @@ func main() {
 		log.WithError(err).Fatal("Failed to create SHA API server")
 	}
 
-	// 🎯 PRODUCTION ENHANCEMENT: Intelligent job recovery with SNA validation on startup
-	log.Info("🔍 Initializing intelligent job recovery system with SNA validation")
-	
-	// Get SNA services from API server handlers
-	snaClient := apiServer.GetHandlers().SNAProgressClient
-	snaPoller := apiServer.GetHandlers().SNAProgressPoller
-	
-	if snaClient == nil || snaPoller == nil {
-		log.Warn("⚠️ SNA services not available - job recovery will be limited")
-	}
-	
-	// Create job recovery with SNA validation capabilities
-	jobRecovery := services.NewProductionJobRecovery(db, snaClient, snaPoller)
-	
-	// Run intelligent recovery on startup
-	log.Info("🚀 Running intelligent job recovery scan with SNA validation...")
-	if err := jobRecovery.RecoverOrphanedJobsOnStartup(context.Background()); err != nil {
-		log.WithError(err).Warn("⚠️ Job recovery failed during startup - continuing with normal operation")
-	} else {
-		log.Info("✅ Job recovery completed successfully")
-	}
-	
-	// 🏥 PRODUCTION ENHANCEMENT: Continuous health monitoring for orphaned jobs
-	log.Info("🏥 Starting SNA polling health monitor for continuous job monitoring")
-	healthMonitor := services.NewVMAPollingHealthMonitor(db, snaClient, snaPoller)
-	if err := healthMonitor.Start(context.Background()); err != nil {
-		log.WithError(err).Warn("⚠️ Failed to start health monitor - continuing without continuous monitoring")
-	} else {
-		log.Info("✅ Health monitor started - will check for orphaned jobs every 2 minutes")
-	}
+	// 🚨 REMOVED (2025-10-10): Old SNA progress-based job recovery
+	// Replaced by telemetry-based stale job detection (see stale_job_detector.go)
+	// Old job recovery code removed as part of polling → push telemetry migration
+	log.Info("✅ Telemetry-based stale job detection will handle orphaned jobs")
+
+	// 🚨 NEW: Stale job detector for telemetry-based progress tracking
+	log.Info("🚨 Starting stale job detector for real-time telemetry monitoring")
+	staleDetector := services.NewStaleJobDetector(db)
+	go staleDetector.Start(context.Background())
 
 	// Setup graceful shutdown
 	c := make(chan os.Signal, 1)

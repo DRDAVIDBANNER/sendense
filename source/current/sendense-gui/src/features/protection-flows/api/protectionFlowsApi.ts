@@ -5,7 +5,10 @@ import axios from 'axios';
 const API_BASE = '';
 
 export interface ProtectionFlowStatus {
+  last_execution_id?: string;
   last_execution_status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  last_execution_time?: string;
+  next_execution_time?: string;
   total_executions: number;
   successful_executions: number;
   failed_executions: number;

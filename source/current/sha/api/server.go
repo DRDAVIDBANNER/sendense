@@ -257,6 +257,11 @@ func (s *Server) setupRoutes() {
 		log.Info("✅ Backup API routes registered (start, list, get, delete, chain)")
 	}
 
+	// 🆕 NEW: Telemetry API endpoints (Real-time progress tracking - 2025-10-10)
+	if s.handlers.Telemetry != nil {
+		s.handlers.Telemetry.RegisterRoutes(api)
+	}
+
 	// 🆕 NEW: Protection Flow API endpoints (Phase 1 Extension - Unified Backup Orchestration)
 	if s.handlers.ProtectionFlow != nil {
 		// Protection Flow collection operations

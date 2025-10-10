@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '../api/protectionFlowsApi';
 
+// Use empty string to let Next.js rewrites proxy handle the routing
+const API_BASE = '';
+
 export function useProtectionFlows() {
   return useQuery({
     queryKey: ['protection-flows'],
@@ -113,5 +116,30 @@ export function useFlowMachines(flowId: string | null) {
     queryFn: () => api.getFlowMachines(flowId!),
     enabled: !!flowId,
     staleTime: 30000, // Refresh every 30 seconds
+  });
+}
+
+export function useMachineBackups(vmName: string | null, repositoryId: string) {
+  return useQuery({
+    queryKey: ['machine-backups', vmName, repositoryId],
+    queryFn: async () => {
+      if (!vmName) return null;
+
+      const params = new URLSearchParams({
+        vm_name: vmName,
+        repository_id: repositoryId,
+      });
+
+      const response = await fetch(`${API_BASE}/api/v1/backups?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch backups: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.backups || [];
+    },
+    enabled: !!vmName && !!repositoryId,
+    staleTime: 30000, // 30 seconds - reasonable for backup data
   });
 }

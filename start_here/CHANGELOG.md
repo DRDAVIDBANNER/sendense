@@ -9,6 +9,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 📋 TODO - **Protection Flows Table Wiring** (2025-10-10)
+- **Issue:** Flows table shows incorrect/missing data (status stuck on "Pending", Last Run = "Never", Next Run = "Never", no progress bar)
+- **Root Cause:** Data transformation missing between backend API and frontend display
+- **Backend Data:** API correctly provides `status.last_execution_time`, `status.next_execution_time`, execution progress
+- **Frontend Issue:** Not mapping backend fields to expected frontend fields (`lastRun`, `nextRun`, `progress`)
+- **Job Sheet:** `/home/oma_admin/sendense/job-sheets/GROK-PROMPT-flows-table-wiring.md`
+- **Tasks:**
+  1. Add data transformation layer to map API fields
+  2. Implement progress calculation from running executions
+  3. Add real-time progress bar display for running flows
+  4. Calculate next run from cron schedule if available
+  5. Fix status display to show actual execution status
+- **Components:**
+  - New hook: `useFlowProgress` and `useAllFlowsProgress` for real-time progress
+  - Update: `protectionFlowsApi.ts` with transformation function
+  - Update: `FlowsTable/index.tsx` to fetch and pass progress data
+  - Update: `FlowsTable/FlowRow.tsx` to display progress bar
+- **Expected Result:** Table shows accurate status, timestamps, and progress bars for running flows
+
+### 🎨 ADDED - **Machine Backup Details Modal** (2025-10-10)
+- **Feature:** Clickable machine rows in Protection Flows open detailed modal with complete backup history
+- **Components:** New `MachineDetailsModal` component with VM summary, KPI cards, and backup history table
+- **Data:** Uses accurate `bytes_transferred` data from telemetry fix (was 0 before 2025-10-10)
+- **KPIs:** Total backups, success rate, average size, average duration calculations
+- **UI:** Professional table with type badges, size formatting, duration calculations, status indicators
+- **Error Handling:** Failed backups show error messages inline
+- **API:** New `useMachineBackups` hook fetching from `GET /api/v1/backups?vm_name={name}&repository_id={repo}`
+- **Accessibility:** Hover styles, keyboard navigation, responsive design
+- **API Fix (v2.27.0):** SHA now returns all required telemetry fields (`type`, `current_phase`, `progress_percent`, `transfer_speed_bps`, `last_telemetry_at`)
+- **Duration Fix (v2.28.0):** SHA now sets `started_at` timestamp when backup begins, enabling proper duration calculations
+- **Binary:** `sendense-hub-v2.28.0-started-at-fix` deployed
+
+### 🔧 FIXED - **Backup Job Telemetry Framework - Data Collection** (2025-10-10)
+- **Feature:** Real-time push-based telemetry from SBC to SHA replacing polling architecture
+- **Status:** ✅ Phase 1-8 COMPLETE (Implementation finished)
+- **Status:** ✅ Phase 9 IN PROGRESS (Data collection bug fixed, ready for integration testing)
+- **Backend:** New API endpoint `POST /api/v1/telemetry/{job_type}/{job_id}` for real-time updates
+- **Architecture:** Hybrid cadence (5s time + 10% progress + state changes) with rich telemetry data
+- **Benefits:** Real-time progress, per-disk tracking, stale job detection, eliminates polling overhead
+- **Implementation:**
+  - ✅ Fixed critical bytes_transferred aggregation bug (Phase 1)
+  - ✅ Database schema updated with telemetry fields (Phase 5)
+  - ✅ SHA telemetry receiver implemented (Phases 2-4)
+  - ✅ Stale job detector running (Phase 6)
+  - ✅ SBC telemetry sender integrated (Phase 7)
+  - ✅ Old polling system removed (Phase 8)
+  - ✅ **DATA COLLECTION FIX:** SBC now builds complete TelemetryUpdate with all fields
+- **Critical Bug Fix (2025-10-10 Session 2):**
+  - **Problem:** Telemetry infrastructure worked but NO data reaching SHA (all fields were 0)
+  - **Root Cause:** Incomplete TelemetryUpdate construction in SBC - hardcoded 0 progress, missing fields
+  - **Fix Applied:**
+    - `tracker.go`: UpdateProgress() now calculates progressPercent, includes all fields (JobID, JobType, CurrentPhase, TotalBytes, Timestamp)
+    - `progress_aggregator.go`: Now passes totalBytes and currentPhase to tracker
+    - Changed error logging from Warn to Error for visibility
+  - **Files Modified:**
+    - `sendense-backup-client/internal/telemetry/tracker.go`
+    - `sendense-backup-client/internal/vmware_nbdkit/progress_aggregator.go`
+  - **Binary:** `migratekit-telemetry-fix` deployed to SNA
+- **Documentation:**
+  - `TELEMETRY_ARCHITECTURE.md` - Complete architecture documentation
+  - `TELEMETRY-DEBUG-FINDINGS.md` - Root cause analysis and fix details
+  - `HANDOVER-2025-10-10-TELEMETRY-FRAMEWORK.md` - Session handover
+  - `PHASE-9-TESTING-GUIDE.md` - Comprehensive testing guide
+  - API documented in `api-documentation/OMA.md`
+  - Schema documented in `api-documentation/DB_SCHEMA.md`
+- **Files Created:** 5 new SHA files, 3 new SBC files (16 files total)
+- **Next:** Run integration test with real backup to verify telemetry data flows correctly
+
+### Planned - **Machine Backup Details Modal** (GUI Enhancement)
+- **Feature:** Clickable VM rows in Protection Flows that open detailed backup history modal
+- **Tech Spec:** `job-sheets/TECH-SPEC-machine-backup-details-modal.md`
+- **Grok Prompt:** `job-sheets/GROK-PROMPT-machine-backup-details-modal.md`
+- **Reference:** `job-sheets/REFERENCE-machine-modal-data-flow.md`
+- **Status:** 📝 Specification complete, ready for implementation after telemetry fix
+- **Blocker:** Requires Phase 1 bytes_transferred fix (NOW COMPLETE)
+- **API:** Uses existing `GET /api/v1/backups` endpoint (no backend changes needed)
+- **Scope:** Pure GUI feature - Modal with VM summary, KPIs (success rate, avg size, avg duration), and backup history list
+
 ---
 
 ## [SHA v2.25.7-individual-vm-machines-fix] - 2025-10-10

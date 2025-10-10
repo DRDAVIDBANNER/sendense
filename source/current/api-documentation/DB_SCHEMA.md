@@ -135,6 +135,7 @@ Backup Repository System (Phase 1 - Added 2025-10-04)
   - CBT: disk_change_id (varchar 255) - VMware CBT change ID for incremental backups
   - Storage: qcow2_path (varchar 512), bytes_transferred
   - Status: status ENUM('pending','running','completed','failed'), error_message, completed_at
+  - Telemetry (added 2025-10-10): progress_percent DOUBLE DEFAULT 0.0 - Real-time per-disk progress tracking
   - Timestamps: created_at
   - Indexes: idx_change_id_lookup (vm_backup_context_id, disk_index, status), idx_completion (backup_job_id, status)
   - Purpose: Per-disk backup tracking with individual change_ids (replaced time-window hack)
@@ -143,9 +144,10 @@ Backup Repository System (Phase 1 - Added 2025-10-04)
   - PK: id (varchar 64)
   - FKs: vm_context_id → vm_replication_contexts(context_id) CASCADE; vm_backup_context_id → vm_backup_contexts(context_id) CASCADE; repository_id → backup_repositories(id) RESTRICT; policy_id → backup_policies(id) SET NULL; parent_backup_id → backup_jobs(id) SET NULL
   - Fields: vm_name, backup_type ENUM('full','incremental','differential'), status ENUM('pending','running','completed','failed','cancelled'), repository_path, bytes_transferred, total_bytes, compression_enabled, error_message
+  - Telemetry (added 2025-10-10): current_phase VARCHAR(255) DEFAULT 'pending', transfer_speed_bps BIGINT DEFAULT 0, eta_seconds INT DEFAULT 0, progress_percent DOUBLE DEFAULT 0.0, last_telemetry_at DATETIME - Real-time progress tracking from sendense-backup-client
   - Deprecated (v2.16.0+): disk_id, change_id - now stored in backup_disks table per-disk
   - Timestamps: created_at, started_at, completed_at
-  - Indexes: idx_vm_context, idx_repository, idx_policy, idx_status, idx_created, idx_parent
+  - Indexes: idx_vm_context, idx_repository, idx_policy, idx_status, idx_created, idx_parent, idx_backup_jobs_telemetry_status_last_telemetry (status, last_telemetry_at) - Stale job detection
   - Note: Parent job represents entire multi-disk backup; per-disk details in backup_disks table
 
 - backup_copies

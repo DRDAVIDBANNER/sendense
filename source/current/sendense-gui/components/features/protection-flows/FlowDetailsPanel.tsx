@@ -27,8 +27,9 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { Flow } from "./types";
-import { getUIStatus } from "@/src/features/protection-flows/types";
+import { getUIStatus, FlowMachineInfo } from "@/src/features/protection-flows/types";
 import { RestoreWorkflowModal } from "./RestoreWorkflowModal";
+import { MachineDetailsModal } from "./MachineDetailsModal";
 import { FlowMachinesTable } from "./FlowMachinesTable";
 import { useFlowExecutions, useFlowMachines } from "@/src/features/protection-flows/hooks/useProtectionFlows";
 import {
@@ -128,6 +129,8 @@ const performanceData = [
 export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
   const [activeTab, setActiveTab] = useState('machines');
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [selectedMachine, setSelectedMachine] = useState<FlowMachineInfo | null>(null);
+  const [isMachineModalOpen, setIsMachineModalOpen] = useState(false);
 
   // Real API data
   const { data: executionsData } = useFlowExecutions(flow.id);
@@ -263,7 +266,13 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
                       <div className="text-muted-foreground">Loading machines...</div>
                     </div>
                   ) : (
-                    <FlowMachinesTable machines={flowMachines} />
+                    <FlowMachinesTable
+                      machines={flowMachines}
+                      onMachineClick={(machine) => {
+                        setSelectedMachine(machine);
+                        setIsMachineModalOpen(true);
+                      }}
+                    />
                   )}
                 </div>
               </ScrollArea>
@@ -523,6 +532,17 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
           backup_edition: true,
           enterprise_edition: false,
           replication_edition: false
+        }}
+      />
+
+      {/* Machine Details Modal */}
+      <MachineDetailsModal
+        machine={selectedMachine}
+        repositoryId={flow.repository_id || ''}
+        isOpen={isMachineModalOpen}
+        onClose={() => {
+          setIsMachineModalOpen(false);
+          setSelectedMachine(null); // Reset state on close
         }}
       />
     </div>

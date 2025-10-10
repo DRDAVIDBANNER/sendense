@@ -87,6 +87,7 @@ type BackupResponse struct {
 	DiskResults      []DiskBackupResult  `json:"disk_results"`           // 🆕 NEW: Results for ALL disks
 	NBDTargetsString string              `json:"nbd_targets_string"`     // 🆕 NEW: Multi-disk NBD targets for SBC
 	BackupType       string              `json:"backup_type"`
+	Type             string              `json:"type"`                   // 🆕 NEW: Alias for backup_type (frontend compat)
 	RepositoryID     string              `json:"repository_id"`
 	PolicyID         string              `json:"policy_id,omitempty"`
 	Status           string              `json:"status"`
@@ -96,6 +97,11 @@ type BackupResponse struct {
 	DisksCount       int                 `json:"disks_count"`             // 🆕 NEW: Number of disks in this backup
 	ChangeID         string              `json:"change_id,omitempty"`
 	ErrorMessage     string              `json:"error_message,omitempty"`
+	// 🆕 NEW: Telemetry fields for real-time progress tracking
+	CurrentPhase     string              `json:"current_phase"`
+	TransferSpeedBps int64               `json:"transfer_speed_bps"`
+	ProgressPercent  float64             `json:"progress_percent"`
+	LastTelemetryAt  string              `json:"last_telemetry_at,omitempty"`
 	CreatedAt        string              `json:"created_at"`
 	StartedAt        string              `json:"started_at,omitempty"`
 	CompletedAt      string              `json:"completed_at,omitempty"`
@@ -236,12 +242,12 @@ func (bh *BackupHandler) StartBackup(w http.ResponseWriter, r *http.Request) {
 	parentJobInsert := `
 		INSERT INTO backup_jobs (
 			id, vm_backup_context_id, vm_context_id, vm_name, repository_id,
-			backup_type, status, repository_path, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			backup_type, status, repository_path, created_at, started_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	err = bh.db.GetGormDB().Exec(parentJobInsert,
 		backupJobID, vmBackupContext.ContextID, vmContext.ContextID, req.VMName, req.RepositoryID,
-		req.BackupType, "running", "/multi-disk-parent", now,
+		req.BackupType, "running", "/multi-disk-parent", now, now,  // ✅ FIX: Set started_at = created_at
 	).Error
 	
 	if err != nil {
@@ -907,6 +913,7 @@ func (bh *BackupHandler) convertToBackupResponse(job *database.BackupJob) *Backu
 		VMContextID:      job.VMContextID,
 		VMName:           job.VMName,
 		BackupType:       job.BackupType,
+		Type:             job.BackupType, // 🆕 NEW: Frontend compatibility alias
 		RepositoryID:     job.RepositoryID,
 		PolicyID:         policyID,
 		Status:           job.Status,
@@ -916,6 +923,10 @@ func (bh *BackupHandler) convertToBackupResponse(job *database.BackupJob) *Backu
 		DisksCount:       int(disksCount), // 🆕 NEW: Count of disks in this backup
 		ChangeID:         job.ChangeID,
 		ErrorMessage:     job.ErrorMessage,
+		// 🆕 NEW: Telemetry fields
+		CurrentPhase:     job.CurrentPhase,
+		TransferSpeedBps: job.TransferSpeedBps,
+		ProgressPercent:  job.ProgressPercent,
 		CreatedAt:        job.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		// Note: DiskResults will be populated by caller for multi-disk backups
 	}
@@ -925,6 +936,9 @@ func (bh *BackupHandler) convertToBackupResponse(job *database.BackupJob) *Backu
 	}
 	if job.CompletedAt != nil {
 		response.CompletedAt = job.CompletedAt.Format("2006-01-02T15:04:05Z")
+	}
+	if job.LastTelemetryAt != nil {
+		response.LastTelemetryAt = job.LastTelemetryAt.Format("2006-01-02T15:04:05Z")
 	}
 
 	return response

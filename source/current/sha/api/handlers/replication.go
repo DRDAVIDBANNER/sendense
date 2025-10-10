@@ -232,10 +232,12 @@ func (h *ReplicationHandler) createVMContextOnly(ctx context.Context, req Create
 }
 
 // NewReplicationHandler creates a new replication handler with migration workflow engine
+// 🚨 DEPRECATED (2025-10-10): snaProgressPoller parameter is deprecated and should be nil
+// Replication will be rebuilt to use telemetry framework in the future
 func NewReplicationHandler(db database.Connection, mountManager *volume.MountManager, snaProgressPoller workflows.SNAProgressPoller) *ReplicationHandler {
 	return &ReplicationHandler{
 		db:              db,
-		migrationEngine: workflows.NewMigrationEngine(db, mountManager, snaProgressPoller),
+		migrationEngine: workflows.NewMigrationEngine(db, mountManager, snaProgressPoller), // Will pass nil from caller
 		replicationRepo: database.NewReplicationJobRepository(db), // Initialize repository
 		jobs:            make([]ReplicationJob, 0),
 	}

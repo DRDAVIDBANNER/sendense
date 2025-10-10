@@ -10,6 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vexxhost/migratekit/internal/progress"
 	"github.com/vexxhost/migratekit/internal/target"
+	"github.com/vexxhost/migratekit/internal/telemetry"
 	"github.com/vmware/govmomi/vim25/methods"
 	"github.com/vmware/govmomi/vim25/types"
 	vmware "github.com/vexxhost/migratekit/internal/vmware"
@@ -125,6 +126,15 @@ func (s *NbdkitServer) ParallelIncrementalCopyToTarget(ctx context.Context, t ta
 	}
 
 	progressAggregator := NewProgressAggregator(totalBytes, snaClient)
+	
+	// 🆕 NEW: Set telemetry tracker from context (SHA push-based real-time progress)
+	if telemetryTracker := ctx.Value("telemetryTracker"); telemetryTracker != nil {
+		if tracker, ok := telemetryTracker.(*telemetry.ProgressTracker); ok {
+			progressAggregator.SetTelemetryTracker(tracker)
+			logger.Info("🚀 SHA telemetry tracker initialized for incremental copy")
+		}
+	}
+	
 	progressChan := make(chan int64, 1000)    // Buffered channel for progress updates
 	errorChan := make(chan error, numWorkers) // Buffered channel for errors
 

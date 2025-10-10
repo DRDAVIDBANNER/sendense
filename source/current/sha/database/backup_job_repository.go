@@ -26,6 +26,12 @@ type BackupJob struct {
 	TotalBytes          int64      `gorm:"column:total_bytes;default:0" json:"total_bytes"`
 	CompressionEnabled  bool       `gorm:"column:compression_enabled;default:true" json:"compression_enabled"`
 	ErrorMessage        string     `gorm:"column:error_message" json:"error_message"`
+	// Telemetry fields for real-time progress tracking
+	CurrentPhase        string     `gorm:"column:current_phase;default:'pending'" json:"current_phase"`
+	TransferSpeedBps    int64      `gorm:"column:transfer_speed_bps;default:0" json:"transfer_speed_bps"`
+	ETASeconds          int        `gorm:"column:eta_seconds;default:0" json:"eta_seconds"`
+	ProgressPercent     float64    `gorm:"column:progress_percent;default:0.0" json:"progress_percent"`
+	LastTelemetryAt     *time.Time `gorm:"column:last_telemetry_at" json:"last_telemetry_at"`
 	CreatedAt           time.Time  `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
 	StartedAt           *time.Time `gorm:"column:started_at" json:"started_at"`
 	CompletedAt         *time.Time `gorm:"column:completed_at" json:"completed_at"`
@@ -74,6 +80,7 @@ type BackupDisk struct {
 	DiskChangeID        *string    `gorm:"column:disk_change_id" json:"disk_change_id"` // VMware CBT change ID
 	QCOW2Path           *string    `gorm:"column:qcow2_path" json:"qcow2_path"`
 	BytesTransferred    int64      `gorm:"column:bytes_transferred;default:0" json:"bytes_transferred"`
+	ProgressPercent     float64    `gorm:"column:progress_percent;default:0.0" json:"progress_percent"` // Per-disk progress tracking
 	Status              string     `gorm:"column:status;not null;default:'pending'" json:"status"` // pending, running, completed, failed
 	ErrorMessage        *string    `gorm:"column:error_message" json:"error_message"`
 	CreatedAt           time.Time  `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`

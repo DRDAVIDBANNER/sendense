@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	// DISABLED: OpenStack imports not needed for NBD-only backups
@@ -17,6 +18,7 @@ import (
 	// "github.com/vexxhost/migratekit/internal/openstack"
 	"github.com/vexxhost/migratekit/internal/progress"
 	"github.com/vexxhost/migratekit/internal/target"
+	"github.com/vexxhost/migratekit/internal/telemetry"
 	"github.com/vexxhost/migratekit/internal/vmware"
 	"github.com/vexxhost/migratekit/internal/vmware_nbdkit"
 	"github.com/vmware/govmomi/find"
@@ -320,6 +322,31 @@ var rootCmd = &cobra.Command{
 			} else {
 				log.Warn("❌ SNA progress tracking failed to initialize - check MIGRATEKIT_PROGRESS_JOB_ID")
 			}
+
+			// 🆕 NEW: Initialize telemetry client for real-time SHA tracking (replaces polling)
+			shaURL := os.Getenv("SHA_API_URL")
+			if shaURL == "" {
+				shaURL = "http://localhost:8082" // Default tunnel endpoint
+			}
+			telemetryClient := telemetry.NewClient(shaURL)
+			
+			// Determine job type from job ID prefix (backup-*, replication-*, etc.)
+			jobType := "backup"
+			if !strings.HasPrefix(jobID, "backup-") {
+				jobType = "replication" // For replication jobs in the future
+			}
+			
+			// Create telemetry tracker
+			telemetryTracker := telemetry.NewProgressTracker(telemetryClient, jobID)
+			
+			ctx = context.WithValue(ctx, "telemetryClient", telemetryClient)
+			ctx = context.WithValue(ctx, "telemetryTracker", telemetryTracker)
+			
+			log.WithFields(log.Fields{
+				"job_id":  jobID,
+				"job_type": jobType,
+				"sha_url": shaURL,
+			}).Info("🚀 SHA telemetry tracking initialized (push-based real-time progress)")
 		}
 
 		cmd.SetContext(ctx)

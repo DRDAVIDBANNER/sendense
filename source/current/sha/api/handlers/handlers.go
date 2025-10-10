@@ -45,10 +45,12 @@ type Handlers struct {
 	Restore                *RestoreHandlers               // 🆕 NEW: File-level restore (Task 4 - 2025-10-05)
 	Backup                 *BackupHandler                 // 🆕 NEW: Backup API endpoints (Task 5 - 2025-10-05)
 	ProtectionFlow         *ProtectionFlowHandler         // 🆕 NEW: Protection Flow orchestration (Phase 1 Extension)
+	Telemetry              *TelemetryHandler              // 🆕 NEW: Real-time telemetry from SBC (2025-10-10)
 
-	// Exposed services for job recovery integration
-	SNAProgressClient *services.SNAProgressClient // SNA API client
-	SNAProgressPoller *services.SNAProgressPoller // SNA progress poller
+	// 🚨 REMOVED (2025-10-10): Old polling-based SNA progress client/poller
+	// Replaced by push-based telemetry framework (TelemetryHandler above)
+	// SNAProgressClient *services.SNAProgressClient // DEPRECATED: Old polling system
+	// SNAProgressPoller *services.SNAProgressPoller // DEPRECATED: Old polling system
 }
 
 // NewHandlers creates a new handlers instance with database connection and mount manager
@@ -57,8 +59,13 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 	// Note: We pass nil for database since mount manager can work without it for basic operations
 	mountManager := volume.NewMountManager(nil, "/mnt/migration")
 
-	// Initialize SNA progress services (via tunnel)
-	snaProgressClient := services.NewVMAProgressClient("http://localhost:9081")
+	// 🚨 REMOVED (2025-10-10): Old polling-based SNA progress services
+	// Replaced by push-based telemetry framework (see TelemetryHandler initialization below)
+	// Old code:
+	// snaProgressClient := services.NewVMAProgressClient("http://localhost:9081")
+	// snaProgressPoller := services.NewVMAProgressPoller(snaProgressClient, repo)
+	// snaProgressPoller.Start(ctx)
+	
 	repo := database.NewOSSEAConfigRepository(db)
 	
 	// 🆕 TASK 3: Initialize encryption service EARLY for OSSEA config repository
@@ -68,16 +75,6 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 	} else {
 		repo.SetEncryptionService(encryptionService)
 		log.Info("✅ Credential encryption enabled for OSSEA configuration")
-	}
-	
-	snaProgressPoller := services.NewVMAProgressPoller(snaProgressClient, repo)
-
-	// Start SNA progress polling service
-	ctx := context.Background()
-	if err := snaProgressPoller.Start(ctx); err != nil {
-		log.WithError(err).Warn("Failed to start SNA progress poller - continuing without real-time progress")
-	} else {
-		log.Info("🚀 SNA progress poller started successfully")
 	}
 
 	// Try to initialize OSSEA clients for network mapping handler
@@ -179,7 +176,7 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 	handlers := &Handlers{
 		Auth:                   NewAuthHandler(db),
 		VM:                     NewVMHandler(db),
-		Replication:            NewReplicationHandler(db, mountManager, snaProgressPoller),
+		Replication:            NewReplicationHandler(db, mountManager, nil), // 🚨 DEPRECATED: snaProgressPoller removed (2025-10-10)
 		OSSEA:                  NewOSSEAHandler(db),
 		Linstor:                NewLinstorHandler(db),
 		NetworkMapping:         NewNetworkMappingHandler(db, osseaClient, networkClient),
@@ -196,9 +193,8 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 		SNAReal:                NewVMARealHandler(db),                                // 🆕 NEW: SNA enrollment system (real implementation)
 		CloudStackSettings:     NewCloudStackSettingsHandler(db),                     // 🆕 NEW: CloudStack validation & settings
 		
-		// Expose SNA services for job recovery
-		SNAProgressClient: snaProgressClient,
-		SNAProgressPoller: snaProgressPoller,
+		// 🚨 REMOVED (2025-10-10): Old SNA progress services
+		// Now using push-based telemetry (TelemetryHandler)
 	}
 
 	// Initialize Repository handler (requires separate initialization due to error handling)
@@ -247,6 +243,11 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 		protectionFlowHandler := NewProtectionFlowHandler(flowService, jobTracker)
 		handlers.ProtectionFlow = protectionFlowHandler
 		log.Info("✅ Protection Flow API endpoints enabled (Phase 1 Extension: Unified backup orchestration)")
+
+		// Initialize Telemetry handler (Real-time progress tracking)
+		telemetryHandler := NewTelemetryHandler(db)
+		handlers.Telemetry = telemetryHandler
+		log.Info("✅ Telemetry API endpoints enabled (Real-time SBC progress tracking)")
 	}
 
 	return handlers, nil

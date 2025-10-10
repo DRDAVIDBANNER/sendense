@@ -613,10 +613,38 @@ Backup API Endpoints (Multi-Disk VM-Level Backups - Implemented October 2025)
   - Query Params: vm_name, vm_context_id, repository_id, backup_type, status
   - Response: { backups: [BackupResponse], total: number }
   - Classification: **Key** (backup discovery)
+  - BackupResponse Structure (Updated 2025-10-10):
+    ```json
+    {
+      "backup_id": "backup-pgtest1-1760099954",
+      "vm_context_id": "ctx-pgtest1-20251006-203401",
+      "vm_name": "pgtest1",
+      "backup_type": "incremental",
+      "type": "incremental",
+      "repository_id": "repo-local-1760055634",
+      "status": "completed",
+      "bytes_transferred": 8455192576,
+      "total_bytes": 8455192576,
+      "current_phase": "completed",
+      "progress_percent": 100.0,
+      "transfer_speed_bps": 336392246,
+      "last_telemetry_at": "2025-10-10T13:40:16Z",
+      "created_at": "2025-10-10T13:39:14Z",
+      "started_at": "2025-10-10T13:39:15Z",
+      "completed_at": "2025-10-10T13:40:16Z",
+      "error_message": null
+    }
+    ```
+  - New Fields (Added v2.27.0):
+    - `type`: Alias for `backup_type` (frontend compatibility)
+    - `current_phase`: Current backup phase from telemetry
+    - `progress_percent`: Real-time progress from telemetry (0-100)
+    - `transfer_speed_bps`: Current transfer speed from telemetry
+    - `last_telemetry_at`: Timestamp of last telemetry update
 
 - GET /api/v1/backups/{backup_id} → `handlers.BackupHandler.GetBackupDetails`
   - Description: Get detailed information about a specific backup
-  - Response: BackupResponse with complete metadata and timestamps
+  - Response: BackupResponse with complete metadata and timestamps (see structure above)
   - Classification: **Key** (backup monitoring)
 
 - POST /api/v1/backups/{backup_id}/complete → `handlers.BackupHandler.CompleteBackup`
@@ -673,6 +701,76 @@ Backup API Endpoints (Multi-Disk VM-Level Backups - Implemented October 2025)
   - Architecture Change: Separates backup change_ids from replication change_ids (different tables/workflows)
   - Testing: October 8, 2025 - Multi-disk VM confirmed working (pgtest1: disk 0 + disk 1)
   - Note: Returns 404 if no completed backup found for VM+disk combination
+
+Backup Job Telemetry (Real-Time Progress Tracking - Implemented October 10, 2025)
+- POST /api/v1/telemetry/{job_type}/{job_id} → `handlers.Telemetry.ReceiveTelemetry`
+  - Description: Receive real-time telemetry updates from sendense-backup-client (replaces polling-based progress tracking)
+  - Path Parameters:
+    - job_type (string, required): Type of job - "backup", "replication", "restore"
+    - job_id (string, required): Unique job identifier (e.g., "backup-pgtest1-disk0-20251010-143522")
+  - Request Body: TelemetryUpdateRequest
+    ```json
+    {
+      "job_type": "backup",
+      "status": "running",
+      "current_phase": "transferring",
+      "bytes_transferred": 32212254720,
+      "total_bytes": 107374182400,
+      "transfer_speed_bps": 3221225472,
+      "eta_seconds": 23,
+      "progress_percent": 30.0,
+      "disks": [
+        {
+          "disk_index": 0,
+          "bytes_transferred": 32212254720,
+          "progress_percent": 30.0,
+          "status": "transferring",
+          "error_message": null
+        }
+      ],
+      "error": null,
+      "timestamp": "2025-10-10T14:35:42Z"
+    }
+    ```
+  - Request Fields:
+    - status (string): Job status - "running", "completed", "failed", "stalled"
+    - current_phase (string): Current operation phase - "snapshot", "transferring", "finalizing"
+    - bytes_transferred (int64): Total bytes transferred across all disks
+    - total_bytes (int64): Total bytes to transfer
+    - transfer_speed_bps (int64): Current transfer speed in bytes per second
+    - eta_seconds (int): Estimated time to completion in seconds
+    - progress_percent (float64): Overall progress percentage (0-100)
+    - disks (array): Per-disk progress information (multi-disk VM support)
+    - error (string, optional): Error message if job failed
+    - timestamp (string): ISO8601 timestamp of telemetry update
+  - Response: { status: "success", message: "Telemetry received and processed", timestamp: "..." }
+  - Response Codes:
+    - 200 OK: Telemetry processed successfully
+    - 400 Bad Request: Invalid request body or missing parameters
+    - 500 Internal Server Error: Database update failed
+  - Classification: **Critical** (enables real-time GUI progress tracking)
+  - Architecture: Push-based telemetry replaces old polling system
+  - Cadence: Hybrid - sends updates when:
+    1. Time-based: Every 5 seconds during active transfer
+    2. Progress-based: Every 10% progress milestone
+    3. State changes: Phase transitions, errors, completion
+    4. Mandatory: Job start and completion always send
+  - Handler: `sha/api/handlers/telemetry_handlers.go` (ReceiveTelemetry method)
+  - Service: `sha/services/telemetry_service.go` (ProcessTelemetryUpdate)
+  - Database Updates:
+    - backup_jobs: bytes_transferred, current_phase, transfer_speed_bps, eta_seconds, progress_percent, last_telemetry_at
+    - backup_disks: bytes_transferred, progress_percent, status (per-disk tracking)
+  - Stale Job Detection: Background service marks jobs "stalled" (60s) or "failed" (5min) if no telemetry received
+  - Client: sendense-backup-client sends via http://localhost:8082 (tunnel endpoint)
+  - Callsites: sendense-backup-client internal/telemetry/client.go
+  - Testing: October 10, 2025 - Implementation complete, integration testing pending
+  - Migration: Requires database schema changes (see 20251010_telemetry_fields.sql)
+  - Benefits:
+    - Real-time progress updates (no polling delay)
+    - Accurate bytes_transferred reporting (fixes machine modal display)
+    - Rich telemetry data for GUI charts (speed, ETA, per-disk progress)
+    - Automatic stale job detection and cleanup
+    - Extensible to all job types (backup, replication, restore)
 
 NBD Port Management (Task 7 - Planned for Implementation 2025-10-07)
 - POST /api/v1/nbd/ports/allocate → `handlers.NBD.AllocatePort`
