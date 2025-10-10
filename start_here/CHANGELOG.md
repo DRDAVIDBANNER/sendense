@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [SHA v2.25.7-individual-vm-machines-fix] - 2025-10-10
+
+### Fixed - **Individual VM Flows Machines Panel**
+- **Problem:** Individual VM protection flows (like `pgtest1`) not showing machine data in "Machines" tab
+- **Root Cause:** Frontend calling non-existent `GET /api/v1/vm-contexts/{context_id}` endpoint
+- **Solution:** Added proper backend endpoint and updated frontend API calls
+
+### Backend Changes
+- **New API Endpoint:** `GET /api/v1/vm-contexts/by-id/{context_id}`
+- **New Handler:** `GetVMContextByID` in `vm_contexts.go`
+- **New Repository Method:** `GetVMContextByIDWithFullDetails` in `repository.go`
+- **Route Added:** `/vm-contexts/by-id/{context_id}` in `server.go`
+
+### Frontend Changes
+- **Updated:** `getFlowMachines` function in `protectionFlowsApi.ts`
+- **Fixed:** API call to use new endpoint for individual VM flows
+- **Fixed:** Response parsing to extract `response.data.context`
+
+### Testing Results
+- ✅ Individual VM flow (`pgtest1`): Now shows machine data correctly
+- ✅ Group-based flow (`pgtest3`): Continues to work as before
+- ✅ All API endpoints tested and working
+
+### Files Modified
+- `source/current/sha/api/handlers/vm_contexts.go`
+- `source/current/sha/database/repository.go`
+- `source/current/sha/api/server.go`
+- `source/current/sendense-gui/src/features/protection-flows/api/protectionFlowsApi.ts`
+
+### Binary
+- `sha-api-v2.25.7-vm-context-by-id` deployed to production
+
+---
+
 ## [SNA Backup Client v1.0.2-snapshot-jobid] - 2025-10-09
 
 ### Changed - **VMware Snapshot Naming (Job-Specific Isolation)**

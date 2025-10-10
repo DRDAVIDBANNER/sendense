@@ -58,6 +58,12 @@ VM-Centric Architecture
 - GET /vm-contexts/{vm_name} → `handlers.VMContext.GetVMContext`
   - Classification: Key (individual VM details)
   
+- GET /vm-contexts/by-id/{context_id} → `handlers.VMContext.GetVMContextByID`
+  - Description: Get VM context by context_id (for individual VM flows)
+  - Request: context_id in URL path
+  - Response: { context: VMReplicationContext, job_history: [], disks: [], cbt_history: [] }
+  - Classification: Key (Protection Flows GUI integration)
+  
 - GET /vm-contexts/{context_id}/recent-jobs → `handlers.VMContext.GetRecentJobs`
   - Classification: Key (job history)
 

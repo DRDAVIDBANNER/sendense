@@ -1,7 +1,40 @@
 # Phase 1 Context Helper
 **Purpose:** Quick reference for AI sessions working on Phase 1 (VMware Backup Implementation)  
 **Status Location:** See `project-goals/phases/phase-1-vmware-backup.md` for current state  
-**Last Updated:** October 9, 2025 - 16:50 BST
+**Last Updated:** October 10, 2025 - 10:15 BST
+
+---
+
+## 🔧 INDIVIDUAL VM FLOWS MACHINES PANEL FIX (October 10, 2025 - 10:15)
+
+### ✅ **Critical GUI Bug Fixed**
+
+**Achievement Date:** October 10, 2025  
+**SHA Version:** v2.25.7-individual-vm-machines-fix  
+**Status:** ✅ 100% PRODUCTION READY - All tested and working
+
+**Problem:** Individual VM protection flows (like `pgtest1`) not showing machine data in "Machines" tab, while group-based flows (like `pgtest3`) worked correctly.
+
+**Root Cause:** Frontend calling non-existent `GET /api/v1/vm-contexts/{context_id}` endpoint. Backend only had `GET /api/v1/vm-contexts/{vm_name}`.
+
+**Solution Implemented:**
+- **New Backend Endpoint:** `GET /api/v1/vm-contexts/by-id/{context_id}`
+- **New Handler:** `GetVMContextByID` in `vm_contexts.go`
+- **New Repository Method:** `GetVMContextByIDWithFullDetails` in `repository.go`
+- **Frontend Fix:** Updated `getFlowMachines` to use new endpoint and parse response correctly
+
+**Test Results:**
+- ✅ Individual VM flow (`pgtest1`): Now shows machine data correctly
+- ✅ Group-based flow (`pgtest3`): Continues to work as before
+- ✅ All API endpoints tested and working
+
+**Files Modified:**
+- `source/current/sha/api/handlers/vm_contexts.go`
+- `source/current/sha/database/repository.go`
+- `source/current/sha/api/server.go`
+- `source/current/sendense-gui/src/features/protection-flows/api/protectionFlowsApi.ts`
+
+**Binary:** `sha-api-v2.25.7-vm-context-by-id` deployed to production
 
 ---
 
