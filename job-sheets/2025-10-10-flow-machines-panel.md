@@ -485,3 +485,4 @@ export const FlowMachinesTable = ({ machines }: { machines: FlowMachineInfo[] })
 **Author:** AI Assistant (per user requirements)  
 **Related:** Protection Flows Engine (job-sheets/2025-10-09-protection-flows-engine.md)
 
+

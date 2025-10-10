@@ -188,7 +188,7 @@ func NewHandlers(db database.Connection) (*Handlers, error) {
 		Debug:                  NewDebugHandler(db),
 		VMContext:              NewVMContextHandler(db, jobTracker), // VM-Centric Architecture GUI endpoints with JobLog integration
 		ScheduleManagement:     NewScheduleManagementHandler(schedulerRepo, schedulerService, jobTracker),
-		MachineGroupManagement: NewMachineGroupManagementHandler(machineGroupService, schedulerRepo, jobTracker),
+		MachineGroupManagement: NewMachineGroupManagementHandler(machineGroupService, schedulerRepo, jobTracker, db),
 		VMGroupAssignment:      NewVMGroupAssignmentHandler(machineGroupService, schedulerRepo, vmContextRepo, jobTracker),
 		EnhancedDiscovery:      NewEnhancedDiscoveryHandler(enhancedDiscoveryService, vmContextRepo, schedulerRepo, jobTracker, db), // 🆕 NEW: Pass db for credential lookup
 		VMwareCredentials:      NewVMwareCredentialsHandler(vmwareCredentialService), // 🆕 NEW: VMware credential management

@@ -7,3 +7,4 @@ DROP TABLE IF EXISTS protection_flow_executions;
 
 -- Drop main flows table
 DROP TABLE IF EXISTS protection_flows;
+

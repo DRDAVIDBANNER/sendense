@@ -133,3 +133,60 @@ export async function bulkDeleteFlows(flow_ids: string[]): Promise<{ successful:
   const { data } = await axios.post(`${API_BASE}/api/v1/protection-flows/bulk-delete`, { flow_ids });
   return data;
 }
+
+// GET flow machines (VMs in the flow with specs and backup stats)
+export async function getFlowMachines(flowId: string): Promise<{
+  machines: {
+    context_id: string;
+    vm_name: string;
+    cpu_count: number;
+    memory_mb: number;
+    os_type: string;
+    power_state: string;
+    disks: { disk_id: string; size_gb: number }[];
+    backup_stats: { backup_count: number; total_size_bytes: number; last_backup_at?: string };
+  }[]
+}> {
+  // 1. Get flow details
+  const flow = await getFlow(flowId);
+
+  // 2. Get VMs (from group or single VM)
+  let vms: any[] = [];
+  if (flow.target_type === 'group') {
+    const response = await axios.get(`${API_BASE}/api/v1/vm-groups/${flow.target_id}/members`);
+    vms = response.data.members;
+  } else {
+    // Individual VM flow - get single VM context by context_id
+    const response = await axios.get(`${API_BASE}/api/v1/vm-contexts/by-id/${flow.target_id}`);
+    vms = [response.data.context]; // Extract the context from the response
+  }
+
+  // 3. Get disks and backup stats for each VM
+  const enriched = await Promise.all(vms.map(async (vm: any) => {
+    try {
+      // Get disks
+      const disksResponse = await axios.get(`${API_BASE}/api/v1/vm-contexts/${vm.context_id}/disks`);
+      const disks = disksResponse.data.disks || [];
+
+      // Get backup stats
+      const statsResponse = await axios.get(`${API_BASE}/api/v1/backups/stats?vm_name=${vm.vm_name}&repository_id=${flow.repository_id}`);
+      const backupStats = statsResponse.data;
+
+      return {
+        ...vm,
+        disks,
+        backup_stats: backupStats
+      };
+    } catch (error) {
+      // Return VM with empty data if enrichment fails
+      console.warn(`Failed to enrich VM ${vm.vm_name}:`, error);
+      return {
+        ...vm,
+        disks: [],
+        backup_stats: { backup_count: 0, total_size_bytes: 0 }
+      };
+    }
+  }));
+
+  return { machines: enriched };
+}

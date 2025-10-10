@@ -621,3 +621,4 @@ Breaking changes: None
 
 *This converts the always-visible Job Logs panel into a professional collapsible drawer that slides out when needed, saving valuable screen space.*
 
+

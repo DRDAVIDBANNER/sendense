@@ -29,7 +29,8 @@ import { format } from "date-fns";
 import { Flow } from "./types";
 import { getUIStatus } from "@/src/features/protection-flows/types";
 import { RestoreWorkflowModal } from "./RestoreWorkflowModal";
-import { useFlowExecutions } from "@/src/features/protection-flows/hooks/useProtectionFlows";
+import { FlowMachinesTable } from "./FlowMachinesTable";
+import { useFlowExecutions, useFlowMachines } from "@/src/features/protection-flows/hooks/useProtectionFlows";
 import {
   LineChart,
   Line,
@@ -45,24 +46,6 @@ import {
   Cell
 } from 'recharts';
 
-interface Machine {
-  id: string;
-  name: string;
-  status: 'running' | 'stopped' | 'suspended' | 'error';
-  host: string;
-  os: string;
-  cpu: number;
-  memory: number;
-  storage: number;
-  network: string;
-  lastActivity: string;
-  performance: {
-    cpuUsage: number;
-    memoryUsage: number;
-    networkThroughput: number;
-    diskIOPS: number;
-  };
-}
 
 interface ActiveJob {
   id: string;
@@ -91,62 +74,6 @@ interface FlowDetailsPanelProps {
   flow: Flow;
 }
 
-const mockMachines: Machine[] = [
-  {
-    id: 'vm1',
-    name: 'web-server-01',
-    status: 'running',
-    host: 'esxi-01',
-    os: 'Ubuntu 22.04',
-    cpu: 2,
-    memory: 4,
-    storage: 100,
-    network: '192.168.1.10',
-    lastActivity: '2025-10-06T14:30:00Z',
-    performance: {
-      cpuUsage: 45,
-      memoryUsage: 62,
-      networkThroughput: 1250,
-      diskIOPS: 850
-    }
-  },
-  {
-    id: 'vm2',
-    name: 'database-01',
-    status: 'running',
-    host: 'esxi-02',
-    os: 'Windows Server 2022',
-    cpu: 4,
-    memory: 16,
-    storage: 500,
-    network: '192.168.1.11',
-    lastActivity: '2025-10-06T14:25:00Z',
-    performance: {
-      cpuUsage: 78,
-      memoryUsage: 85,
-      networkThroughput: 2100,
-      diskIOPS: 1250
-    }
-  },
-  {
-    id: 'vm3',
-    name: 'app-server-01',
-    status: 'running',
-    host: 'esxi-01',
-    os: 'CentOS 8',
-    cpu: 2,
-    memory: 8,
-    storage: 200,
-    network: '192.168.1.12',
-    lastActivity: '2025-10-06T14:20:00Z',
-    performance: {
-      cpuUsage: 32,
-      memoryUsage: 45,
-      networkThroughput: 890,
-      diskIOPS: 620
-    }
-  }
-];
 
 const mockActiveJobs: ActiveJob[] = [
   {
@@ -206,11 +133,11 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
   const { data: executionsData } = useFlowExecutions(flow.id);
   const executions = executionsData?.executions || [];
 
-  if (!flow) return null;
+  // Real machine data from flow
+  const { data: machinesData, isLoading: machinesLoading } = useFlowMachines(flow.id);
+  const flowMachines = machinesData?.machines || [];
 
-  const flowMachines = mockMachines.filter(machine =>
-    flow.flow_type === 'replication' ? ['vm1', 'vm2'].includes(machine.id) : true
-  );
+  if (!flow) return null;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -330,58 +257,14 @@ export function FlowDetailsPanel({ flow }: FlowDetailsPanelProps) {
           <div className="flex-1 overflow-hidden">
             <TabsContent value="machines" className="h-full mt-4">
               <ScrollArea className="h-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-6 pb-4">
-                  {flowMachines.map((machine) => (
-                    <Card key={machine.id} className="relative">
-                  <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-base flex items-center gap-2 text-foreground">
-                            <Server className="h-4 w-4 text-primary" />
-                            {machine.name}
-                          </CardTitle>
-                          {getStatusBadge(machine.status)}
-                        </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                            <span className="text-muted-foreground">Host:</span>
-                            <div className="font-medium text-foreground">{machine.host}</div>
+                <div className="px-6 pb-4">
+                  {machinesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-muted-foreground">Loading machines...</div>
                     </div>
-                    <div>
-                            <span className="text-muted-foreground">OS:</span>
-                            <div className="font-medium text-foreground">{machine.os}</div>
-                      </div>
-                          <div>
-                            <span className="text-muted-foreground">CPU:</span>
-                            <div className="font-medium text-foreground">{machine.cpu} cores</div>
-                    </div>
-                    <div>
-                            <span className="text-muted-foreground">Memory:</span>
-                            <div className="font-medium text-foreground">{machine.memory} GB</div>
-                      </div>
-                    </div>
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">CPU Usage</span>
-                            <span className="text-foreground">{machine.performance.cpuUsage}%</span>
-                          </div>
-                          <Progress value={machine.performance.cpuUsage} className="h-2" />
-
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Memory Usage</span>
-                            <span className="text-foreground">{machine.performance.memoryUsage}%</span>
-                          </div>
-                          <Progress value={machine.performance.memoryUsage} className="h-2" />
-                        </div>
-
-                        <div className="text-xs text-muted-foreground">
-                          Last activity: {format(new Date(machine.lastActivity), 'MMM dd, HH:mm')}
-                        </div>
-                  </CardContent>
-                </Card>
-                  ))}
+                  ) : (
+                    <FlowMachinesTable machines={flowMachines} />
+                  )}
                 </div>
               </ScrollArea>
             </TabsContent>

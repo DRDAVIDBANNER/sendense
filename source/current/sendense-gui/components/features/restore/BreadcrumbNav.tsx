@@ -43,3 +43,4 @@ export function BreadcrumbNav({ path, onNavigate }: BreadcrumbNavProps) {
     </nav>
   );
 }
+

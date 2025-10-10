@@ -24,3 +24,4 @@ export function useRepositories() {
     staleTime: 60000, // 60 seconds - repos are relatively static
   });
 }
+

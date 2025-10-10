@@ -984,24 +984,68 @@ func (bh *BackupHandler) RegisterRoutes(r *mux.Router) {
 	
 	// 1. POST /api/v1/backups - Start new backup
 	r.HandleFunc("/backups", bh.StartBackup).Methods("POST")
-	
-	// 2. GET /api/v1/backups - List all backups (with optional filters)
+
+	// 2. GET /api/v1/backups/stats - Get backup statistics for VM (MUST come before /backups)
+	r.HandleFunc("/backups/stats", bh.GetBackupStats).Methods("GET")
+
+	// 3. GET /api/v1/backups - List all backups (with optional filters)
 	r.HandleFunc("/backups", bh.ListBackups).Methods("GET")
-	
-	// 3. GET /api/v1/backups/changeid - Get previous change_id for incremental (MUST come before parameterized routes)
+
+	// 4. GET /api/v1/backups/changeid - Get previous change_id for incremental (MUST come before parameterized routes)
 	r.HandleFunc("/backups/changeid", bh.GetChangeID).Methods("GET")
-	
-	// 4. GET /api/v1/backups/{vm_name}/chain - Get backup chain for VM (MUST come before /{backup_id})
+
+	// 5. GET /api/v1/backups/{vm_name}/chain - Get backup chain for VM (MUST come before /{backup_id})
 	r.HandleFunc("/backups/{vm_name}/chain", bh.GetBackupChain).Methods("GET")
-	
-	// 5. POST /api/v1/backups/{backup_id}/complete - Complete backup and record change_id (MUST come before /{backup_id})
+
+	// 6. POST /api/v1/backups/{backup_id}/complete - Complete backup and record change_id (MUST come before /{backup_id})
 	r.HandleFunc("/backups/{backup_id}/complete", bh.CompleteBackup).Methods("POST")
-	
-	// 6. GET /api/v1/backups/{backup_id} - Get backup details
+
+	// 7. GET /api/v1/backups/{backup_id} - Get backup details
 	r.HandleFunc("/backups/{backup_id}", bh.GetBackupDetails).Methods("GET")
-	
-	// 7. DELETE /api/v1/backups/{backup_id} - Delete backup
+
+	// 8. DELETE /api/v1/backups/{backup_id} - Delete backup
 	r.HandleFunc("/backups/{backup_id}", bh.DeleteBackup).Methods("DELETE")
 
-	log.Info("✅ Backup API routes registered - 7 RESTful endpoints (start, complete, changeid, list, get, delete, chain)")
+	log.Info("✅ Backup API routes registered - 8 RESTful endpoints (start, stats, complete, changeid, list, get, delete, chain)")
+}
+
+// GetBackupStats returns backup statistics for a VM in a specific repository
+// GET /api/v1/backups/stats?vm_name={name}&repository_id={repo}
+func (bh *BackupHandler) GetBackupStats(w http.ResponseWriter, r *http.Request) {
+	vmName := r.URL.Query().Get("vm_name")
+	repoID := r.URL.Query().Get("repository_id")
+
+	if vmName == "" || repoID == "" {
+		bh.sendError(w, http.StatusBadRequest, "vm_name and repository_id are required", "")
+		return
+	}
+
+	var stats struct {
+		BackupCount      int    `json:"backup_count"`
+		TotalSizeBytes   int64  `json:"total_size_bytes"`
+		LastBackupAt     string `json:"last_backup_at"`
+	}
+
+	// Query backup statistics (CRITICAL: filter out per-disk records with id NOT LIKE '%-disk%')
+	err := bh.db.GetGormDB().
+		Table("backup_jobs").
+		Select("COUNT(*) as backup_count, SUM(IFNULL(bytes_transferred, 0)) as total_size_bytes, MAX(completed_at) as last_backup_at").
+		Where("vm_name = ? AND repository_id = ? AND status = ? AND id NOT LIKE ?",
+			vmName, repoID, "completed", "%-disk%").
+		Scan(&stats).Error
+
+	if err != nil {
+		log.WithError(err).Error("Failed to get backup stats")
+		bh.sendError(w, http.StatusInternalServerError, "Failed to get backup stats", err.Error())
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"vm_name":       vmName,
+		"repository_id": repoID,
+		"backup_count":  stats.BackupCount,
+		"total_size":    stats.TotalSizeBytes,
+	}).Info("✅ Backup stats retrieved")
+
+	bh.sendJSON(w, http.StatusOK, stats)
 }

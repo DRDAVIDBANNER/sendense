@@ -102,6 +102,56 @@ func (h *VMContextHandler) GetVMContext(w http.ResponseWriter, r *http.Request) 
 	h.writeJSONResponse(w, http.StatusOK, vmContextDetails)
 }
 
+// GetVMContextByID retrieves complete VM context information by context_id
+// GET /api/v1/vm-contexts/by-id/{context_id}
+func (h *VMContextHandler) GetVMContextByID(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	contextID := vars["context_id"]
+
+	if contextID == "" {
+		h.writeErrorResponse(w, http.StatusBadRequest, "Context ID is required")
+		return
+	}
+
+	log.WithField("context_id", contextID).Info("Getting VM context by ID with full details")
+
+	vmContextDetails, err := h.vmContextRepo.GetVMContextByIDWithFullDetails(contextID)
+	if err != nil {
+		log.WithError(err).WithField("context_id", contextID).Error("Failed to get VM context details by ID")
+		
+		// Check if it's a not found error
+		if err.Error() == "VM context not found for context_id: "+contextID {
+			h.writeErrorResponse(w, http.StatusNotFound, err.Error())
+			return
+		}
+		
+		h.writeErrorResponse(w, http.StatusInternalServerError, "Failed to retrieve VM context")
+		return
+	}
+
+	// Parse and include last operation summary if present
+	if vmContextDetails.Context.LastOperationSummary != nil && *vmContextDetails.Context.LastOperationSummary != "" {
+		var opSummary map[string]interface{}
+		if err := json.Unmarshal([]byte(*vmContextDetails.Context.LastOperationSummary), &opSummary); err == nil {
+			vmContextDetails.LastOperation = opSummary
+		} else {
+			log.WithError(err).Warn("Failed to parse last_operation_summary JSON")
+		}
+	}
+
+	log.WithFields(log.Fields{
+		"context_id":         contextID,
+		"vm_name":            vmContextDetails.Context.VMName,
+		"current_job":        vmContextDetails.Context.CurrentJobID,
+		"job_history_count":  len(vmContextDetails.JobHistory),
+		"disks_count":        len(vmContextDetails.Disks),
+		"cbt_history_count":  len(vmContextDetails.CBTHistory),
+		"has_operation_summary": vmContextDetails.Context.LastOperationSummary != nil,
+	}).Info("Successfully retrieved VM context details by ID with operation summary")
+
+	h.writeJSONResponse(w, http.StatusOK, vmContextDetails)
+}
+
 // ListVMContexts retrieves all VM contexts with summary information
 // GET /api/v1/vm-contexts
 // VMContextWithGroups represents a VM context with its group memberships
@@ -377,6 +427,44 @@ func getCurrentStepFriendly(steps []joblog.StepRecord) string {
 		}
 	}
 	return ""
+}
+
+// GetVMDisks returns disk information for a VM context
+// GET /api/v1/vm-contexts/{context_id}/disks
+func (h *VMContextHandler) GetVMDisks(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	contextID := vars["context_id"]
+
+	if contextID == "" {
+		h.writeErrorResponse(w, http.StatusBadRequest, "Context ID is required")
+		return
+	}
+
+	// Get VM disks
+	var disks []struct {
+		DiskID string `json:"disk_id"`
+		SizeGB int    `json:"size_gb"`
+	}
+
+	err := h.db.GetGormDB().
+		Table("vm_disks").
+		Select("disk_id, size_gb").
+		Where("vm_context_id = ?", contextID).
+		Order("disk_id").
+		Find(&disks).Error
+
+	if err != nil {
+		log.WithError(err).Error("Failed to get VM disks")
+		h.writeErrorResponse(w, http.StatusInternalServerError, "Failed to get VM disks: "+err.Error())
+		return
+	}
+
+	response := map[string]interface{}{
+		"disks": disks,
+		"count": len(disks),
+	}
+
+	h.writeJSONResponse(w, http.StatusOK, response)
 }
 
 func extractSanitizedError(steps []joblog.StepRecord) (string, string, []string) {

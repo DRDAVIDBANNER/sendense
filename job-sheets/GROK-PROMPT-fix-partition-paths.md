@@ -217,3 +217,4 @@ curl -s "http://localhost:8082/api/v1/restore/e6e1dd09-05dd-4ba8-8344-cd885a07b7
 - ONLY fix the path parsing/mapping logic
 - Backend must handle BOTH formats: display names from GUI and direct `/partition-N` paths
 
+

@@ -103,6 +103,8 @@ func (s *Server) setupRoutes() {
 	// VM Context endpoints for GUI integration (VM-Centric Architecture)
 	api.HandleFunc("/vm-contexts", s.requireAuth(s.handlers.VMContext.ListVMContexts)).Methods("GET")
 	api.HandleFunc("/vm-contexts/{vm_name}", s.requireAuth(s.handlers.VMContext.GetVMContext)).Methods("GET")
+	api.HandleFunc("/vm-contexts/by-id/{context_id}", s.requireAuth(s.handlers.VMContext.GetVMContextByID)).Methods("GET")
+	api.HandleFunc("/vm-contexts/{context_id}/disks", s.requireAuth(s.handlers.VMContext.GetVMDisks)).Methods("GET")
 	api.HandleFunc("/vm-contexts/{context_id}/recent-jobs", s.requireAuth(s.handlers.VMContext.GetRecentJobs)).Methods("GET")
 
 	// OSSEA configuration - SINGLE UNIFIED ENDPOINT (following project rules)
@@ -181,6 +183,7 @@ func (s *Server) setupRoutes() {
 	api.HandleFunc("/machine-groups/{id}/vms", s.requireAuth(s.handlers.VMGroupAssignment.AssignVMToGroup)).Methods("POST")
 	api.HandleFunc("/machine-groups/{id}/vms/{vmId}", s.requireAuth(s.handlers.VMGroupAssignment.RemoveVMFromGroup)).Methods("DELETE")
 	api.HandleFunc("/machine-groups/{id}/vms", s.requireAuth(s.handlers.VMGroupAssignment.ListGroupVMs)).Methods("GET")
+	api.HandleFunc("/vm-groups/{group_id}/members", s.requireAuth(s.handlers.MachineGroupManagement.GetGroupMembers)).Methods("GET")
 	api.HandleFunc("/vm-contexts/{id}/group", s.requireAuth(s.handlers.VMGroupAssignment.AssignVMToGroupByContext)).Methods("PUT")
 
 	// Enhanced Discovery endpoints

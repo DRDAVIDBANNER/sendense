@@ -4,3 +4,4 @@
 
 ALTER TABLE restore_mounts
 DROP COLUMN partition_metadata;
+

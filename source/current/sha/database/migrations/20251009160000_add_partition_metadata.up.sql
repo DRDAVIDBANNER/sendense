@@ -4,3 +4,4 @@
 
 ALTER TABLE restore_mounts
 ADD COLUMN partition_metadata JSON COMMENT 'Partition details for multi-partition mounts';
+

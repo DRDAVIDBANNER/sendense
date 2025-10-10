@@ -82,6 +82,45 @@ var (
 	jobID                string
 )
 
+// getSnapshotPrefix determines the snapshot prefix based on job ID
+// Backup jobs use "sbak-", replication jobs use "srep-"
+// This ensures different job types don't interfere with each other's snapshots
+func getSnapshotPrefix(jobID string) string {
+	// Job IDs starting with "backup-" are backup jobs
+	if len(jobID) >= 7 && jobID[:7] == "backup-" {
+		return "sbak-"
+	}
+	// Everything else is treated as replication
+	return "srep-"
+}
+
+// deleteOldSnapshots recursively finds and deletes snapshots matching the given prefix
+// This allows safe cleanup of old snapshots without interfering with other job types
+func deleteOldSnapshots(ctx context.Context, vm *object.VirtualMachine, snapshots []types.VirtualMachineSnapshotTree, prefix string) {
+	for _, snapshot := range snapshots {
+		// Only delete snapshots with our specific prefix
+		if len(snapshot.Name) >= len(prefix) && snapshot.Name[:len(prefix)] == prefix {
+			log.WithFields(log.Fields{
+				"snapshot_name": snapshot.Name,
+				"prefix":        prefix,
+			}).Info("🗑️  Deleting old snapshot with matching prefix")
+			
+			consolidate := true
+			_, err := vm.RemoveSnapshot(ctx, snapshot.Snapshot.Value, false, &consolidate)
+			if err != nil {
+				log.WithError(err).WithField("snapshot_name", snapshot.Name).Warn("⚠️  Failed to delete old snapshot")
+			} else {
+				log.WithField("snapshot_name", snapshot.Name).Info("✅ Old snapshot deleted successfully")
+			}
+		}
+		
+		// Recurse into child snapshots
+		if len(snapshot.ChildSnapshotList) > 0 {
+			deleteOldSnapshots(ctx, vm, snapshot.ChildSnapshotList, prefix)
+		}
+	}
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "migratekit",
 	Short: "Near-live migration toolkit for VMware to OpenStack",
@@ -190,23 +229,26 @@ var rootCmd = &cobra.Command{
 		}
 		log.Infof("🔍 CBT Status Debug: ChangeTrackingEnabled = %s", cbtStatus)
 
-		if snapshotRef, _ := vm.FindSnapshot(ctx, "migratekit"); snapshotRef != nil {
-			log.Info("Snapshot already exists - auto-deleting for CBT testing")
+		// 🎯 NEW: Job-specific snapshot cleanup with safe prefix matching
+		// Determine snapshot prefix based on job type (sbak- for backups, srep- for replications)
+		prefix := getSnapshotPrefix(jobID)
+		log.WithFields(log.Fields{
+			"job_id": jobID,
+			"prefix": prefix,
+		}).Info("🧹 Checking for old snapshots with matching prefix")
 
-			// Send progress update for snapshot stage
+		// Get VM snapshot tree and delete old snapshots with matching prefix only
+		err = vm.Properties(ctx, vm.Reference(), []string{"snapshot"}, &o)
+		if err == nil && o.Snapshot != nil {
+			// Send progress update for snapshot cleanup stage
 			if snaProgressClient := ctx.Value("snaProgressClient"); snaProgressClient != nil {
 				if vpc, ok := snaProgressClient.(*progress.SNAProgressClient); ok && vpc.IsEnabled() {
-					vpc.SendStageUpdate("Creating Snapshot", 10)
+					vpc.SendStageUpdate("Cleaning Old Snapshots", 10)
 				}
 			}
 
-			// 🚨 AUTO-DELETE for testing - remove interactive prompt
-			consolidate := true
-			_, err := vm.RemoveSnapshot(ctx, snapshotRef.Value, false, &consolidate)
-			if err != nil {
-				return fmt.Errorf("failed to delete existing snapshot: %w", err)
-			}
-			log.Info("✅ Existing snapshot deleted successfully")
+			// Recursively delete old snapshots matching our prefix
+			deleteOldSnapshots(ctx, vm, o.Snapshot.RootSnapshotList, prefix)
 		}
 
 		// Send progress update after snapshot handling
@@ -302,8 +344,9 @@ It handles the following additional cases as well:
 
 		vm := ctx.Value("vm").(*object.VirtualMachine)
 		vddkConfig := ctx.Value("vddkConfig").(*vmware_nbdkit.VddkConfig)
+		jobID := ctx.Value("jobID").(string)
 
-		servers := vmware_nbdkit.NewNbdkitServers(vddkConfig, vm)
+		servers := vmware_nbdkit.NewNbdkitServers(vddkConfig, vm, jobID)
 		err := servers.MigrationCycle(ctx, false)
 		if err != nil {
 			return err
@@ -361,8 +404,9 @@ var cutoverCmd = &cobra.Command{
 		// }
 
 		log.Info("Starting NBD backup cycle (OpenStack disabled)")
+		jobID := ctx.Value("jobID").(string)
 
-		servers := vmware_nbdkit.NewNbdkitServers(vddkConfig, vm)
+		servers := vmware_nbdkit.NewNbdkitServers(vddkConfig, vm, jobID)
 		err := servers.MigrationCycle(ctx, false)
 		if err != nil {
 			return err

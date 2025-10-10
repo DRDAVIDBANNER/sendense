@@ -106,3 +106,12 @@ export function useDisableFlow() {
     },
   });
 }
+
+export function useFlowMachines(flowId: string | null) {
+  return useQuery({
+    queryKey: ['protection-flow', flowId, 'machines'],
+    queryFn: () => api.getFlowMachines(flowId!),
+    enabled: !!flowId,
+    staleTime: 30000, // Refresh every 30 seconds
+  });
+}

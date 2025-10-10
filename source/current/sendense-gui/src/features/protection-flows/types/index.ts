@@ -61,3 +61,26 @@ export interface FlowRowProps {
   onDelete?: (flow: Flow) => void;
   onRunNow?: (flow: Flow) => void;
 }
+
+// Flow Machines Panel types
+export interface FlowMachineInfo {
+  context_id: string;
+  vm_name: string;
+  cpu_count: number;
+  memory_mb: number;
+  os_type: string;
+  power_state: string;
+  disks: VMDiskInfo[];
+  backup_stats: VMBackupStats;
+}
+
+export interface VMDiskInfo {
+  disk_id: string;
+  size_gb: number;
+}
+
+export interface VMBackupStats {
+  backup_count: number;
+  total_size_bytes: number;
+  last_backup_at?: string;
+}

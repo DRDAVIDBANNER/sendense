@@ -11,6 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [SNA Backup Client v1.0.2-snapshot-jobid] - 2025-10-09
+
+### Changed - **VMware Snapshot Naming (Job-Specific Isolation)**
+- **Problem:** All snapshots named "migratekit" (hardcoded), causing conflicts between concurrent jobs
+- **Impact:** Multiple backups or replications on same VM would delete each other's snapshots
+- **Solution:** Job-specific snapshot names with type prefixes
+  - **Backup jobs**: `sbak-{jobID}` (e.g., `sbak-backup-backup-pgtest3-1760025105`)
+  - **Replication jobs**: `srep-{jobID}` (e.g., `srep-repl-pgtest3-1760025105`)
+  - Each job type only deletes snapshots with matching prefix (safe isolation)
+  
+### Technical Implementation
+- **Added Fields to NbdkitServers:**
+  - `JobID string` - Full job identifier from command line
+  - `SnapshotPrefix string` - Computed prefix ("sbak-" or "srep-")
+  
+- **New Helper Functions:**
+  - `getSnapshotPrefix(jobID string)` - Determines prefix based on job ID pattern
+  - `deleteOldSnapshots(...)` - Recursively finds and deletes only matching-prefix snapshots
+  
+- **Updated Snapshot Lifecycle:**
+  - **At START**: Delete old snapshots matching current job's prefix only
+  - **Create snapshot**: Use `{prefix}{jobID}` as name
+  - **At END**: Delete current job's snapshot (existing logic preserved)
+  
+- **Files Modified:**
+  - `internal/vmware_nbdkit/vmware_nbdkit.go` - Updated struct and createSnapshot()
+  - `main.go` - Added prefix detection, safe deletion logic, updated constructor calls
+
+### Safety Features
+- ✅ Backup jobs ONLY delete `sbak-*` snapshots (won't touch replications)
+- ✅ Replication jobs ONLY delete `srep-*` snapshots (won't touch backups)
+- ✅ Won't interfere with user-created snapshots or other systems
+- ✅ Supports concurrent backups/replications without conflicts
+- ✅ Recursive snapshot tree traversal (handles nested snapshots)
+
+### Binary
+- `sendense-backup-client-v1.0.2-snapshot-jobid` (~20MB)
+- Deployed to `/usr/local/bin/sendense-backup-client` on SNA
+
+---
+
 ## [SHA v2.25.5-critical-fixes] - 2025-10-09
 
 ### Fixed - **Critical Production Bugs** 🔥

@@ -26,6 +26,15 @@ import (
 
 const MaxChunkSize = 32 * 1024 * 1024 // 32MB maximum for NBD server compatibility
 
+// getSnapshotPrefix determines the snapshot prefix based on job ID
+// Backup jobs use "sbak-", replication jobs use "srep-"
+func getSnapshotPrefix(jobID string) string {
+	if len(jobID) >= 7 && jobID[:7] == "backup-" {
+		return "sbak-"
+	}
+	return "srep-"
+}
+
 type VddkConfig struct {
 	Debug       bool
 	Endpoint    *url.URL
@@ -35,10 +44,12 @@ type VddkConfig struct {
 }
 
 type NbdkitServers struct {
-	VddkConfig     *VddkConfig
-	VirtualMachine *object.VirtualMachine
-	SnapshotRef    types.ManagedObjectReference
-	Servers        []*NbdkitServer
+	VddkConfig       *VddkConfig
+	VirtualMachine   *object.VirtualMachine
+	SnapshotRef      types.ManagedObjectReference
+	Servers          []*NbdkitServer
+	JobID            string // Full job identifier (e.g., "backup-backup-pgtest3-1760025105")
+	SnapshotPrefix   string // Computed prefix: "sbak-" for backups, "srep-" for replications
 }
 
 type NbdkitServer struct {
@@ -47,11 +58,14 @@ type NbdkitServer struct {
 	Nbdkit  *nbdkit.NbdkitServer
 }
 
-func NewNbdkitServers(vddk *VddkConfig, vm *object.VirtualMachine) *NbdkitServers {
+func NewNbdkitServers(vddk *VddkConfig, vm *object.VirtualMachine, jobID string) *NbdkitServers {
+	prefix := getSnapshotPrefix(jobID)
 	return &NbdkitServers{
 		VddkConfig:     vddk,
 		VirtualMachine: vm,
 		Servers:        []*NbdkitServer{},
+		JobID:          jobID,
+		SnapshotPrefix: prefix,
 	}
 }
 
@@ -63,7 +77,15 @@ func (s *NbdkitServers) createSnapshot(ctx context.Context) error {
 		}
 	}
 
-	task, err := s.VirtualMachine.CreateSnapshot(ctx, "migratekit", "Ephemeral snapshot for MigrateKit", false, s.VddkConfig.Quiesce)
+	// Use job-specific snapshot name with type prefix (sbak- or srep-)
+	snapshotName := s.SnapshotPrefix + s.JobID
+	log.WithFields(log.Fields{
+		"snapshot_name": snapshotName,
+		"job_id":        s.JobID,
+		"prefix":        s.SnapshotPrefix,
+	}).Info("📸 Creating job-specific snapshot")
+
+	task, err := s.VirtualMachine.CreateSnapshot(ctx, snapshotName, "Sendense backup/replication snapshot", false, s.VddkConfig.Quiesce)
 	if err != nil {
 		return err
 	}

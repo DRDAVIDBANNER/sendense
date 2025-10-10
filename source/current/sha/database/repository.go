@@ -2167,6 +2167,79 @@ func (r *VMReplicationContextRepository) GetVMContextWithFullDetails(vmName stri
 	return result, nil
 }
 
+// GetVMContextByIDWithFullDetails retrieves complete VM context information by context_id
+func (r *VMReplicationContextRepository) GetVMContextByIDWithFullDetails(contextID string) (*VMContextDetails, error) {
+	if r.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+
+	// Get the VM context by context_id
+	var context VMReplicationContext
+	if err := r.db.Where("context_id = ?", contextID).First(&context).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("VM context not found for context_id: %s", contextID)
+		}
+		return nil, fmt.Errorf("failed to get VM context for context_id %s: %w", contextID, err)
+	}
+
+	result := &VMContextDetails{
+		Context: context,
+	}
+
+	// Get current job if exists
+	if context.CurrentJobID != nil && *context.CurrentJobID != "" {
+		var currentJob ReplicationJob
+		if err := r.db.Where("id = ?", *context.CurrentJobID).First(&currentJob).Error; err == nil {
+			result.CurrentJob = &currentJob
+		}
+	}
+
+	// Get job history (last 10 jobs)
+	var jobHistory []ReplicationJob
+	if err := r.db.Where("vm_context_id = ?", context.ContextID).
+		Order("created_at DESC").
+		Limit(10).
+		Find(&jobHistory).Error; err != nil {
+		log.WithError(err).Warn("Failed to get job history")
+	} else {
+		result.JobHistory = jobHistory
+	}
+
+	// Get VM disks for the most recent job
+	if len(jobHistory) > 0 {
+		var disks []VMDisk
+		if err := r.db.Where("vm_context_id = ?", context.ContextID).
+			Order("created_at DESC").
+			Find(&disks).Error; err != nil {
+			log.WithError(err).Warn("Failed to get VM disks")
+		} else {
+			result.Disks = disks
+		}
+	}
+
+	// Get CBT history (last 20 records)
+	var cbtHistory []CBTHistory
+	if err := r.db.Where("vm_context_id = ?", context.ContextID).
+		Order("created_at DESC").
+		Limit(20).
+		Find(&cbtHistory).Error; err != nil {
+		log.WithError(err).Warn("Failed to get CBT history")
+	} else {
+		result.CBTHistory = cbtHistory
+	}
+
+	log.WithFields(log.Fields{
+		"context_id":         contextID,
+		"vm_name":           context.VMName,
+		"current_job":       context.CurrentJobID,
+		"job_history_count": len(result.JobHistory),
+		"disks_count":       len(result.Disks),
+		"cbt_history_count": len(result.CBTHistory),
+	}).Debug("Retrieved VM context by ID with full details")
+
+	return result, nil
+}
+
 // ListVMContexts retrieves all VM contexts with summary information
 func (r *VMReplicationContextRepository) ListVMContexts() ([]VMReplicationContext, error) {
 	if r.db == nil {

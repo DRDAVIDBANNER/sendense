@@ -21,6 +21,7 @@ type MachineGroupManagementHandler struct {
 	machineGroupService *services.MachineGroupService
 	schedulerRepo       *database.SchedulerRepository
 	tracker             *joblog.Tracker
+	db                  database.Connection
 }
 
 // NewMachineGroupManagementHandler creates a new machine group management handler
@@ -28,11 +29,13 @@ func NewMachineGroupManagementHandler(
 	machineGroupService *services.MachineGroupService,
 	schedulerRepo *database.SchedulerRepository,
 	tracker *joblog.Tracker,
+	db database.Connection,
 ) *MachineGroupManagementHandler {
 	return &MachineGroupManagementHandler{
 		machineGroupService: machineGroupService,
 		schedulerRepo:       schedulerRepo,
 		tracker:             tracker,
+		db:                  db,
 	}
 }
 
@@ -405,6 +408,49 @@ func (h *MachineGroupManagementHandler) DeleteGroup(w http.ResponseWriter, r *ht
 		"group_id":  groupID,
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
+	h.writeJSONResponse(w, http.StatusOK, response)
+}
+
+// GetGroupMembers returns all VMs in a group with full VM specs
+// GET /api/v1/vm-groups/{group_id}/members
+func (h *MachineGroupManagementHandler) GetGroupMembers(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	groupID := vars["group_id"]
+
+	if groupID == "" {
+		h.writeErrorResponse(w, http.StatusBadRequest, "Group ID is required")
+		return
+	}
+
+	// Get group members with full VM specs
+	var members []struct {
+		ContextID   string `json:"context_id"`
+		VMName      string `json:"vm_name"`
+		CPUCount    int    `json:"cpu_count"`
+		MemoryMB    int    `json:"memory_mb"`
+		OSType      string `json:"os_type"`
+		PowerState  string `json:"power_state"`
+	}
+
+	err := h.db.GetGormDB().
+		Table("vm_group_memberships vgm").
+		Select("vrc.context_id, vrc.vm_name, vrc.cpu_count, vrc.memory_mb, vrc.os_type, vrc.power_state").
+		Joins("JOIN vm_replication_contexts vrc ON vgm.vm_context_id = vrc.context_id").
+		Where("vgm.group_id = ? AND vgm.enabled = 1", groupID).
+		Order("vrc.vm_name").
+		Find(&members).Error
+
+	if err != nil {
+		log.WithError(err).Error("Failed to get group members")
+		h.writeErrorResponse(w, http.StatusInternalServerError, "Failed to get group members: "+err.Error())
+		return
+	}
+
+	response := map[string]interface{}{
+		"members": members,
+		"count":   len(members),
+	}
+
 	h.writeJSONResponse(w, http.StatusOK, response)
 }
 

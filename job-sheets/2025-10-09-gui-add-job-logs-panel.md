@@ -317,3 +317,4 @@ Breaking changes: None
 
 *This restores the Job Logs panel that was accidentally removed during the modal-to-panel refactoring.*
 
+
