@@ -342,14 +342,15 @@ func (s *ProtectionFlowService) ProcessBackupFlow(ctx context.Context, flow *dat
 			continue
 		}
 
-		// Determine backup type: check if full backup exists for this VM
+		// Determine backup type: check if COMPLETED full backup exists for this VM
+		// CRITICAL: Only count backups with status='completed' - failed/running backups don't have valid change IDs
 		backupType := "incremental"
 		var existingBackup database.BackupJob
-		if err := s.db.GetGormDB().Where("vm_name = ? AND repository_id = ? AND backup_type = ?", 
-			vmCtx.VMName, *flow.RepositoryID, "full").First(&existingBackup).Error; err != nil {
-			// No full backup exists, must do full backup first
+		if err := s.db.GetGormDB().Where("vm_name = ? AND repository_id = ? AND backup_type = ? AND status = ?", 
+			vmCtx.VMName, *flow.RepositoryID, "full", "completed").First(&existingBackup).Error; err != nil {
+			// No completed full backup exists, must do full backup first
 			backupType = "full"
-			logger.Info("No full backup found, will perform full backup", "vm_name", vmCtx.VMName)
+			logger.Info("No completed full backup found, will perform full backup", "vm_name", vmCtx.VMName)
 		}
 
 		// Call backup API
