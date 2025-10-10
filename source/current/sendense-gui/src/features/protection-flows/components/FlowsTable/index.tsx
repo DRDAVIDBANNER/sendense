@@ -6,10 +6,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Flow, FlowsTableProps, FlowRowProps } from "../../types";
 import { FlowRow } from "./FlowRow";
+import { useAllFlowsProgress } from "../../hooks/useFlowProgress";
 
 export function FlowsTable({ flows, onSelectFlow, selectedFlowId }: FlowsTableProps) {
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Get progress data for all flows
+  const flowIds = flows.map(f => f.id);
+  const { data: progressData } = useAllFlowsProgress(flowIds, flows.length > 0);
 
   const sortedFlows = useMemo(() => {
     return [...flows].sort((a, b) => {
@@ -117,17 +122,23 @@ export function FlowsTable({ flows, onSelectFlow, selectedFlowId }: FlowsTablePr
               </TableCell>
             </TableRow>
           ) : (
-            sortedFlows.map((flow) => (
-              <FlowRow
-                key={flow.id}
-                flow={flow}
-                isSelected={selectedFlowId === flow.id}
-                onSelect={onSelectFlow}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onRunNow={handleRunNow}
-              />
-            ))
+            sortedFlows.map((flow) => {
+              const flowProgress = progressData?.[flow.id];
+              return (
+                <FlowRow
+                  key={flow.id}
+                  flow={{
+                    ...flow,
+                    progress: flowProgress?.progress // Add progress to flow object
+                  }}
+                  isSelected={selectedFlowId === flow.id}
+                  onSelect={onSelectFlow}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onRunNow={handleRunNow}
+                />
+              );
+            })
           )}
         </TableBody>
       </Table>

@@ -1,13 +1,33 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '../api/protectionFlowsApi';
+import type { Flow } from '../types';
 
 // Use empty string to let Next.js rewrites proxy handle the routing
 const API_BASE = '';
 
+// Transform ProtectionFlow to Flow (UI format)
+function transformProtectionFlowToFlow(apiFlow: api.ProtectionFlow): Flow {
+  return {
+    ...apiFlow,
+    // Map backend fields to frontend computed fields
+    lastRun: apiFlow.status?.last_execution_time,
+    nextRun: apiFlow.status?.next_execution_time,
+    // source and destination will be resolved separately if needed
+    source: apiFlow.target_id, // Placeholder - could be resolved to VM/group name
+    destination: apiFlow.repository_id, // Placeholder - could be resolved to repo name
+  };
+}
+
 export function useProtectionFlows() {
   return useQuery({
     queryKey: ['protection-flows'],
-    queryFn: api.listFlows,
+    queryFn: async () => {
+      const result = await api.listFlows();
+      return {
+        ...result,
+        flows: result.flows.map(transformProtectionFlowToFlow),
+      };
+    },
     refetchInterval: 5000, // Refresh every 5 seconds for live updates
   });
 }
@@ -15,7 +35,10 @@ export function useProtectionFlows() {
 export function useProtectionFlow(id: string) {
   return useQuery({
     queryKey: ['protection-flow', id],
-    queryFn: () => api.getFlow(id),
+    queryFn: async () => {
+      const result = await api.getFlow(id);
+      return transformProtectionFlowToFlow(result);
+    },
     enabled: !!id,
   });
 }

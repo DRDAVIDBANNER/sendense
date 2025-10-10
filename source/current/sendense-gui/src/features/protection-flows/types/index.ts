@@ -16,6 +16,8 @@ export interface Flow {
   target_id: string;
   repository_id?: string;
   schedule_id?: string;
+  schedule_name?: string;
+  schedule_cron?: string;
   policy_id?: string;
   enabled: boolean;
   status: FlowStatusData;

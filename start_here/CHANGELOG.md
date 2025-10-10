@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 📋 TODO - **Machine Backup Modal - Complete with Charts** (2025-10-10)
+- **Objective:** Transform modal into comprehensive backup monitoring dashboard with performance charts and telemetry history
+- **Job Sheet:** `/home/oma_admin/sendense/job-sheets/GROK-PROMPT-backup-modal-charts-complete.md`
+- **Scope:** Full end-to-end implementation (backend + frontend + database)
+- **Backend Work:**
+  1. New table: `job_telemetry_snapshots` for historical performance data
+  2. New field: `backup_jobs.performance_metrics` JSON for rolled-up data
+  3. Snapshot storage: Store telemetry every 30s during backup
+  4. Completion handler: Roll up snapshots to JSON, delete snapshots to keep DB lean
+  5. New API: `GET /api/v1/telemetry/history/{job_id}` for chart data
+- **Frontend Work:**
+  1. Install `recharts` library for charts
+  2. Add 3-tab system: Summary, Performance, Analytics
+  3. Performance tab: Speed histogram, peak/avg stats, job selector
+  4. Analytics tab: Success rate donut, backup trends, KPI summary
+  5. Real-time updates: Live charts for running jobs, rolled-up for completed
+  6. Create hooks: `useTelemetryHistory` for data fetching
+  7. Create components: `SpeedHistogram`, `SuccessDonut` charts
+- **Features:**
+  - Historical performance charts (speed over time)
+  - Success/fail analytics with donut chart
+  - Job selector dropdown to view different backups
+  - Real-time chart updates for running jobs
+  - Professional Veeam-level monitoring UI
+- **Storage:** Efficient hybrid system (live snapshots → rolled-up JSON → delete snapshots)
+- **Estimated Time:** 6-8 hours total
+- **Dependencies:** Requires telemetry framework (already complete)
+
 ### 📋 TODO - **Protection Flows Table Wiring** (2025-10-10)
 - **Issue:** Flows table shows incorrect/missing data (status stuck on "Pending", Last Run = "Never", Next Run = "Never", no progress bar)
 - **Root Cause:** Data transformation missing between backend API and frontend display
@@ -37,6 +65,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Error Handling:** Failed backups show error messages inline
 - **API:** New `useMachineBackups` hook fetching from `GET /api/v1/backups?vm_name={name}&repository_id={repo}`
 - **Accessibility:** Hover styles, keyboard navigation, responsive design
+
+### 🔧 FIXED - **Protection Flows Table Complete Wiring** (2025-10-10)
+- **Status Display:** Fixed flows showing "Pending" - now correctly displays Success/Error/Running/Warning
+- **Last Run:** Fixed "Never" display - now shows actual `last_execution_time` from backend
+- **Next Run:** Fixed "Never" display - now shows `next_execution_time` when available
+- **Progress Bars:** Added real-time progress bars for running flows with % completion
+- **Data Transformation:** Added transformation layer mapping backend fields to UI expectations
+- **Progress Calculation:** Implemented aggregate progress from job execution counts (jobs_completed/jobs_created)
+- **Real-time Updates:** Progress bars update every 2 seconds for running flows
+- **Visual Feedback:** Added pulsing animation to status dots for running flows
+- **API Integration:** New `useFlowProgress` and `useAllFlowsProgress` hooks with efficient bulk fetching
 - **API Fix (v2.27.0):** SHA now returns all required telemetry fields (`type`, `current_phase`, `progress_percent`, `transfer_speed_bps`, `last_telemetry_at`)
 - **Duration Fix (v2.28.0):** SHA now sets `started_at` timestamp when backup begins, enabling proper duration calculations
 - **Binary:** `sendense-hub-v2.28.0-started-at-fix` deployed

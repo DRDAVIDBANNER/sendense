@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,10 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
     }
   };
 
+  const uiStatus = getUIStatus(flow);
+  const isRunning = uiStatus === 'running';
+  const hasProgress = flow.progress !== undefined && flow.progress > 0;
+
   return (
     <tr
       className={`border-b border-border hover:bg-muted/50 cursor-pointer transition-colors ${
@@ -33,11 +38,20 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-          <div>
+          <div className="flex-1">
             <div className="font-medium text-foreground">{flow.name}</div>
             {flow.source && flow.destination && (
               <div className="text-sm text-muted-foreground">
                 {flow.source} → {flow.destination}
+              </div>
+            )}
+            {/* Progress bar for running flows */}
+            {isRunning && hasProgress && (
+              <div className="mt-2 flex items-center gap-2">
+                <Progress value={flow.progress} className="h-1.5 flex-1" />
+                <span className="text-xs text-muted-foreground min-w-[3ch]">
+                  {flow.progress}%
+                </span>
               </div>
             )}
           </div>
@@ -51,13 +65,13 @@ export function FlowRow({ flow, isSelected, onSelect, onEdit, onDelete, onRunNow
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${
-            getUIStatus(flow) === 'success' ? 'bg-green-500' :
-            getUIStatus(flow) === 'running' ? 'bg-blue-500' :
-            getUIStatus(flow) === 'warning' ? 'bg-yellow-500' :
-            getUIStatus(flow) === 'error' ? 'bg-red-500' :
+            uiStatus === 'success' ? 'bg-green-500' :
+            uiStatus === 'running' ? 'bg-blue-500 animate-pulse' :  // ✅ Add pulse for running
+            uiStatus === 'warning' ? 'bg-yellow-500' :
+            uiStatus === 'error' ? 'bg-red-500' :
             'bg-muted-foreground'
           }`} />
-          <span className="capitalize text-sm">{getUIStatus(flow)}</span>
+          <span className="capitalize text-sm">{uiStatus}</span>
         </div>
       </td>
       <td className="px-4 py-3 text-sm text-muted-foreground">

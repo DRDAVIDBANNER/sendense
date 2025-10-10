@@ -41,6 +41,9 @@ export interface FlowExecution {
   error_message?: string;
   bytes_transferred?: number;
   duration_seconds?: number;
+  jobs_created?: number;
+  jobs_completed?: number;
+  jobs_failed?: number;
 }
 
 export interface FlowSummary {
@@ -54,16 +57,59 @@ export interface FlowSummary {
   failed_executions_today: number;
 }
 
+// Transform backend flow data to frontend format
+function transformFlowResponse(apiFlow: any): ProtectionFlow {
+  return {
+    ...apiFlow,
+    status: {
+      ...apiFlow.status,
+      // Ensure the status fields are properly mapped
+      last_execution_status: apiFlow.status?.last_execution_status || 'pending',
+      last_execution_time: apiFlow.status?.last_execution_time,
+      next_execution_time: apiFlow.status?.next_execution_time,
+    },
+  };
+}
+
+// Calculate next run time from cron expression if available
+function calculateNextRun(flow: any): string | undefined {
+  // If next_execution_time exists, use it
+  if (flow.status?.next_execution_time) {
+    return flow.status.next_execution_time;
+  }
+
+  // If flow has schedule_cron, calculate next run
+  if (flow.schedule_cron) {
+    try {
+      // Use a simple calculation for next run time
+      // For now, just return a placeholder - in production you'd use cron-parser
+      const now = new Date();
+      // Simple calculation: assume daily if no specific time
+      const nextRun = new Date(now);
+      nextRun.setDate(nextRun.getDate() + 1);
+      nextRun.setHours(2, 0, 0, 0); // Default to 2 AM
+      return nextRun.toISOString();
+    } catch (e) {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
 // GET /api/v1/protection-flows
 export async function listFlows(): Promise<{ flows: ProtectionFlow[]; total: number }> {
   const { data } = await axios.get(`${API_BASE}/api/v1/protection-flows`);
-  return data;
+  return {
+    flows: data.flows.map(transformFlowResponse),
+    total: data.total
+  };
 }
 
 // GET /api/v1/protection-flows/{id}
 export async function getFlow(id: string): Promise<ProtectionFlow> {
   const { data } = await axios.get(`${API_BASE}/api/v1/protection-flows/${id}`);
-  return data;
+  return transformFlowResponse(data);
 }
 
 // POST /api/v1/protection-flows
