@@ -110,6 +110,12 @@ func main() {
 	staleDetector := services.NewStaleJobDetector(db)
 	go staleDetector.Start(context.Background())
 
+	// 🆕 NEW: Execution monitor to update flow execution status when jobs complete
+	log.Info("🔍 Starting execution monitor for flow completion tracking")
+	flowRepo := database.NewFlowRepository(db)
+	executionMonitor := services.NewExecutionMonitor(flowRepo, db)
+	executionMonitor.Start()
+
 	// Setup graceful shutdown
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
